@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+autoInstallPeers: true
+strictPeerDependencies: false
+onlyBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - esbuild
+  - node-pty
