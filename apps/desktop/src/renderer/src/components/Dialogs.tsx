@@ -47,6 +47,17 @@ export function CommandPalette() {
 }
 
 /** AP-04: one keyboard-driven list of everything waiting on the user. */
+const KIND_LABELS: Record<string, string> = {
+  question: 'Question',
+  permission: 'Approval',
+  terminal: 'Terminal',
+  'setup-failed': 'Setup failed',
+  interrupted: 'Interrupted',
+  limit: 'Limit reached',
+  gate: 'Workflow gate',
+  paused: 'Workflow paused',
+};
+
 export function InboxDialog() {
   const open = useStore((s) => s.inboxOpen);
   const inbox = useStore((s) => s.inbox);
@@ -56,10 +67,11 @@ export function InboxDialog() {
   const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
   const [index, setIndex] = useState(0);
   const items = [
-    ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
-    ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, requestId: null })),
+    ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, runId: i.runId ?? null, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
+    ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, runId: null, requestId: null })),
   ];
-  const go = (sessionId: string | null) => {
+  const go = (sessionId: string | null, runId: string | null = null) => {
+    if (runId) return set({ inboxOpen: false, tab: 'workflows', focusRunId: runId });
     if (sessionId) selectSession(sessionId);
     set({ inboxOpen: false, tab: 'sessions' });
   };
@@ -82,7 +94,7 @@ export function InboxDialog() {
           const cur = items[index];
           if (e.key === 'ArrowDown') setIndex((i) => Math.min(items.length - 1, i + 1));
           else if (e.key === 'ArrowUp') setIndex((i) => Math.max(0, i - 1));
-          else if (e.key === 'Enter' && cur) go(cur.sessionId);
+          else if (e.key === 'Enter' && cur) go(cur.sessionId, cur.runId);
           else if ((e.key === 'a' || e.key === 'r') && cur?.requestId && cur.sessionId) answer(cur.sessionId, cur.requestId, e.key === 'a' ? 'allow' : 'reject');
           else return;
           e.preventDefault();
@@ -91,10 +103,10 @@ export function InboxDialog() {
         {items.length === 0 ? <li className="p-2 text-ink-muted">Nothing is waiting on you.</li> : null}
         {items.map((it, i) => (
           <li key={it.key} role="option" aria-selected={i === index}>
-            <button type="button" onClick={() => go(it.sessionId)} className={cx('flex w-full flex-col gap-0.5 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}>
+            <button type="button" onClick={() => go(it.sessionId, it.runId)} className={cx('flex w-full flex-col gap-0.5 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}>
               <span className="font-semibold">{it.title}</span>
               <span className="text-ink-muted">
-                {it.sub} · {it.kind === 'question' ? 'Question' : it.kind === 'permission' ? 'Approval' : it.kind === 'terminal' ? 'Terminal' : it.kind === 'setup-failed' ? 'Setup failed' : 'Interrupted'}
+                {it.sub} · {KIND_LABELS[it.kind]}
               </span>
             </button>
           </li>

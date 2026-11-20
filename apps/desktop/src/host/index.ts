@@ -32,6 +32,7 @@ const broadcast: Publish = (topic, payload) => {
 host.bus.on('session.event', (e) => broadcast('session.event', e));
 host.bus.on('session.changed', (e) => broadcast('session.changed', e));
 host.bus.on('inbox.changed', (e) => broadcast('inbox.changed', e));
+host.bus.on('workflow.run', (e) => broadcast('workflow.run', e));
 host.bus.on('notify', (e) => {
   broadcast('notify', e);
   parent.postMessage({ type: 'notify', ...e });

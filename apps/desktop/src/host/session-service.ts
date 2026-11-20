@@ -67,7 +67,7 @@ const titleFrom = (content: PromptBlock[]) => {
  */
 export class SessionService {
   private readonly live = new Map<string, LiveSession>();
-  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string }>();
+  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string }>();
   private readonly booting = new Set<string>();
   private disposed = false;
   /** Extra MCP servers to hand agents (connectors, M5). */
@@ -148,8 +148,11 @@ export class SessionService {
     return !!this.live.get(sessionId)?.turn;
   }
 
+  /** Other services that add items to Needs you (workflow gates and paused runs). */
+  readonly inboxSources: (() => NeedsYouItem[])[] = [];
+
   inbox(): NeedsYouItem[] {
-    const items: NeedsYouItem[] = [];
+    const items: NeedsYouItem[] = this.inboxSources.flatMap((source) => source());
     for (const [sessionId, live] of this.live) {
       const session = this.repos.sessions.get(sessionId);
       if (!session) continue;
@@ -179,7 +182,7 @@ export class SessionService {
     return items;
   }
 
-  private refreshInbox() {
+  refreshInbox() {
     if (this.disposed) return;
     this.bus.emit('inbox.changed', this.inbox());
   }
@@ -236,7 +239,7 @@ export class SessionService {
     this.repos.sessions.insert(session);
     this.append(id, { type: 'session.state_changed', from: null, to: state, reason: state === 'queued' ? 'Waiting for a free slot' : null });
     this.repos.queue.push(id, input.prompt);
-    this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}) });
+    this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}), ...(input.modelId ? { modelId: input.modelId } : {}) });
     this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
@@ -278,6 +281,10 @@ export class SessionService {
       }
       await this.startAgent(sessionId);
       if (opts.modeId) await this.setMode(sessionId, opts.modeId).catch(() => undefined);
+      if (opts.modelId) {
+        await this.live.get(sessionId)!.agent.setModel(opts.modelId);
+        this.append(sessionId, { type: 'notice', level: 'info', text: `Using the model ${opts.modelId}.` });
+      }
       await this.sendNext(sessionId);
     } catch (err) {
       const message = err instanceof AgentAuthRequiredError ? `${err.message} Open the agent's own terminal UI to sign in.` : (err as Error).message;

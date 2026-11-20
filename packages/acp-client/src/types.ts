@@ -60,12 +60,17 @@ export interface AgentSession {
   readonly agentSessionId: string;
   readonly modes: SessionMode[];
   readonly currentModeId: string | null;
+  /** Models from the agent's `model` config option (ACP session config options); empty when not offered. */
+  readonly models: { id: string; name: string }[];
+  readonly currentModelId: string | null;
   readonly pid: number | null;
   /** Latest usage the agent reported (HI-03), or null when it reports none. */
   readonly usage: { inputTokens: number | null; outputTokens: number | null; costUsd: number | null } | null;
   prompt(content: PromptBlock[]): Promise<StopReason>;
   cancel(): Promise<void>;
   setMode(modeId: string): Promise<void>;
+  /** WF-09: picks a model through `session/set_config_option`. Throws when the agent does not offer it. */
+  setModel(modelId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
   onPermissionRequest(handler: PermissionHandler): void;
   /** Resolves when the agent process exits, with an error when it crashed. */

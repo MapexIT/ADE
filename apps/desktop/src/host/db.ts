@@ -162,6 +162,21 @@ export const MIGRATIONS: string[] = [
   CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
   CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
   `,
+  // M6-T02: workflow runs. The YAML is copied in so a run keeps its graph when the file changes later.
+  `
+  CREATE TABLE workflow_runs (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workflow_id TEXT NOT NULL,
+    workflow_yaml TEXT NOT NULL,
+    status TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    context_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX workflow_runs_workspace ON workflow_runs(workspace_id, created_at);
+  `,
 ];
 
 export function migrate(db: Database): number {

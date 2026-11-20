@@ -18,6 +18,7 @@ interface FakeSession {
   id: string;
   cwd: string;
   modeId: string;
+  modelId: string;
   history: SessionUpdate[];
   cancel: (() => void) | null;
   cancelled: boolean;
@@ -27,6 +28,12 @@ const MODES = [
   { id: 'build', name: 'Build', description: 'Make changes' },
   { id: 'plan', name: 'Plan', description: 'Read only, propose a plan' },
 ];
+
+const MODELS = [
+  { value: 'fake-small', name: 'Fake small' },
+  { value: 'fake-large', name: 'Fake large' },
+];
+const modelOption = (current: string) => [{ id: 'model', name: 'Model', category: 'model' as const, type: 'select' as const, currentValue: current, options: MODELS }];
 
 const COMMANDS = [
   { name: 'review', description: 'Review the current changes' },
@@ -97,6 +104,9 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
       switch (step.op) {
         case 'say':
           await stream(client, s, 'agent_message_chunk', step.text);
+          break;
+        case 'whichmodel':
+          await stream(client, s, 'agent_message_chunk', `Model: ${s.modelId}`);
           break;
         case 'think':
           await stream(client, s, 'agent_thought_chunk', step.text);
@@ -213,7 +223,7 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
     }))
     .onRequest('authenticate', () => ({}))
     .onRequest('session/new', async ({ params, client }) => {
-      const s: FakeSession = { id: randomUUID(), cwd: params.cwd, modeId: 'build', history: [], cancel: null, cancelled: false };
+      const s: FakeSession = { id: randomUUID(), cwd: params.cwd, modeId: 'build', modelId: 'fake-small', history: [], cancel: null, cancelled: false };
       sessions.set(s.id, s);
       setTimeout(() => {
         void client.notify('session/update', {
@@ -221,16 +231,16 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
           update: { sessionUpdate: 'available_commands_update', availableCommands: COMMANDS },
         });
       }, 0);
-      return { sessionId: s.id, modes: { currentModeId: s.modeId, availableModes: MODES } };
+      return { sessionId: s.id, modes: { currentModeId: s.modeId, availableModes: MODES }, configOptions: modelOption(s.modelId) };
     })
     .onRequest('session/load', async ({ params, client }) => {
       const p = transcriptPath(params.sessionId);
       if (!p || !existsSync(p)) throw new RequestError(-32002, `Unknown session ${params.sessionId}`);
       const saved = JSON.parse(readFileSync(p, 'utf8')) as { cwd: string; modeId: string; history: SessionUpdate[] };
-      const s: FakeSession = { id: params.sessionId, cwd: params.cwd, modeId: saved.modeId, history: [], cancel: null, cancelled: false };
+      const s: FakeSession = { id: params.sessionId, cwd: params.cwd, modeId: saved.modeId, modelId: 'fake-small', history: [], cancel: null, cancelled: false };
       sessions.set(s.id, s);
       for (const update of saved.history) await send(client, s, update);
-      return { modes: { currentModeId: s.modeId, availableModes: MODES } };
+      return { modes: { currentModeId: s.modeId, availableModes: MODES }, configOptions: modelOption(s.modelId) };
     })
     .onRequest('session/set_mode', async ({ params, client }) => {
       const s = sessions.get(params.sessionId);
@@ -239,6 +249,13 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
       s.modeId = params.modeId;
       await send(client, s, { sessionUpdate: 'current_mode_update', currentModeId: s.modeId });
       return {};
+    })
+    .onRequest('session/set_config_option', async ({ params }) => {
+      const s = sessions.get(params.sessionId);
+      if (!s) throw new RequestError(-32002, 'Unknown session');
+      if (params.configId !== 'model' || !MODELS.some((m) => m.value === params.value)) throw new RequestError(-32602, 'Unknown option value');
+      s.modelId = String(params.value);
+      return { configOptions: modelOption(s.modelId) };
     })
     .onRequest('session/prompt', async ({ params, client }) => {
       const s = sessions.get(params.sessionId);

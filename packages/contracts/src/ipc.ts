@@ -21,9 +21,13 @@ const Ok = z.object({ ok: z.literal(true) });
 
 export const NeedsYouItem = z.object({
   id: z.string(),
+  /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
   sessionId: z.string(),
   sessionTitle: z.string(),
-  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit']),
+  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused']),
+  /** Set for workflow gates and paused runs. */
+  runId: z.string().optional(),
+  nodeId: z.string().optional(),
   title: z.string(),
   createdAt: z.string(),
 });
@@ -45,6 +49,8 @@ export const CreateSessionInput = z.object({
   bringChanges: z.boolean().default(false),
   workItemRef: z.string().max(200).optional(),
   modeId: z.string().max(200).optional(),
+  /** WF-09: a model from the agent's model option; the session fails to start when the agent does not offer it. */
+  modelId: z.string().max(200).optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
 
@@ -77,6 +83,54 @@ export const WorkflowSummary = z.object({
   problems: z.array(z.object({ level: z.enum(['error', 'warning']), message: z.string(), nodeId: z.string().nullable() })),
 });
 export type WorkflowSummary = z.infer<typeof WorkflowSummary>;
+
+export const WorkflowRunStatus = z.enum(['running', 'waiting-gate', 'paused', 'succeeded', 'failed', 'cancelled']);
+export type WorkflowRunStatus = z.infer<typeof WorkflowRunStatus>;
+
+/** WF-06: one workflow run as the run view shows it. */
+export const WorkflowRunView = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  workflowId: z.string(),
+  workflowName: z.string(),
+  status: WorkflowRunStatus,
+  current: z.string().nullable(),
+  pauseReason: z.string().nullable(),
+  nodes: z.array(
+    z.object({
+      id: z.string(),
+      type: z.string(),
+      title: z.string(),
+      detail: z.string(),
+      status: z.enum(['pending', 'running', 'passed', 'failed', 'waiting', 'skipped']),
+      attempts: z.number(),
+      sessionId: z.string().nullable(),
+      startedAt: z.number().nullable(),
+      endedAt: z.number().nullable(),
+      summary: z.string(),
+    }),
+  ),
+  edges: WorkflowSummary.shape.edges,
+  used: z.object({ turns: z.number(), minutes: z.number(), loops: z.number(), costUsd: z.number() }),
+  budgets: z.object({ minutes: z.number().optional(), turns: z.number().optional(), loops: z.number().optional(), costUsd: z.number().optional() }),
+  log: z.array(z.string()),
+  createdAt: z.string(),
+});
+export type WorkflowRunView = z.infer<typeof WorkflowRunView>;
+
+export const StartWorkflowInput = z.object({
+  workspaceId: Id,
+  workflowId: z.string().min(1).max(300),
+  workItem: z.record(z.string(), z.string().max(20_000)).default({}),
+  /** WF-09: run a node written for one agent with another, for example when that agent is not installed. */
+  agentOverrides: z.partialRecord(AgentId, AgentId).default({}),
+});
+export type StartWorkflowInput = z.input<typeof StartWorkflowInput>;
+
+export const WorkflowDetail = z.object({ summary: WorkflowSummary, yaml: z.string(), definition: z.unknown() });
+export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
+
+export const HandOffSample = z.object({ summary: z.string().max(200_000).default(''), diff: z.string().max(400_000).default(''), checkOutput: z.string().max(200_000).default('') });
 
 /** Requests served by the host utility process. */
 export const hostApi = defineApi({
@@ -135,6 +189,20 @@ export const hostApi = defineApi({
   'audit.list': method(z.object({ workspaceId: Id }), z.array(AuditEntry)),
 
   'workflows.list': method(z.object({ workspaceId: Id.nullable() }), z.array(WorkflowSummary)),
+  'workflows.start': method(StartWorkflowInput, WorkflowRunView),
+  'workflows.get': method(z.object({ workspaceId: Id, workflowId: z.string().min(1).max(300) }), WorkflowDetail),
+  /** WF-01: saves an edited workflow to `.ade/workflows/<file>`. Structural problems are returned, not refused. */
+  'workflows.save': method(z.object({ workspaceId: Id, file: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,80}\.ya?ml$/i), definition: z.unknown() }), WorkflowSummary),
+  /** WF-11: runs one node on sample input as a one-step run. */
+  'workflows.testNode': method(
+    z.object({ workspaceId: Id, node: z.unknown(), sample: HandOffSample.default({ summary: '', diff: '', checkOutput: '' }), workItem: z.record(z.string(), z.string()).default({}), agentOverrides: z.partialRecord(AgentId, AgentId).default({}) }),
+    WorkflowRunView,
+  ),
+  'workflows.runs': method(z.object({ workspaceId: Id }), z.array(WorkflowRunView)),
+  'workflows.decideGate': method(z.object({ runId: Id, nodeId: z.string(), approved: z.boolean() }), Ok),
+  'workflows.resume': method(z.object({ runId: Id }), Ok),
+  'workflows.retryFrom': method(z.object({ runId: Id, nodeId: z.string() }), Ok),
+  'workflows.cancel': method(z.object({ runId: Id }), Ok),
   'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
   'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional() }), z.array(WorkItem)),
 });
@@ -147,6 +215,7 @@ export const hostTopics = defineTopics({
   'session.event': SessionEvent,
   'session.changed': SessionsChanged,
   'inbox.changed': z.array(NeedsYouItem),
+  'workflow.run': WorkflowRunView,
   'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string() }),
 });
 export type HostTopics = typeof hostTopics;

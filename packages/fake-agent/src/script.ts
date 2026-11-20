@@ -16,6 +16,7 @@
  *   env <NAME>                      say whether an environment variable is set
  *   usage                           report token usage and cost
  *   mode <id>                       switch to a mode
+ *   whichmodel                      say which model the session uses
  */
 export type Step =
   | { op: 'say'; text: string }
@@ -31,7 +32,8 @@ export type Step =
   | { op: 'sleep'; ms: number }
   | { op: 'env'; name: string }
   | { op: 'usage' }
-  | { op: 'mode'; id: string };
+  | { op: 'mode'; id: string }
+  | { op: 'whichmodel' };
 
 export const SCENARIOS: Record<string, string> = {
   message: 'say Hello from the fake agent.',
@@ -53,6 +55,9 @@ export function parseScript(text: string): Step[] {
     const [head = ''] = line.split(/\s+/, 1);
     const arg = line.includes(' ') ? rest(line) : '';
     switch (head) {
+      case 'whichmodel':
+        steps.push({ op: 'whichmodel' });
+        break;
       case 'scenario': {
         const script = SCENARIOS[arg];
         if (script) steps.push(...parseScript(script));

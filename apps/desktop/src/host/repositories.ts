@@ -388,6 +388,59 @@ export class RunRepo {
   }
 }
 
+export interface WorkflowRunRow {
+  id: string;
+  workspaceId: string;
+  workflowId: string;
+  yaml: string;
+  status: string;
+  state: unknown;
+  context: unknown;
+  createdAt: string;
+}
+
+/** Workflow run persistence (M6-T02). State and context are JSON owned by the workflow service. */
+export class WorkflowRunRepo {
+  constructor(private readonly db: Database) {}
+
+  private map = (r: R): WorkflowRunRow => ({
+    id: String(r.id),
+    workspaceId: String(r.workspace_id),
+    workflowId: String(r.workflow_id),
+    yaml: String(r.workflow_yaml),
+    status: String(r.status),
+    state: JSON.parse(String(r.state_json)),
+    context: JSON.parse(String(r.context_json)),
+    createdAt: String(r.created_at),
+  });
+
+  insert(row: Omit<WorkflowRunRow, 'createdAt'>): WorkflowRunRow {
+    const now = new Date().toISOString();
+    this.db.run(
+      'INSERT INTO workflow_runs (id, workspace_id, workflow_id, workflow_yaml, status, state_json, context_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      row.id, row.workspaceId, row.workflowId, row.yaml, row.status, JSON.stringify(row.state), JSON.stringify(row.context), now, now,
+    );
+    return { ...row, createdAt: now };
+  }
+
+  save(id: string, status: string, state: unknown, context: unknown): void {
+    this.db.run('UPDATE workflow_runs SET status = ?, state_json = ?, context_json = ?, updated_at = ? WHERE id = ?', status, JSON.stringify(state), JSON.stringify(context), new Date().toISOString(), id);
+  }
+
+  get(id: string): WorkflowRunRow | null {
+    const r = this.db.get<R>('SELECT * FROM workflow_runs WHERE id = ?', id);
+    return r ? this.map(r) : null;
+  }
+
+  list(workspaceId: string): WorkflowRunRow[] {
+    return this.db.all<R>('SELECT * FROM workflow_runs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 100', workspaceId).map(this.map);
+  }
+
+  inStatuses(statuses: string[]): WorkflowRunRow[] {
+    return this.db.all<R>(`SELECT * FROM workflow_runs WHERE status IN (${statuses.map(() => '?').join(', ')})`, ...statuses).map(this.map);
+  }
+}
+
 export class Repositories {
   readonly workspaces: WorkspaceRepo;
   readonly sessions: SessionRepo;
@@ -398,6 +451,7 @@ export class Repositories {
   readonly settings: SettingsRepo;
   readonly audit: AuditRepo;
   readonly runs: RunRepo;
+  readonly workflowRuns: WorkflowRunRepo;
 
   constructor(readonly db: Database) {
     this.workspaces = new WorkspaceRepo(db);
@@ -409,5 +463,6 @@ export class Repositories {
     this.settings = new SettingsRepo(db);
     this.audit = new AuditRepo(db);
     this.runs = new RunRepo(db);
+    this.workflowRuns = new WorkflowRunRepo(db);
   }
 }

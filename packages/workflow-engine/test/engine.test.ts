@@ -175,3 +175,31 @@ describe('hand-off packet', () => {
     expect(renderPrompt('Plan {{workItem.title}}: {{summary}} / {{ checkOutput }}', { summary: 'S', diff: '', checkOutput: 'C', workItem: { title: 'T' } })).toBe('Plan T: S / C');
   });
 });
+
+describe('sessions reported by executors', () => {
+  it('links the session while the node runs and counts one attempt', async () => {
+    const wf = parseWorkflow('name: s\nnodes:\n  - { id: a, type: agent, agent: fake, prompt: x }\n');
+    const store = new MemoryRunStore();
+    let seenWhileRunning: string | null = null;
+    const agent: NodeExecutor = {
+      type: 'agent',
+      async execute(_node, _packet, ctx) {
+        ctx.reportSession('s-1');
+        await Promise.resolve();
+        seenWhileRunning = store.runs.get('r')?.nodes.a?.sessionId ?? null;
+        return { outcome: 'pass', packet: {}, sessionId: 's-1' };
+      },
+    };
+    const runner = new WorkflowRunner(wf, 'r', store, [agent]);
+    await runner.start();
+    expect(seenWhileRunning).toBe('s-1');
+    expect(runner.current.nodes.a).toMatchObject({ sessionId: 's-1', attempts: 1, status: 'passed' });
+    expect(runner.current.status).toBe('succeeded');
+  });
+
+  it('node.session sets the session without counting an attempt', () => {
+    const wf = parseWorkflow('name: s\nnodes:\n  - { id: a, type: agent, agent: fake, prompt: x }\n');
+    const { state } = reduce(wf, initialState(wf), { type: 'node.session', nodeId: 'a', sessionId: 'x' });
+    expect(state.nodes.a).toMatchObject({ sessionId: 'x', attempts: 0 });
+  });
+});

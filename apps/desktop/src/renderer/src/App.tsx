@@ -8,7 +8,7 @@ import { RunScreen } from './components/RunScreen.tsx';
 import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
 import { TerminalsScreen } from './components/terminal/TerminalsScreen.tsx';
 import { TopBar } from './components/TopBar.tsx';
-import { WorkflowsScreen } from './components/WorkflowsScreen.tsx';
+import { WorkflowsScreen } from './components/workflows/WorkflowsScreen.tsx';
 import { WorkItemsScreen } from './components/WorkItemsScreen.tsx';
 import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
