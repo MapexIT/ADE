@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ShellKind } from '@ade/contracts';
 
@@ -15,7 +15,8 @@ export interface ShellLaunch {
 }
 
 export function shellKindOf(path: string): ShellKind | null {
-  const name = basename(path).toLowerCase().replace(/\.exe$/, '');
+  // Split on both separators: a Windows path must be recognised on any platform.
+  const name = (path.split(/[\\/]/).pop() ?? path).toLowerCase().replace(/\.exe$/, '');
   if (name === 'pwsh') return 'pwsh';
   if (name === 'powershell') return 'powershell';
   if (name === 'zsh') return 'zsh';
