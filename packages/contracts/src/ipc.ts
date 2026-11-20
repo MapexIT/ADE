@@ -122,6 +122,7 @@ export const hostApi = defineApi({
 
   'audit.list': method(z.object({ workspaceId: Id }), z.array(AuditEntry)),
 
+  'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
   'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional() }), z.array(WorkItem)),
 });
 export type HostApi = typeof hostApi;

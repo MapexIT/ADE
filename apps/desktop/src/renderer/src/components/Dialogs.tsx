@@ -115,18 +115,21 @@ export function SettingsDialog() {
   const [setupFile, setSetupFile] = useState<{ exists: boolean; content: string } | null>(null);
   const [creds, setCreds] = useState<{ available: boolean; backend: string; stored: string[] } | null>(null);
   const [token, setToken] = useState({ shortcut: '', github: '' });
+  const [share, setShare] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     void host.call('settings.get', { key: 'concurrencyCap' }).then((v) => setCap(typeof v.value === 'number' ? v.value : 3));
     void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
     void main('main.credentials.status', {}).then(setCreds);
+    void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     if (workspaceId) void host.call('workspace.setupFile', { workspaceId }).then(setSetupFile);
   }, [open, workspaceId]);
 
   const save = async () => {
     await attempt(() => host.call('settings.set', { key: 'concurrencyCap', value: Math.max(1, Math.min(10, cap)) }));
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
+    await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     toast('Settings saved.');
     set({ settingsOpen: false });
   };
@@ -185,6 +188,13 @@ export function SettingsDialog() {
             </div>
           ))}
           <p className="m-0 text-[12px] text-ink-muted">Tokens are encrypted by your operating system's credential store and never written to the database, logs or prompts.</p>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Give new sessions the Shortcut connector as an MCP server
+              <span className="block text-[12px] text-ink-muted">The agent then holds your Shortcut token. Off by default; only agents that support HTTP MCP receive it.</span>
+            </span>
+          </label>
         </section>
       </div>
     </Modal>

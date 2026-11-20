@@ -49,6 +49,8 @@ parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
       stop();
       publishers.delete(publish);
     });
+  } else if (msg?.type === 'credentials') {
+    host.setCredentials((msg as { values?: Partial<Record<'shortcut' | 'github', string>> }).values ?? {});
   } else if (msg?.type === 'shutdown') {
     void host.dispose().finally(() => process.exit(0));
   }

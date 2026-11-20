@@ -6,6 +6,7 @@ import type { WorkItem } from '@ade/contracts';
  */
 export interface WorkItemProvider {
   readonly source: WorkItem['source'];
+  connected(): Promise<boolean>;
   list(query?: string): Promise<WorkItem[]>;
 }
 
@@ -21,8 +22,9 @@ export class WorkItemService {
     this.providers.delete(source);
   }
 
-  connected(): WorkItem['source'][] {
-    return [...this.providers.keys()];
+  async sources(): Promise<{ source: WorkItem['source']; connected: boolean }[]> {
+    const all: WorkItem['source'][] = ['shortcut', 'github'];
+    return Promise.all(all.map(async (source) => ({ source, connected: (await this.providers.get(source)?.connected().catch(() => false)) ?? false })));
   }
 
   async list(source: WorkItem['source'], query?: string): Promise<WorkItem[]> {
