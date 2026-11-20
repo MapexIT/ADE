@@ -97,6 +97,8 @@ probed yet; CI runs the fake-agent suite on Ubuntu.
 | Agent overrides | Starting a run can map a node's agent to another (for example when Codex is not installed). | WF-09 asks for mixed agents; templates name agents the user may not have. |
 | Connector nodes | Fail with "not supported yet" until connector actions (CO-05 to CO-10) arrive in M7. | No connector write actions exist yet. |
 | Runs and restarts | A run that was running when ADE closed comes back paused; a run waiting at a gate stays waiting. | Nothing restarts without the user. |
+| Workflow editing | Templates are read-only; "Copy to repository" saves one to `.ade/workflows/` for editing. Edits are validated live in the renderer with the same engine code; saving writes YAML; a run needs a saved, error-free file. | Workflows are versioned with the code (WF-03), and the canvas never shows a different verdict from the host. |
+| Test a node (WF-11) | Runs as a one-step workflow run with the sample hand-off, shown in the run view. Gates, loops, branches and land steps cannot be tested alone. | Reuses the run machinery and its audit; a land step must never run without a gate. |
 
 ## Facts to verify (`VERIFY` markers in the docs)
 

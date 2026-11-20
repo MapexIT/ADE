@@ -168,3 +168,23 @@ export function parseWorkflow(yamlText: string): Workflow {
   if (errors.length) throw new WorkflowError(errors);
   return parsed.data;
 }
+
+/** One line describing a node, shown on the canvas. */
+export function describeNode(n: WorkflowNode): string {
+  switch (n.type) {
+    case 'agent':
+      return `${n.agent}${n.model ? ` (${n.model})` : ''} · ${n.profile}${n.skills.length ? ` · skills: ${n.skills.join(', ')}` : ''}`;
+    case 'command':
+      return n.run.join(' ');
+    case 'gate':
+      return n.question;
+    case 'loop':
+      return `up to ${n.max} times`;
+    case 'branch':
+      return `on ${n.condition}`;
+    case 'connector':
+      return `${n.connector} · ${n.action}`;
+    case 'land':
+      return n.mode;
+  }
+}

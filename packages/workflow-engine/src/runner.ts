@@ -120,8 +120,9 @@ export class WorkflowRunner {
     return this.idle;
   }
 
-  start(workItem: Record<string, string> = {}): Promise<void> {
-    return this.enqueue({ type: 'start', workItem, at: Date.now() });
+  /** `packet` seeds the hand-off, which is how a single node is tested on sample input (WF-11). */
+  start(workItem: Record<string, string> = {}, packet?: Partial<HandOff>): Promise<void> {
+    return this.enqueue({ type: 'start', workItem, ...(packet ? { packet } : {}), at: Date.now() });
   }
 
   decideGate(nodeId: string, approved: boolean): Promise<void> {

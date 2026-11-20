@@ -1,11 +1,37 @@
 import { randomUUID } from 'node:crypto';
-import { RpcError, type NeedsYouItem, type StartWorkflowInput, type WorkflowRunView } from '@ade/contracts';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  RpcError,
+  type NeedsYouItem,
+  type StartWorkflowInput,
+  type WorkflowDetail,
+  type WorkflowRunView,
+  type WorkflowSummary,
+} from '@ade/contracts';
 import { git, revParse } from '@ade/git';
-import { parseWorkflow, WorkflowError, WorkflowRunner, type RunState, type RunStore, type Workflow } from '@ade/workflow-engine';
+import {
+  parseWorkflow,
+  Workflow,
+  WorkflowError,
+  WorkflowNode,
+  WorkflowRunner,
+  type HandOff,
+  type RunState,
+  type RunStore,
+} from '@ade/workflow-engine';
+import { parse, stringify } from 'yaml';
 import type { EventBus } from './bus.ts';
-import { AgentExecutor, CommandExecutor, ConnectorExecutor, LandExecutor, type ExecutorDeps, type RunContext } from './executors.ts';
+import {
+  AgentExecutor,
+  CommandExecutor,
+  ConnectorExecutor,
+  LandExecutor,
+  type ExecutorDeps,
+  type RunContext,
+} from './executors.ts';
 import type { Repositories, WorkflowRunRow } from './repositories.ts';
-import { detailOf, loadWorkflowSource } from './workflows.ts';
+import { detailOf, loadWorkflowSource, summarise } from './workflows.ts';
 
 interface ActiveRun {
   runner: WorkflowRunner;
@@ -35,21 +61,81 @@ export class WorkflowService {
   ) {
     // WF-07: the minutes budget counts wall-clock time while a node runs.
     this.ticker = setInterval(() => {
-      for (const run of this.active.values()) if (run.runner.current.status === 'running') void run.runner.tick(1).catch(() => undefined);
+      for (const run of this.active.values())
+        if (run.runner.current.status === 'running') void run.runner.tick(1).catch(() => undefined);
     }, 60_000);
     this.ticker.unref?.();
   }
 
   async start(input: StartWorkflowInput): Promise<WorkflowRunView> {
-    const workspace = this.repos.workspaces.get(input.workspaceId);
-    if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
+    const workspace = this.workspace(input.workspaceId);
     const yaml = await loadWorkflowSource(workspace.rootPath, input.workflowId);
     if (yaml === null) throw new RpcError('not_found', 'Unknown workflow');
+    return this.launch(
+      workspace,
+      input.workflowId,
+      yaml,
+      input.workItem ?? {},
+      undefined,
+      input.agentOverrides ?? {},
+    );
+  }
+
+  /** WF-11: one node on sample input, as a one-step run the run view shows like any other. */
+  async testNode(input: {
+    workspaceId: string;
+    node: unknown;
+    sample: Partial<HandOff>;
+    workItem: Record<string, string>;
+    agentOverrides: RunContext['agentOverrides'];
+  }): Promise<WorkflowRunView> {
+    const parsed = WorkflowNode.safeParse(input.node);
+    if (!parsed.success)
+      throw new RpcError(
+        'invalid_workflow',
+        `The step is invalid: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      );
+    const node = parsed.data;
+    if (node.type === 'gate' || node.type === 'loop' || node.type === 'branch')
+      throw new RpcError('not_testable', 'Gates, loops and branches have nothing to run on their own.');
+    if (node.type === 'land')
+      throw new RpcError('not_testable', 'Land steps only run after a gate inside a workflow.');
+    const yaml = stringify({ name: `Test: ${node.title ?? node.id}`, nodes: [node] });
+    return this.launch(
+      this.workspace(input.workspaceId),
+      `test:${node.id}`,
+      yaml,
+      input.workItem,
+      input.sample,
+      input.agentOverrides,
+    );
+  }
+
+  private workspace(id: string) {
+    const workspace = this.repos.workspaces.get(id);
+    if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
+    return workspace;
+  }
+
+  private async launch(
+    workspace: { id: string; rootPath: string },
+    workflowId: string,
+    yaml: string,
+    workItem: Record<string, string>,
+    packet: Partial<HandOff> | undefined,
+    agentOverrides: RunContext['agentOverrides'],
+  ): Promise<WorkflowRunView> {
     let wf: Workflow;
     try {
       wf = parseWorkflow(yaml);
     } catch (err) {
-      const message = err instanceof WorkflowError ? err.problems.filter((p) => p.level === 'error').map((p) => p.message).join(' ') : (err as Error).message;
+      const message =
+        err instanceof WorkflowError
+          ? err.problems
+              .filter((p) => p.level === 'error')
+              .map((p) => p.message)
+              .join(' ')
+          : (err as Error).message;
       throw new RpcError('invalid_workflow', `The workflow cannot run: ${message}`);
     }
     const baseCommit = await revParse(workspace.rootPath, 'HEAD').catch(() => {
@@ -63,19 +149,77 @@ export class WorkflowService {
       repoRoot: workspace.rootPath,
       baseCommit,
       head: null,
-      agentOverrides: input.agentOverrides ?? {},
+      agentOverrides,
       scratchWorktree: null,
     };
-    const row = this.repos.workflowRuns.insert({ id, workspaceId: workspace.id, workflowId: input.workflowId, yaml, status: 'running', state: null, context: ctx });
+    const row = this.repos.workflowRuns.insert({
+      id,
+      workspaceId: workspace.id,
+      workflowId,
+      yaml,
+      status: 'running',
+      state: null,
+      context: ctx,
+    });
     const run = this.activate(row, wf, ctx, undefined);
-    this.repos.audit.append({ workspaceId: workspace.id, sessionId: null, actor: 'user', action: 'workflow.started', detail: { runId: id, workflow: input.workflowId, agentOverrides: ctx.agentOverrides } });
-    void run.runner.start(input.workItem ?? {}).catch((err) => this.fail(id, err as Error));
+    this.repos.audit.append({
+      workspaceId: workspace.id,
+      sessionId: null,
+      actor: 'user',
+      action: 'workflow.started',
+      detail: { runId: id, workflow: workflowId, agentOverrides },
+    });
+    void run.runner.start(workItem, packet).catch((err) => this.fail(id, err as Error));
     return this.view(run, row.id);
   }
 
+  async detail(workspaceId: string, workflowId: string): Promise<WorkflowDetail> {
+    const workspace = this.workspace(workspaceId);
+    const yaml = await loadWorkflowSource(workspace.rootPath, workflowId);
+    if (yaml === null) throw new RpcError('not_found', 'Unknown workflow');
+    const source = workflowId.startsWith('template:') ? 'template' : 'repository';
+    const path = source === 'repository' ? `.ade/workflows/${workflowId.slice('repo:'.length)}` : null;
+    let definition: unknown = null;
+    try {
+      definition = parse(yaml);
+    } catch {
+      definition = null;
+    }
+    return { summary: summarise(workflowId, source, path, yaml), yaml, definition };
+  }
+
+  /** WF-01 / WF-03: the editor saves YAML into the repository, so workflows are versioned with the code. */
+  async save(workspaceId: string, file: string, definition: unknown): Promise<WorkflowSummary> {
+    const workspace = this.workspace(workspaceId);
+    const parsed = Workflow.safeParse(definition);
+    if (!parsed.success)
+      throw new RpcError(
+        'invalid_workflow',
+        parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      );
+    const yaml = stringify(parsed.data, { lineWidth: 0 });
+    const dir = join(workspace.rootPath, '.ade', 'workflows');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, file), yaml, 'utf8');
+    this.repos.audit.append({
+      workspaceId,
+      sessionId: null,
+      actor: 'user',
+      action: 'workflow.saved',
+      detail: { file },
+    });
+    return summarise(`repo:${file}`, 'repository', `.ade/workflows/${file}`, yaml);
+  }
+
   /** Builds the runner, executors and store for a run (new, or reloaded after a restart). */
-  private activate(row: WorkflowRunRow, wf: Workflow, ctx: RunContext, state: RunState | undefined): ActiveRun {
-    const saveContext = (c: RunContext) => this.repos.workflowRuns.save(row.id, active.runner.current.status, active.runner.current, c);
+  private activate(
+    row: WorkflowRunRow,
+    wf: Workflow,
+    ctx: RunContext,
+    state: RunState | undefined,
+  ): ActiveRun {
+    const saveContext = (c: RunContext) =>
+      this.repos.workflowRuns.save(row.id, active.runner.current.status, active.runner.current, c);
     const deps: ExecutorDeps = { ...this.deps, saveContext };
     const store: RunStore = {
       save: (runId, _name, s) => this.repos.workflowRuns.save(runId, s.status, s, ctx),
@@ -85,14 +229,28 @@ export class WorkflowService {
       wf,
       row.id,
       store,
-      [new AgentExecutor(deps, ctx), new CommandExecutor(deps, ctx), new LandExecutor(deps, ctx), new ConnectorExecutor()],
+      [
+        new AgentExecutor(deps, ctx),
+        new CommandExecutor(deps, ctx),
+        new LandExecutor(deps, ctx),
+        new ConnectorExecutor(),
+      ],
       {
         onState: () => this.publish(row.id),
         onGate: (nodeId) => {
           const node = wf.nodes.find((n) => n.id === nodeId);
-          this.bus.emit('notify', { sessionId: ctx.head?.sessionId ?? '', title: 'A workflow is waiting for you', body: `${wf.name}: ${node?.type === 'gate' ? node.question : nodeId}` });
+          this.bus.emit('notify', {
+            sessionId: ctx.head?.sessionId ?? '',
+            title: 'A workflow is waiting for you',
+            body: `${wf.name}: ${node?.type === 'gate' ? node.question : nodeId}`,
+          });
         },
-        onPaused: (reason) => this.bus.emit('notify', { sessionId: ctx.head?.sessionId ?? '', title: 'A workflow paused', body: `${wf.name}: ${reason}` }),
+        onPaused: (reason) =>
+          this.bus.emit('notify', {
+            sessionId: ctx.head?.sessionId ?? '',
+            title: 'A workflow paused',
+            body: `${wf.name}: ${reason}`,
+          }),
       },
       state,
     );
@@ -105,7 +263,11 @@ export class WorkflowService {
     console.error(`[host] workflow run ${runId} failed`, err);
     const run = this.active.get(runId);
     if (!run) return;
-    const state: RunState = { ...run.runner.current, status: 'failed', log: [...run.runner.current.log, `error: ${err.message}`] };
+    const state: RunState = {
+      ...run.runner.current,
+      status: 'failed',
+      log: [...run.runner.current.log, `error: ${err.message}`],
+    };
     this.repos.workflowRuns.save(runId, 'failed', state, run.ctx);
     this.active.delete(runId);
     this.publishRow(runId);
@@ -116,7 +278,11 @@ export class WorkflowService {
     for (const row of this.repos.workflowRuns.inStatuses(LIVE_STATUSES)) {
       const state = row.state as RunState | null;
       if (state?.status === 'running') {
-        const paused: RunState = { ...state, status: 'paused', pauseReason: 'ADE was closed while the run was running.' };
+        const paused: RunState = {
+          ...state,
+          status: 'paused',
+          pauseReason: 'ADE was closed while the run was running.',
+        };
         this.repos.workflowRuns.save(row.id, 'paused', paused, row.context);
       }
     }
@@ -140,27 +306,42 @@ export class WorkflowService {
   decideGate(runId: string, nodeId: string, approved: boolean) {
     const run = this.load(runId);
     const s = run.runner.current;
-    if (s.status !== 'waiting-gate' || s.current !== nodeId) throw new RpcError('not_waiting', 'That step is not waiting for a decision.');
-    this.repos.audit.append({ workspaceId: run.ctx.workspaceId, sessionId: run.ctx.head?.sessionId ?? null, actor: 'user', action: approved ? 'workflow.gate.approved' : 'workflow.gate.rejected', detail: { runId, nodeId } });
+    if (s.status !== 'waiting-gate' || s.current !== nodeId)
+      throw new RpcError('not_waiting', 'That step is not waiting for a decision.');
+    this.repos.audit.append({
+      workspaceId: run.ctx.workspaceId,
+      sessionId: run.ctx.head?.sessionId ?? null,
+      actor: 'user',
+      action: approved ? 'workflow.gate.approved' : 'workflow.gate.rejected',
+      detail: { runId, nodeId },
+    });
     return this.act(runId, (r) => r.runner.decideGate(nodeId, approved));
   }
 
   resume(runId: string) {
-    if (this.load(runId).runner.current.status !== 'paused') throw new RpcError('not_paused', 'Only a paused run can resume.');
+    if (this.load(runId).runner.current.status !== 'paused')
+      throw new RpcError('not_paused', 'Only a paused run can resume.');
     return this.act(runId, (r) => r.runner.resume());
   }
 
   retryFrom(runId: string, nodeId: string) {
     const run = this.load(runId);
     if (!run.wf.nodes.some((n) => n.id === nodeId)) throw new RpcError('not_found', 'Unknown step');
-    if (run.runner.current.status === 'running') throw new RpcError('busy', 'Wait for the running step to finish, or cancel the run.');
+    if (run.runner.current.status === 'running')
+      throw new RpcError('busy', 'Wait for the running step to finish, or cancel the run.');
     return this.act(runId, (r) => r.runner.retryFrom(nodeId));
   }
 
   async cancel(runId: string): Promise<{ ok: true }> {
     const run = this.load(runId);
     await run.runner.cancel();
-    this.repos.audit.append({ workspaceId: run.ctx.workspaceId, sessionId: null, actor: 'user', action: 'workflow.cancelled', detail: { runId } });
+    this.repos.audit.append({
+      workspaceId: run.ctx.workspaceId,
+      sessionId: null,
+      actor: 'user',
+      action: 'workflow.cancelled',
+      detail: { runId },
+    });
     this.active.delete(runId);
     this.publishRow(runId);
     return { ok: true };
@@ -192,7 +373,12 @@ export class WorkflowService {
         sessionId: ctx.head?.sessionId ?? '',
         sessionTitle: ctx.workflowName,
         kind: row.status === 'paused' ? 'paused' : 'gate',
-        title: row.status === 'paused' ? (state.pauseReason ?? 'The run paused') : node?.type === 'gate' ? node.question : 'Waiting for a decision',
+        title:
+          row.status === 'paused'
+            ? (state.pauseReason ?? 'The run paused')
+            : node?.type === 'gate'
+              ? node.question
+              : 'Waiting for a decision',
         createdAt: row.createdAt,
         runId: row.id,
         ...(state.current ? { nodeId: state.current } : {}),
@@ -228,7 +414,10 @@ export class WorkflowService {
     if (active) return this.view(active, row.id);
     const wf = safeParse(row.yaml);
     if (!wf) return null;
-    const state = (row.state as RunState | null) ?? { ...emptyState(wf), status: row.status as RunState['status'] };
+    const state = (row.state as RunState | null) ?? {
+      ...emptyState(wf),
+      status: row.status as RunState['status'],
+    };
     return buildView(row.id, row.context as RunContext, row.workflowId, wf, state, row.createdAt);
   }
 
@@ -238,7 +427,9 @@ export class WorkflowService {
     clearInterval(this.ticker);
     for (const [runId, run] of this.active) {
       if (run.ctx.scratchWorktree && !LIVE_STATUSES.includes(run.runner.current.status)) {
-        await git(['worktree', 'remove', '--force', run.ctx.scratchWorktree], { cwd: run.ctx.repoRoot }).catch(() => undefined);
+        await git(['worktree', 'remove', '--force', run.ctx.scratchWorktree], {
+          cwd: run.ctx.repoRoot,
+        }).catch(() => undefined);
       }
       this.active.delete(runId);
     }
@@ -257,7 +448,12 @@ function emptyState(wf: Workflow): RunState {
   return {
     status: 'running',
     current: null,
-    nodes: Object.fromEntries(wf.nodes.map((n) => [n.id, { status: 'pending', attempts: 0, sessionId: null, output: null, startedAt: null, endedAt: null }])),
+    nodes: Object.fromEntries(
+      wf.nodes.map((n) => [
+        n.id,
+        { status: 'pending', attempts: 0, sessionId: null, output: null, startedAt: null, endedAt: null },
+      ]),
+    ),
     loops: {},
     used: { turns: 0, minutes: 0, loops: 0, costUsd: 0 },
     packet: { summary: '', diff: '', checkOutput: '', workItem: {} },
@@ -266,7 +462,14 @@ function emptyState(wf: Workflow): RunState {
   };
 }
 
-export function buildView(id: string, ctx: RunContext, workflowId: string, wf: Workflow, s: RunState, createdAt: string): WorkflowRunView {
+export function buildView(
+  id: string,
+  ctx: RunContext,
+  workflowId: string,
+  wf: Workflow,
+  s: RunState,
+  createdAt: string,
+): WorkflowRunView {
   return {
     id,
     workspaceId: ctx.workspaceId,
@@ -287,7 +490,8 @@ export function buildView(id: string, ctx: RunContext, workflowId: string, wf: W
         sessionId: nr?.sessionId ?? null,
         startedAt: nr?.startedAt ?? null,
         endedAt: nr?.endedAt ?? null,
-        summary: n.type === 'gate' || n.type === 'loop' || n.type === 'branch' ? '' : (nr?.output?.summary ?? ''),
+        summary:
+          n.type === 'gate' || n.type === 'loop' || n.type === 'branch' ? '' : (nr?.output?.summary ?? ''),
       };
     }),
     edges: wf.edges.map((e) => ({ from: e.from, to: e.to, when: e.when ?? null })),

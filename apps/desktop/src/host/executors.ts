@@ -22,7 +22,8 @@ import type { SessionService } from './session-service.ts';
 const MAX_DIFF = 40_000;
 const MAX_OUTPUT = 20_000;
 
-const tail = (text: string, max: number) => (text.length > max ? `[earlier output cut]\n${text.slice(-max)}` : text);
+const tail = (text: string, max: number) =>
+  text.length > max ? `[earlier output cut]\n${text.slice(-max)}` : text;
 
 /** Where the run's work currently lives. Agent nodes move it forward; commands and land read it. */
 export interface RunHead {
@@ -101,34 +102,39 @@ export class AgentExecutor implements NodeExecutor<AgentNode> {
       sessionId = session.id;
       exec.reportSession(session.id);
 
-      const ended = await new Promise<{ stopReason: string; costUsd: number | null } | { failed: string }>((resolve) => {
-        const finish = (v: { stopReason: string; costUsd: number | null } | { failed: string }) => {
-          exec.signal.removeEventListener('abort', abort);
-          resolve(v);
-        };
-        const handle = (e: SessionEvent) => {
-          if (e.type === 'turn.ended') finish({ stopReason: e.stopReason, costUsd: e.usage?.costUsd ?? null });
-        };
-        onEvent = handle;
-        onState = (state) => {
-          if (state === 'interrupted') finish({ failed: 'The session stopped before its turn ended.' });
-          if (state === 'discarded') finish({ failed: 'The session was discarded.' });
-        };
-        const abort = () => {
-          void this.deps.sessions.cancel(session.id).catch(() => undefined);
-          finish({ failed: 'The run was cancelled.' });
-        };
-        exec.signal.addEventListener('abort', abort);
-        for (const e of early.splice(0)) if (e.sessionId === session.id) handle(e);
-        const now = this.deps.repos.sessions.get(session.id)?.state;
-        if (now === 'interrupted') finish({ failed: 'The session stopped before its turn ended.' });
-      });
+      const ended = await new Promise<{ stopReason: string; costUsd: number | null } | { failed: string }>(
+        (resolve) => {
+          const finish = (v: { stopReason: string; costUsd: number | null } | { failed: string }) => {
+            exec.signal.removeEventListener('abort', abort);
+            resolve(v);
+          };
+          const handle = (e: SessionEvent) => {
+            if (e.type === 'turn.ended')
+              finish({ stopReason: e.stopReason, costUsd: e.usage?.costUsd ?? null });
+          };
+          onEvent = handle;
+          onState = (state) => {
+            if (state === 'interrupted') finish({ failed: 'The session stopped before its turn ended.' });
+            if (state === 'discarded') finish({ failed: 'The session was discarded.' });
+          };
+          const abort = () => {
+            void this.deps.sessions.cancel(session.id).catch(() => undefined);
+            finish({ failed: 'The run was cancelled.' });
+          };
+          exec.signal.addEventListener('abort', abort);
+          for (const e of early.splice(0)) if (e.sessionId === session.id) handle(e);
+          const now = this.deps.repos.sessions.get(session.id)?.state;
+          if (now === 'interrupted') finish({ failed: 'The session stopped before its turn ended.' });
+        },
+      );
 
-      if ('failed' in ended) return { outcome: 'fail', sessionId: session.id, packet: { summary: ended.failed } };
+      if ('failed' in ended)
+        return { outcome: 'fail', sessionId: session.id, packet: { summary: ended.failed } };
 
       const current = this.deps.repos.sessions.require(session.id);
       const turn = this.deps.repos.turns.list(session.id).at(-1);
-      const endCommit = turn?.endCheckpoint ?? (await snapshot(current.worktreePath!, null, 'ADE workflow hand-off'));
+      const endCommit =
+        turn?.endCheckpoint ?? (await snapshot(current.worktreePath!, null, 'ADE workflow hand-off'));
       const diff = (await diffPatch(current.worktreePath!, base, endCommit)).toString('utf8');
       this.ctx.head = { sessionId: session.id, worktree: current.worktreePath!, commit: endCommit };
       this.deps.saveContext(this.ctx);
@@ -139,12 +145,18 @@ export class AgentExecutor implements NodeExecutor<AgentNode> {
         turns: 1,
         ...(ended.costUsd !== null ? { costUsd: ended.costUsd } : {}),
         packet: {
-          summary: lastMessage(this.deps.repos.events.list(session.id)) || `${node.id} finished (${ended.stopReason}).`,
+          summary:
+            lastMessage(this.deps.repos.events.list(session.id)) ||
+            `${node.id} finished (${ended.stopReason}).`,
           diff: tail(diff, MAX_DIFF),
         },
       };
     } catch (err) {
-      return { outcome: 'fail', ...(sessionId ? { sessionId } : {}), packet: { summary: (err as Error).message } };
+      return {
+        outcome: 'fail',
+        ...(sessionId ? { sessionId } : {}),
+        packet: { summary: (err as Error).message },
+      };
     } finally {
       offEvent();
       offState();
@@ -186,14 +198,25 @@ export class CommandExecutor implements NodeExecutor<CommandNode> {
 
   async execute(node: CommandNode, _packet: HandOff, exec: ExecutionContext): Promise<NodeResult> {
     const resolved = this.deps.resolveCommand(node.run);
-    if (!resolved) return { outcome: 'fail', packet: { checkOutput: `${node.run[0]} was not found on the PATH.`, summary: `${node.run[0]} was not found.` } };
+    if (!resolved)
+      return {
+        outcome: 'fail',
+        packet: {
+          checkOutput: `${node.run[0]} was not found on the PATH.`,
+          summary: `${node.run[0]} was not found.`,
+        },
+      };
     const cwd = await this.cwd();
     const startedAt = new Date().toISOString();
     const { code, output } = await new Promise<{ code: number | null; output: string }>((resolve) => {
       let out = '';
       const child = spawnCommand(
         { command: resolved.command.command, args: [...resolved.command.args, ...node.run.slice(1)] },
-        { cwd, env: { ...process.env, ...resolved.env, CI: '1', FORCE_COLOR: '0' }, stdio: ['ignore', 'pipe', 'pipe'] },
+        {
+          cwd,
+          env: { ...process.env, ...resolved.env, CI: '1', FORCE_COLOR: '0' },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
       );
       const add = (b: Buffer) => {
         out += b.toString('utf8');
@@ -211,13 +234,25 @@ export class CommandExecutor implements NodeExecutor<CommandNode> {
     });
     // Visible in the run history like any other run (CR-04).
     this.deps.repos.runs.record(
-      { runConfigId: null, sessionId: this.ctx.head?.sessionId ?? null, worktreePath: cwd, command: node.run, startedAt, endedAt: new Date().toISOString(), exitCode: code, output },
+      {
+        runConfigId: null,
+        sessionId: this.ctx.head?.sessionId ?? null,
+        worktreePath: cwd,
+        command: node.run,
+        startedAt,
+        endedAt: new Date().toISOString(),
+        exitCode: code,
+        output,
+      },
       this.ctx.workspaceId,
     );
     const pass = code === 0;
     return {
       outcome: pass ? 'pass' : 'fail',
-      packet: { checkOutput: tail(output, MAX_OUTPUT), summary: `${node.run.join(' ')} ${pass ? 'passed' : `failed (exit ${code ?? 'none'})`}.` },
+      packet: {
+        checkOutput: tail(output, MAX_OUTPUT),
+        summary: `${node.run.join(' ')} ${pass ? 'passed' : `failed (exit ${code ?? 'none'})`}.`,
+      },
     };
   }
 }
@@ -236,9 +271,16 @@ export class LandExecutor implements NodeExecutor<LandNode> {
 
   async execute(node: LandNode, packet: HandOff): Promise<NodeResult> {
     const head = this.ctx.head;
-    if (!head?.sessionId) return { outcome: 'fail', packet: { summary: 'There is nothing to land: no agent node made changes.' } };
-    const files = (await changedFiles(head.worktree, this.ctx.baseCommit, await snapshot(head.worktree, null, 'ADE land'))).map((c) => c.path);
-    if (!files.length) return { outcome: 'fail', packet: { summary: 'There is nothing to land: the run changed no files.' } };
+    if (!head?.sessionId)
+      return {
+        outcome: 'fail',
+        packet: { summary: 'There is nothing to land: no agent node made changes.' },
+      };
+    const files = (
+      await changedFiles(head.worktree, this.ctx.baseCommit, await snapshot(head.worktree, null, 'ADE land'))
+    ).map((c) => c.path);
+    if (!files.length)
+      return { outcome: 'fail', packet: { summary: 'There is nothing to land: the run changed no files.' } };
     const message = packet.workItem.title ? `${packet.workItem.title}` : this.ctx.workflowName;
     const mode = node.mode === 'apply' ? 'apply' : 'commit';
     const session = this.deps.repos.sessions.require(head.sessionId);
@@ -264,7 +306,10 @@ export class LandExecutor implements NodeExecutor<LandNode> {
 export class ConnectorExecutor implements NodeExecutor<ConnectorNode> {
   readonly type = 'connector' as const;
   async execute(node: ConnectorNode): Promise<NodeResult> {
-    return { outcome: 'fail', packet: { summary: `The ${node.connector} action "${node.action}" is not supported yet.` } };
+    return {
+      outcome: 'fail',
+      packet: { summary: `The ${node.connector} action "${node.action}" is not supported yet.` },
+    };
   }
 }
 
@@ -278,6 +323,9 @@ export function commandResolver(node: Command, nodeEnv: Record<string, string>) 
     const command = toSpawnable(path, node.command);
     if (!command) return null;
     const usesNode = command.command === node.command;
-    return { command: usesNode ? { command: command.command, args: [...node.args, ...command.args] } : command, env: usesNode ? nodeEnv : {} };
+    return {
+      command: usesNode ? { command: command.command, args: [...node.args, ...command.args] } : command,
+      env: usesNode ? nodeEnv : {},
+    };
   };
 }

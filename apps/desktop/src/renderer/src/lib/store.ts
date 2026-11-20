@@ -31,6 +31,8 @@ interface State {
   workspaceId: string | null;
   agents: AgentStatus[];
   tab: Tab;
+  /** The workflow run the Workflows screen should show (set from Needs you). */
+  focusRunId: string | null;
   selectedSessionId: string | null;
   sessions: Record<string, Session>;
   views: Record<string, SessionView>;
@@ -77,6 +79,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   workspaceId: null,
   agents: [],
   tab: 'sessions',
+  focusRunId: null,
   selectedSessionId: null,
   sessions: {},
   views: {},

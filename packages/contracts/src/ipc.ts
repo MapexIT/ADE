@@ -127,6 +127,11 @@ export const StartWorkflowInput = z.object({
 });
 export type StartWorkflowInput = z.input<typeof StartWorkflowInput>;
 
+export const WorkflowDetail = z.object({ summary: WorkflowSummary, yaml: z.string(), definition: z.unknown() });
+export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
+
+export const HandOffSample = z.object({ summary: z.string().max(200_000).default(''), diff: z.string().max(400_000).default(''), checkOutput: z.string().max(200_000).default('') });
+
 /** Requests served by the host utility process. */
 export const hostApi = defineApi({
   'app.ping': method(z.object({}), z.object({ pid: z.number(), startedAt: z.string() })),
@@ -185,6 +190,14 @@ export const hostApi = defineApi({
 
   'workflows.list': method(z.object({ workspaceId: Id.nullable() }), z.array(WorkflowSummary)),
   'workflows.start': method(StartWorkflowInput, WorkflowRunView),
+  'workflows.get': method(z.object({ workspaceId: Id, workflowId: z.string().min(1).max(300) }), WorkflowDetail),
+  /** WF-01: saves an edited workflow to `.ade/workflows/<file>`. Structural problems are returned, not refused. */
+  'workflows.save': method(z.object({ workspaceId: Id, file: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,80}\.ya?ml$/i), definition: z.unknown() }), WorkflowSummary),
+  /** WF-11: runs one node on sample input as a one-step run. */
+  'workflows.testNode': method(
+    z.object({ workspaceId: Id, node: z.unknown(), sample: HandOffSample.default({ summary: '', diff: '', checkOutput: '' }), workItem: z.record(z.string(), z.string()).default({}), agentOverrides: z.partialRecord(AgentId, AgentId).default({}) }),
+    WorkflowRunView,
+  ),
   'workflows.runs': method(z.object({ workspaceId: Id }), z.array(WorkflowRunView)),
   'workflows.decideGate': method(z.object({ runId: Id, nodeId: z.string(), approved: z.boolean() }), Ok),
   'workflows.resume': method(z.object({ runId: Id }), Ok),
