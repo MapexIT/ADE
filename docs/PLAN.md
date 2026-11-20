@@ -6,6 +6,11 @@ short summary of what was built and what was deferred, then **stop and wait for 
 
 Feature IDs refer to `docs/FEATURES.md`.
 
+> Status on 2026-11-20: M1 to M4 are built and their Playwright gates pass on Windows; CI runs the unit and
+> integration suite on Ubuntu (and on Windows for pushes to main). Open items are listed in
+> `docs/DECISIONS.md` under "Spike answers" and "Open questions". Tasks left unticked are partly done or need
+> a human (real agents, clean machines, connector accounts).
+
 ## M0 - Spike (throwaway code on a `spike` branch)
 
 Goal: answer the eight spike questions in `docs/DECISIONS.md` before any product code exists.
@@ -32,39 +37,39 @@ Goal: answer the eight spike questions in `docs/DECISIONS.md` before any product
 
 ## M1 - Skeleton
 
-- [ ] **M1-T01** Monorepo: pnpm workspaces, strict TypeScript, ESLint, Prettier, Vitest, CI on Windows and
+- [x] **M1-T01** Monorepo: pnpm workspaces, strict TypeScript, ESLint, Prettier, Vitest, CI on Windows and
       Ubuntu. Done when CI is green on an empty test.
-- [ ] **M1-T02** Electron shell: main, typed preload, sandboxed renderer with CSP, host and pty utility
+- [x] **M1-T02** Electron shell: main, typed preload, sandboxed renderer with CSP, host and pty utility
       processes with supervised restart. Done when killing either utility process restarts it and the UI
       shows a reconnect notice.
-- [ ] **M1-T03** `packages/contracts`: zod schemas for entities, IPC requests and events, plus request and
+- [x] **M1-T03** `packages/contracts`: zod schemas for entities, IPC requests and events, plus request and
       stream helpers. Done when an invalid payload is rejected in a test.
-- [ ] **M1-T04** UI foundation: tokens, Tailwind, restyled shadcn/ui base components, top bar, Dockview
+- [x] **M1-T04** UI foundation: tokens, Tailwind, restyled shadcn/ui base components, top bar, Dockview
       layout with persistence, command palette. Done when the layout survives a restart.
-- [ ] **M1-T05** SQLite with migrations; workspaces and settings; "open repository" flow that requires a
+- [x] **M1-T05** SQLite with migrations; workspaces and settings; "open repository" flow that requires a
       Git repository. Done when a workspace reopens after a restart.
-- [ ] **M1-T06** Editor (ED-01, ED-02). Done when a file can be found, edited and saved, and an external
+- [x] **M1-T06** Editor (ED-01, ED-02). Done when a file can be found, edited and saved, and an external
       change is detected.
-- [ ] **M1-T07** `pnpm dist` produces installers on both CI platforms. Done when the artefacts exist.
+- [x] **M1-T07** `pnpm dist` produces installers on both CI platforms. Done when the artefacts exist.
 
 **Gate (Playwright):** launch, open a repository, edit and save a file, restart, layout and workspace are
 restored.
 
 ## M2 - Sessions
 
-- [ ] **M2-T01** `packages/fake-agent` with scripted scenarios: message, tool call, permission request,
+- [x] **M2-T01** `packages/fake-agent` with scripted scenarios: message, tool call, permission request,
       plan, question, failure, hang. Done when each scenario runs from a test.
-- [ ] **M2-T02** `packages/acp-client`: `AgentRuntime` and `AgentSession` over the official SDK, runtimes
+- [x] **M2-T02** `packages/acp-client`: `AgentRuntime` and `AgentSession` over the official SDK, runtimes
       for the three agents, detection and health (ST-01). Done when the fake agent and one real agent run
       through the same interface.
-- [ ] **M2-T03** Session service, state machine and event store. Done when every transition in
+- [x] **M2-T03** Session service, state machine and event store. Done when every transition in
       `docs/PRODUCT.md` has a unit test and invalid transitions are rejected.
-- [ ] **M2-T04** Composer (ST-02, ST-03, ST-04).
-- [ ] **M2-T05** Timeline, inline results, plan panel, session header (WA-01 to WA-04).
-- [ ] **M2-T06** Steering (SR-01 to SR-05).
-- [ ] **M2-T07** Permissions: profiles, approval card, reject with a note, Needs-you inbox, notifications
+- [x] **M2-T04** Composer (ST-02, ST-03, ST-04).
+- [x] **M2-T05** Timeline, inline results, plan panel, session header (WA-01 to WA-04).
+- [x] **M2-T06** Steering (SR-01 to SR-05).
+- [x] **M2-T07** Permissions: profiles, approval card, reject with a note, Needs-you inbox, notifications
       (AP-01 to AP-05).
-- [ ] **M2-T08** Sessions list, concurrency cap, history, usage, limits, protocol inspector (PL-01, PL-02,
+- [x] **M2-T08** Sessions list, concurrency cap, history, usage, limits, protocol inspector (PL-01, PL-02,
       HI-01, HI-03, HI-04, WA-05).
 
 **Gate (Playwright, fake agent):** start a session, see a tool call, approve a permission request, receive
@@ -73,28 +78,29 @@ of the three agents on Windows and on Linux.
 
 ## M3 - Worktrees and review
 
-- [ ] **M3-T01** `packages/git`: worktree create and remove, setup script, bring my changes (CN-01 to
+- [x] **M3-T01** `packages/git`: worktree create and remove, setup script, bring my changes (CN-01 to
       CN-03), with integration tests on temporary repositories.
-- [ ] **M3-T02** Checkpoints at turn start and end; undo turn (RV-02, RV-04).
-- [ ] **M3-T03** Changes view with Monaco diff; per-turn diff (RV-01, RV-03).
-- [ ] **M3-T04** Comment to agent; edit in place with attribution (RV-05, RV-06).
-- [ ] **M3-T05** Land and discard; audit log (RV-07, RV-08, HI-02).
+- [x] **M3-T02** Checkpoints at turn start and end; undo turn (RV-02, RV-04).
+- [x] **M3-T03** Changes view with Monaco diff; per-turn diff (RV-01, RV-03).
+- [x] **M3-T04** Comment to agent; edit in place with attribution (RV-05, RV-06).
+- [x] **M3-T05** Land and discard; audit log (RV-07, RV-08, HI-02).
 - [ ] **M3-T06** Sandbox pass-through, sandbox badge, minimal environment (CN-04 to CN-06).
+      Badge and minimal environment are done and tested; pass-through waits for spike question 5.
 
 **Gate (Playwright, fake agent):** two turns edit two files; the per-turn diff is correct; undo turn 2;
 land one file into the checkout; discard the session; the final patch exists in app data.
 
 ## M4 - Terminals and code runner
 
-- [ ] **M4-T01** pty process and terminal panel: tabs, splits, search, resize, process tree kill (TM-01,
+- [x] **M4-T01** pty process and terminal panel: tabs, splits, search, resize, process tree kill (TM-01,
       TM-02, TM-06).
-- [ ] **M4-T02** Shell-integration scripts and parser, unit-tested on recorded byte streams (SM-02).
-- [ ] **M4-T03** Smart terminal: blocks, sticky header, jump, clickable output (SM-01, SM-06, SM-07).
-- [ ] **M4-T04** Status bar (SM-03).
+- [x] **M4-T02** Shell-integration scripts and parser, unit-tested on recorded byte streams (SM-02).
+- [x] **M4-T03** Smart terminal: blocks, sticky header, jump, clickable output (SM-01, SM-06, SM-07).
+- [x] **M4-T04** Status bar (SM-03).
 - [ ] **M4-T05** Agent terminal UI, agent awareness, attention ring, agent command terminals (TM-03, SM-04,
-      SM-05, TM-04).
-- [ ] **M4-T06** Send to agent and Fix with agent (TM-05, SM-08).
-- [ ] **M4-T07** Code runner: detection, run bar, run output, send run to agent (CR-01 to CR-04).
+      SM-05, TM-04). Agent terminal UI, awareness and the ring are done; TM-04 live terminals are open.
+- [x] **M4-T06** Send to agent and Fix with agent (TM-05, SM-08).
+- [x] **M4-T07** Code runner: detection, run bar, run output, send run to agent (CR-01 to CR-04).
 
 **Gate (Playwright):** a failing command produces a failed block; Fix with agent starts a turn with the
 block attached; running a configuration adds a history row.
@@ -106,8 +112,8 @@ block attached; running a configuration adds a history row.
 - [ ] **M5-T03** GitHub issues and Projects items in the work item panel (CO-01).
 - [ ] **M5-T04** Start from a work item, branch naming, linked sessions; connectors passed to agents as MCP
       servers (CO-02 to CO-04).
-- [ ] **M5-T05** First-run setup and settings (PK-02, HI-05).
-- [ ] **M5-T06** Installers, self-update and signing configuration (PK-01, PK-03). Signing certificates
+- [x] **M5-T05** First-run setup and settings (PK-02, HI-05).
+- [x] **M5-T06** Installers, self-update and signing configuration (PK-01, PK-03). Signing certificates
       come from the user: leave documented placeholders, never commit secrets.
 - [ ] **M5-T07** Clean-machine install test in CI for Windows and Linux.
 

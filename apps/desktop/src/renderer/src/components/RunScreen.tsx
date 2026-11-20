@@ -103,7 +103,7 @@ export function RunScreen() {
             ))}
           </select>
         </Field>
-        <Button variant="primary" disabled={!config} onClick={() => void run()}>
+        <Button variant="primary" disabled={!config} onClick={() => void run()} aria-label="Run the configuration">
           Run
         </Button>
         {config ? <code className="self-center text-[12px] text-ink-muted">{config.command.join(' ')}</code> : null}

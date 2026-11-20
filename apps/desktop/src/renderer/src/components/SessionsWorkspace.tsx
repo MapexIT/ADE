@@ -48,10 +48,17 @@ export function SessionsWorkspace() {
       })
       .catch(() => defaultLayout(event.api));
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const persist = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      void host.call('settings.set', { key: LAYOUT_KEY, value: event.api.toJSON() });
+    };
     event.api.onDidLayoutChange(() => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void host.call('settings.set', { key: LAYOUT_KEY, value: event.api.toJSON() }), 400);
+      timer = setTimeout(persist, 150);
     });
+    // A change made just before quitting is still saved.
+    window.addEventListener('beforeunload', () => timer && persist());
   };
 
   // Opening a file shows the editor panel next to the session, and remembers its place.
