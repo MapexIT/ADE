@@ -26,6 +26,7 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     entry: join(__dirname, 'host.js'),
     env: { ADE_USER_DATA: userData, ...(devFakeAgent ? { ADE_FAKE_AGENT_ENTRY: join(__dirname, 'fake-agent.js') } : {}) },
     onStatus: (status) => publish('process.status', { which: 'host', status }),
+    onReady: () => sendCredentials(),
     onMessage: (msg) => {
       const m = msg as { type?: string; sessionId?: string; title?: string; body?: string };
       if (m.type === 'notify' && m.sessionId) notify(m.title ?? 'ADE', m.body ?? '', m.sessionId);
@@ -38,6 +39,20 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     onStatus: (status) => publish('process.status', { which: 'pty', status }),
   }),
 };
+
+/** Connector tokens go to the host in memory on every (re)start and after every change; never to disk unencrypted. */
+function sendCredentials() {
+  const values: Record<string, string> = {};
+  for (const key of ['shortcut', 'github'] as const) {
+    try {
+      const v = credentials.get(key);
+      if (v) values[key] = v;
+    } catch {
+      // unreadable entry: leave it out
+    }
+  }
+  supervisors.host.post({ type: 'credentials', values });
+}
 
 /** AP-05: a desktop notification; clicking it focuses that session. Skipped while the window has focus. */
 function notify(title: string, body: string, sessionId?: string) {
@@ -81,10 +96,12 @@ const handlers: Handlers<MainApi> = {
   'main.credentials.status': () => ({ available: credentials.available(), backend: credentials.backend(), stored: credentials.stored() }),
   'main.credentials.set': ({ key, secret }) => {
     credentials.set(key, secret);
+    sendCredentials();
     return { ok: true };
   },
   'main.credentials.delete': ({ key }) => {
     credentials.delete(key);
+    sendCredentials();
     return { ok: true };
   },
   'main.info': () => ({ version: app.getVersion(), platform: process.platform, userData, isPackaged: app.isPackaged }),

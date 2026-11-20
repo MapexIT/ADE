@@ -9,6 +9,7 @@ interface Options {
   env: Record<string, string>;
   onStatus: (status: ProcessStatus) => void;
   onMessage?: (message: unknown) => void;
+  onReady?: () => void;
 }
 
 /**
@@ -37,6 +38,7 @@ export class ProcessSupervisor {
     this.child = child;
     child.on('message', (msg: unknown) => {
       if ((msg as { type?: string })?.type === 'ready') {
+        this.opts.onReady?.();
         this.opts.onStatus('up');
         for (const wc of this.renderers) this.connect(wc);
       } else this.opts.onMessage?.(msg);
@@ -69,6 +71,11 @@ export class ProcessSupervisor {
     this.renderers.add(wc);
     wc.once('destroyed', () => this.renderers.delete(wc));
     this.connect(wc);
+  }
+
+  /** Sends a message to the process over its parent port (main-only data such as decrypted tokens). */
+  post(message: unknown): void {
+    this.child?.postMessage(message);
   }
 
   /** Kills the process on purpose (used by "restart" and by tests of the reconnect path). */

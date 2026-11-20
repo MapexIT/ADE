@@ -10,6 +10,7 @@ import { ReviewService } from './review-service.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig } from './workspace-config.ts';
+import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './connectors.ts';
 import { WorkItemService } from './work-items.ts';
 
 export interface HostConfig {
@@ -62,7 +63,12 @@ export function createHost(config: HostConfig) {
   const workspaces = new WorkspaceService(repos);
   const agents = new AgentService(runtimes);
   const files = new FileService(repos, sessions);
+  const credentials = new CredentialCache();
   const workItems = new WorkItemService();
+  const shortcut = new ShortcutMcpProvider(credentials);
+  workItems.register(shortcut);
+  const github = new GitHubCliProvider(credentials);
+  if (github.available()) workItems.register(github);
   const startedAt = new Date().toISOString();
 
   const workspaceRoot = (workspaceId: string) => {
@@ -151,7 +157,16 @@ export function createHost(config: HostConfig) {
     },
     'runs.history': ({ workspaceId }) => repos.runs.history(workspaceId),
     'audit.list': ({ workspaceId }) => repos.audit.list(workspaceId),
+    'workItems.sources': () => workItems.sources(),
     'workItems.list': ({ source, query }) => workItems.list(source, query),
+  };
+
+  // CO-04: connectors are passed to agents as MCP servers only when the user opted in, because the agent then
+  // holds the connector token. Off by default.
+  sessions.mcpServersFor = () => {
+    if (!repos.settings.get<boolean>('connectors.shareWithAgents', false)) return [];
+    const token = credentials.get('shortcut');
+    return token ? [{ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } }] : [];
   };
 
   sessions.recover();
@@ -165,6 +180,11 @@ export function createHost(config: HostConfig) {
     review,
     workItems,
     paths,
+    /** Main hands over decrypted connector tokens; they stay in memory only. */
+    setCredentials(values: Partial<Record<'shortcut' | 'github', string>>) {
+      credentials.set(values);
+      void shortcut.reset();
+    },
     async dispose() {
       await sessions.shutdown();
       db.close();

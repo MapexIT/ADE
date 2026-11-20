@@ -15,7 +15,7 @@ export function WorkItemsScreen() {
   const set = useStore((s) => s.set);
 
   useEffect(() => {
-    void main('main.credentials.status', {}).then((s) => setConnected(s.stored), () => setConnected([]));
+    void host.call('workItems.sources', {}).then((s) => setConnected(s.filter((x) => x.connected).map((x) => x.source)), () => setConnected([]));
   }, []);
 
   useEffect(() => {

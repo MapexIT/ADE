@@ -107,10 +107,12 @@ block attached; running a configuration adds a history row.
 
 ## M5 - Connectors, first run, installers (MVP)
 
-- [ ] **M5-T01** MCP client and credential store wrapper, including the Linux backend check.
-- [ ] **M5-T02** Shortcut connector and work item panel (CO-01).
-- [ ] **M5-T03** GitHub issues and Projects items in the work item panel (CO-01).
-- [ ] **M5-T04** Start from a work item, branch naming, linked sessions; connectors passed to agents as MCP
+- [x] **M5-T01** MCP client and credential store wrapper, including the Linux backend check.
+- [ ] **M5-T02** Shortcut connector and work item panel (CO-01). Built on the hosted MCP server with tool
+      discovery; needs a check against a real Shortcut workspace.
+- [ ] **M5-T03** GitHub issues and Projects items in the work item panel (CO-01). Issues work through the `gh`
+      CLI; Projects items are open.
+- [x] **M5-T04** Start from a work item, branch naming, linked sessions; connectors passed to agents as MCP
       servers (CO-02 to CO-04).
 - [x] **M5-T05** First-run setup and settings (PK-02, HI-05).
 - [x] **M5-T06** Installers, self-update and signing configuration (PK-01, PK-03). Signing certificates

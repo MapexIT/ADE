@@ -22,12 +22,9 @@ export interface AgentInstallInfo {
   version: string | null;
 }
 
-export interface McpServerSpec {
-  name: string;
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}
+export type McpServerSpec =
+  | { name: string; command: string; args: string[]; env: Record<string, string> }
+  | { name: string; url: string; headers: Record<string, string> };
 
 export interface StartOptions {
   /** Absolute path of the session worktree. Every agent process runs here. */

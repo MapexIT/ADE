@@ -109,9 +109,13 @@ probed yet; CI runs the fake-agent suite on Ubuntu.
   their output shows in the tool card.
 - **Scrollback restore (TM-01).** Terminal output is kept in memory while ADE runs; serialising it to disk on
   exit is not built yet.
-- **Shortcut and GitHub connectors (M5-T02, M5-T03).** The credential store and the provider registry exist;
-  the MCP clients are not wired. Which Shortcut MCP tools list stories assigned to the user must be read from
-  the server's tool list, not guessed.
+- **Shortcut and GitHub connectors (M5-T02, M5-T03).** GitHub issues come from `gh search issues
+  --assignee=@me` (verified locally), using the user's `gh` login or a stored token. Shortcut uses the hosted MCP
+  server with the stored token; ADE picks the story search tool and its query argument from the server's own
+  tool list and searches `owner:me !is:done`. Both the tool choice and that query syntax need a check against a
+  real workspace. GitHub Projects items are not built.
+- **Connectors for agents (CO-04).** Passing a connector to agents hands them the token, so it is opt-in in
+  settings and off by default; HTTP servers go only to agents that advertise HTTP MCP.
 - **Linux safeStorage.** `getSelectedStorageBackend()` values `basic_text` and `unknown` are treated as
   unsafe and storing is refused. Confirm the full list of backend names on a real Linux desktop.
 

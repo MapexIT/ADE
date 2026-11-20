@@ -57,12 +57,10 @@ interface LocalTerminal {
   exitStatus: { exitCode: number | null; signal: string | null } | null;
 }
 
-const toMcp = (s: McpServerSpec): McpServer => ({
-  name: s.name,
-  command: s.command,
-  args: s.args,
-  env: Object.entries(s.env).map(([name, value]) => ({ name, value })),
-});
+const toMcp = (s: McpServerSpec): McpServer =>
+  'url' in s
+    ? { type: 'http', name: s.name, url: s.url, headers: Object.entries(s.headers).map(([name, value]) => ({ name, value })) }
+    : { name: s.name, command: s.command, args: s.args, env: Object.entries(s.env).map(([name, value]) => ({ name, value })) };
 
 /**
  * Adapter from the official ACP SDK to ADE's `AgentSession`. One instance owns one agent process.
@@ -278,7 +276,8 @@ export class AcpAgentSession implements AgentSession {
       ...(init.agentInfo?.version ? { agentVersion: init.agentInfo.version } : {}),
     };
 
-    const mcpServers = (this.opts.mcpServers ?? []).map(toMcp);
+    // HTTP servers are passed only to agents that advertise HTTP MCP support (ACP session setup).
+    const mcpServers = (this.opts.mcpServers ?? []).filter((s) => !('url' in s) || this.capabilities.mcpHttp).map(toMcp);
     let modes: SessionModeState | null | undefined;
     try {
       if (this.opts.resumeSessionId && this.capabilities.loadSession) {
