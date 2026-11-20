@@ -23,7 +23,7 @@ export const NeedsYouItem = z.object({
   id: z.string(),
   sessionId: z.string(),
   sessionTitle: z.string(),
-  kind: z.enum(['permission', 'question', 'setup-failed', 'limit']),
+  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit']),
   title: z.string(),
   createdAt: z.string(),
 });

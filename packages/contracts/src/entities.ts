@@ -180,6 +180,8 @@ export const FileChange = z.object({
   status: z.enum(['added', 'modified', 'deleted', 'renamed', 'binary']),
   additions: z.number().int(),
   deletions: z.number().int(),
+  /** RV-06: the user edited this file in ADE while the agent was idle. */
+  editedByUser: z.boolean().default(false),
 });
 export type FileChange = z.infer<typeof FileChange>;
 

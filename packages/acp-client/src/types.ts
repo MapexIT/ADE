@@ -64,6 +64,8 @@ export interface AgentSession {
   readonly modes: SessionMode[];
   readonly currentModeId: string | null;
   readonly pid: number | null;
+  /** Latest usage the agent reported (HI-03), or null when it reports none. */
+  readonly usage: { inputTokens: number | null; outputTokens: number | null; costUsd: number | null } | null;
   prompt(content: PromptBlock[]): Promise<StopReason>;
   cancel(): Promise<void>;
   setMode(modeId: string): Promise<void>;

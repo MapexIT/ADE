@@ -1,0 +1,7 @@
+{
+  "id": "opencode",
+  "install": null,
+  "platform": "win32",
+  "error": "OpenCode cannot be started: it is not installed or its adapter is missing.",
+  "protocol": []
+}

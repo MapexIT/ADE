@@ -162,13 +162,13 @@ export async function changedFiles(cwd: string, from: string, to: string): Promi
       const oldPath = status[++i]!;
       const path = status[++i]!;
       const c = counts.get(path);
-      out.push({ path, oldPath, status: c?.binary ? 'binary' : 'renamed', additions: c?.add ?? 0, deletions: c?.del ?? 0 });
+      out.push({ path, oldPath, status: c?.binary ? 'binary' : 'renamed', additions: c?.add ?? 0, deletions: c?.del ?? 0, editedByUser: false });
       continue;
     }
     const path = status[++i]!;
     const c = counts.get(path);
     const kind = code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified';
-    out.push({ path, oldPath: null, status: c?.binary ? 'binary' : kind, additions: c?.add ?? 0, deletions: c?.del ?? 0 });
+    out.push({ path, oldPath: null, status: c?.binary ? 'binary' : kind, additions: c?.add ?? 0, deletions: c?.del ?? 0, editedByUser: false });
   }
   return out;
 }

@@ -21,6 +21,8 @@ interface Descriptor {
   id: AgentId;
   /** The user's install, used for health and version (sign-in happens in this binary's own flow). */
   binary: string | null;
+  /** False when the bundled adapter brings its own agent runtime (Claude Code and Codex adapters do). */
+  requiresBinary: boolean;
   versionArgs: string[];
   envPolicy: EnvPolicy;
   /** How to start the ACP server for this agent. */
@@ -28,11 +30,14 @@ interface Descriptor {
 }
 
 /** Permission profile -> the agent mode ids that implement it, in preference order (matched by id, not by agent). */
+// Mode ids observed in the M0 probe (docs/spike): Claude Code advertises default, acceptEdits, plan, auto and
+// bypassPermissions; Codex advertises read-only (asks before edits), workspace-write, agent and agent-full-access.
+// The host's permission policy still enforces the profile, so "ask" and "read-only" may share a mode.
 const PROFILE_MODES: Record<PermissionProfile, string[]> = {
-  ask: ['default', 'ask', 'build', 'auto'],
-  'auto-edit': ['acceptEdits', 'auto-edit', 'autoEdit', 'auto'],
-  autonomous: ['bypassPermissions', 'full-access', 'yolo', 'autonomous'],
-  'read-only': ['plan', 'read-only', 'readonly', 'read_only'],
+  ask: ['default', 'ask', 'read-only'],
+  'auto-edit': ['acceptEdits', 'workspace-write', 'auto-edit'],
+  autonomous: ['bypassPermissions', 'agent-full-access', 'full-access'],
+  'read-only': ['plan', 'read-only', 'readonly'],
 };
 
 export function pickModeForProfile(profile: PermissionProfile, modes: SessionMode[]): string | null {
@@ -68,7 +73,7 @@ export class AcpRuntime implements AgentRuntime {
   /** Whether ADE can start this agent's ACP server at all (adapter bundled and binary found). */
   async launchable(): Promise<{ ok: true } | { ok: false; reason: string }> {
     const install = await this.detect();
-    if (this.d.binary && !install) return { ok: false, reason: `${this.label} is not installed.` };
+    if (this.d.requiresBinary && !install) return { ok: false, reason: `${this.label} is not installed.` };
     if (!this.d.launch(install, this.locator)) return { ok: false, reason: `The ${this.label} adapter is not bundled with this build.` };
     return { ok: true };
   }
@@ -101,6 +106,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
     {
       id: 'opencode',
       binary: 'opencode',
+      requiresBinary: true,
       versionArgs: ['--version'],
       envPolicy: { prefixes: ['OPENCODE_'], names: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'] },
       launch: (install) => {
@@ -112,6 +118,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
     {
       id: 'claude-code',
       binary: 'claude',
+      requiresBinary: false,
       versionArgs: ['--version'],
       envPolicy: { prefixes: ['CLAUDE_CODE_', 'ANTHROPIC_'], names: ['CLAUDE_CONFIG_DIR'] },
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/claude-agent-acp')),
@@ -119,6 +126,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
     {
       id: 'codex',
       binary: 'codex',
+      requiresBinary: false,
       versionArgs: ['--version'],
       envPolicy: { prefixes: ['CODEX_'], names: ['OPENAI_API_KEY', 'OPENAI_BASE_URL'] },
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/codex-acp')),
@@ -129,6 +137,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
     descriptors.push({
       id: 'fake',
       binary: null,
+      requiresBinary: false,
       versionArgs: [],
       envPolicy: { prefixes: ['ADE_FAKE_'] },
       launch: () => nodeLaunch(locator, entry),
