@@ -15,6 +15,8 @@ import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './conne
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
+import { SkillService } from './skills.ts';
+import { homedir } from 'node:os';
 
 export interface HostConfig {
   userData: string;
@@ -26,6 +28,8 @@ export interface HostConfig {
   /** Resolves adapter entry points; defaults to Node resolution from this file. */
   adapterEntry?: AdapterLocator['adapterEntry'];
   databasePath?: string;
+  /** Home folder for the agents' user skills folders (SK-05); tests point it at a temporary folder. */
+  homeDir?: string;
 }
 
 const defaultAdapterEntry: AdapterLocator['adapterEntry'] = (pkg) => {
@@ -75,10 +79,21 @@ export function createHost(config: HostConfig) {
   const workflows = new WorkflowService(
     repos,
     bus,
-    { repos, bus, sessions, review, worktreesDir: paths.worktrees, resolveCommand: commandResolver(config.node, config.nodeEnv) },
+    {
+      repos,
+      bus,
+      sessions,
+      review,
+      worktreesDir: paths.worktrees,
+      resolveCommand: commandResolver(config.node, config.nodeEnv),
+    },
     () => sessions.refreshInbox(),
   );
   sessions.inboxSources.push(() => workflows.inbox());
+  const skills = new SkillService(join(config.userData, 'skills'), config.homeDir ?? homedir());
+  sessions.installSkills = async (repoRoot, worktree, agentId, names) =>
+    skills.install(worktree, agentId, await skills.resolve(repoRoot, names));
+  const rootOrNull = (workspaceId: string | null) => (workspaceId ? workspaceRoot(workspaceId) : null);
   const startedAt = new Date().toISOString();
 
   const workspaceRoot = (workspaceId: string) => {
@@ -113,7 +128,9 @@ export function createHost(config: HostConfig) {
       await sessions.prompt(sessionId, content);
       return { ok: true };
     },
-    'sessions.queue': async ({ sessionId, content }) => ({ id: (await sessions.prompt(sessionId, content)).id }),
+    'sessions.queue': async ({ sessionId, content }) => ({
+      id: (await sessions.prompt(sessionId, content)).id,
+    }),
     'sessions.unqueue': ({ sessionId, id }) => {
       sessions.unqueue(sessionId, id);
       return { ok: true };
@@ -153,17 +170,21 @@ export function createHost(config: HostConfig) {
     'inbox.list': () => sessions.inbox(),
     'files.list': ({ root }) => files.list(root),
     'files.read': ({ path }) => files.read(path),
-    'files.write': ({ path, content, expectedMtimeMs, sessionId }) => files.write(path, content, expectedMtimeMs, sessionId),
+    'files.write': ({ path, content, expectedMtimeMs, sessionId }) =>
+      files.write(path, content, expectedMtimeMs, sessionId),
     'runs.configs': async ({ workspaceId }) => {
       repos.runs.replaceDetected(workspaceId, await detectRunConfigs(workspaceRoot(workspaceId)));
       return repos.runs.configs(workspaceId);
     },
     'runs.saveConfig': (c) => repos.runs.saveUser(c),
     'runs.record': (run) => {
-      const ws = run.sessionId ? repos.sessions.get(run.sessionId)?.workspaceId : repos.workspaces.list().find((w) => run.worktreePath.startsWith(w.rootPath))?.id;
+      const ws = run.sessionId
+        ? repos.sessions.get(run.sessionId)?.workspaceId
+        : repos.workspaces.list().find((w) => run.worktreePath.startsWith(w.rootPath))?.id;
       const saved = repos.runs.record(run, ws ?? null);
       workflows.onRunRecorded(run, ws ?? null);
-      if (run.sessionId) sessions.record(run.sessionId, { type: 'run.finished', runId: saved.id, exitCode: run.exitCode });
+      if (run.sessionId)
+        sessions.record(run.sessionId, { type: 'run.finished', runId: saved.id, exitCode: run.exitCode });
       return saved;
     },
     'runs.history': ({ workspaceId }) => repos.runs.history(workspaceId),
@@ -178,6 +199,41 @@ export function createHost(config: HostConfig) {
     'workflows.resume': ({ runId }) => workflows.resume(runId),
     'workflows.retryFrom': ({ runId, nodeId }) => workflows.retryFrom(runId, nodeId),
     'workflows.cancel': ({ runId }) => workflows.cancel(runId),
+    'skills.list': ({ workspaceId }) => skills.list(rootOrNull(workspaceId)),
+    'skills.read': ({ workspaceId, id }) => skills.read(rootOrNull(workspaceId), id),
+    'skills.save': ({ workspaceId, ...input }) => skills.save(rootOrNull(workspaceId), input),
+    'skills.sync': ({ workspaceId, id, enabled }) => skills.sync(rootOrNull(workspaceId), id, enabled),
+    'skills.draft': ({ workspaceId, agentId, name, description, fromSessionId }) => {
+      // SK-04: an ordinary session drafts the skill into .ade/skills, so it is reviewed and landed like any change.
+      const transcript = fromSessionId
+        ? repos.events
+            .list(fromSessionId)
+            .flatMap((e) =>
+              e.type === 'agent.message'
+                ? [`Agent: ${e.text}`]
+                : e.type === 'user.message'
+                  ? [`User: ${e.content.map((b) => ('text' in b ? b.text : '')).join(' ')}`]
+                  : [],
+            )
+            .join('\n\n')
+            .slice(-20_000)
+        : '';
+      const prompt = [
+        `Write an Agent Skill called ${name}.`,
+        `Create the file .ade/skills/${name}/SKILL.md. Start it with YAML frontmatter that has exactly "name: ${name}" and a one-sentence "description:" saying when to use the skill, then write clear, step-by-step instructions. Put long reference material or scripts in files next to SKILL.md and link them.`,
+        `What the skill is for: ${description}`,
+        transcript ? `Base it on how this past session went:\n\n${transcript}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      return sessions.create({
+        workspaceId,
+        agentId,
+        title: `Draft skill: ${name}`,
+        prompt: [{ type: 'text', text: prompt }],
+        permissionProfile: 'auto-edit',
+      });
+    },
     'workItems.sources': () => workItems.sources(),
     'workItems.list': ({ source, query }) => workItems.list(source, query),
   };
@@ -187,7 +243,9 @@ export function createHost(config: HostConfig) {
   sessions.mcpServersFor = () => {
     if (!repos.settings.get<boolean>('connectors.shareWithAgents', false)) return [];
     const token = credentials.get('shortcut');
-    return token ? [{ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } }] : [];
+    return token
+      ? [{ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } }]
+      : [];
   };
 
   sessions.recover();
@@ -202,6 +260,7 @@ export function createHost(config: HostConfig) {
     review,
     workItems,
     workflows,
+    skills,
     paths,
     /** Main hands over decrypted connector tokens; they stay in memory only. */
     setCredentials(values: Partial<Record<'shortcut' | 'github', string>>) {

@@ -9,6 +9,7 @@ import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
 import { TerminalsScreen } from './components/terminal/TerminalsScreen.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { WorkflowsScreen } from './components/workflows/WorkflowsScreen.tsx';
+import { SkillsScreen } from './components/SkillsScreen.tsx';
 import { WorkItemsScreen } from './components/WorkItemsScreen.tsx';
 import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
@@ -79,6 +80,7 @@ export function App() {
           <motion.div key={tab} className="absolute inset-0" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
             {tab === 'work-items' ? <WorkItemsScreen /> : null}
             {tab === 'workflows' ? <WorkflowsScreen /> : null}
+            {tab === 'skills' ? <SkillsScreen /> : null}
             {tab === 'terminals' ? <TerminalsScreen /> : null}
             {tab === 'run' ? <RunScreen /> : null}
             {tab === 'review' ? <ReviewScreen /> : null}

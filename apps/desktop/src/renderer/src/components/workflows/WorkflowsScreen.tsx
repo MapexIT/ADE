@@ -42,6 +42,12 @@ export function WorkflowsScreen() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [dialog, setDialog] = useState<'run' | 'test' | null>(null);
+  const [skillNames, setSkillNames] = useState<string[]>([]);
+  useEffect(() => {
+    void attempt(() => host.call('skills.list', { workspaceId })).then((l) =>
+      setSkillNames([...new Set((l ?? []).filter((x) => x.location !== 'installed').map((x) => x.name))]),
+    );
+  }, [workspaceId]);
 
   const reloadList = useCallback(async () => {
     const l = (await attempt(() => host.call('workflows.list', { workspaceId }))) ?? [];
@@ -360,6 +366,7 @@ export function WorkflowsScreen() {
                   node={node}
                   readOnly={readOnly}
                   isStart={draft.nodes[0]?.id === node.id}
+                  skillNames={skillNames}
                   onChange={(next) => {
                     edit(updateNode(draft, node.id, next));
                     if (next.id !== node.id) setSelectedNode(next.id);

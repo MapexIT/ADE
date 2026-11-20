@@ -51,6 +51,7 @@ export function NodeSettings({
   onMakeStart,
   onTest,
   isStart,
+  skillNames,
 }: {
   node: WorkflowNode;
   readOnly: boolean;
@@ -59,6 +60,8 @@ export function NodeSettings({
   onMakeStart: () => void;
   onTest: (() => void) | null;
   isStart: boolean;
+  /** Repository and personal skills that can be attached (SK-01). */
+  skillNames: string[];
 }) {
   const [id, setId] = useState(node.id);
   useEffect(() => setId(node.id), [node.id]);
@@ -143,6 +146,38 @@ export function NodeSettings({
                 className={`${inputClass} py-2`}
               />
             </Field>
+            <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
+              <legend className="mb-1 font-semibold">Skills for this step</legend>
+              {[...new Set([...skillNames, ...node.skills])].map((name) => (
+                <label key={name} className="flex min-h-9 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={node.skills.includes(name)}
+                    onChange={(e) =>
+                      set({
+                        skills: e.target.checked
+                          ? [...node.skills, name]
+                          : node.skills.filter((x) => x !== name),
+                      })
+                    }
+                    className="size-4 accent-[var(--accent)]"
+                  />
+                  <span className="font-mono text-[12px]">{name}</span>
+                  {!skillNames.includes(name) ? (
+                    <span className="text-[12px] text-danger">not in the library</span>
+                  ) : null}
+                </label>
+              ))}
+              {skillNames.length === 0 && node.skills.length === 0 ? (
+                <span className="text-[12px] text-ink-muted">
+                  No skills yet. Build one on the Skills screen.
+                </span>
+              ) : (
+                <span className="text-[12px] text-ink-muted">
+                  Loaded into the agent's skills folder for this step only.
+                </span>
+              )}
+            </fieldset>
           </>
         ) : null}
 

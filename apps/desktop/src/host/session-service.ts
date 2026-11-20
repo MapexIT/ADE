@@ -67,7 +67,7 @@ const titleFrom = (content: PromptBlock[]) => {
  */
 export class SessionService {
   private readonly live = new Map<string, LiveSession>();
-  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string }>();
+  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string; skills?: string[] }>();
   private readonly booting = new Set<string>();
   private disposed = false;
   /** Extra MCP servers to hand agents (connectors, M5). */
@@ -147,6 +147,9 @@ export class SessionService {
   hasActiveTurn(sessionId: string) {
     return !!this.live.get(sessionId)?.turn;
   }
+
+  /** SK-01: copies named skills into the agent's skills folder in the worktree. Set by the composition root. */
+  installSkills: ((repoRoot: string, worktree: string, agentId: AgentId, names: string[]) => Promise<string[]>) | null = null;
 
   /** Other services that add items to Needs you (workflow gates and paused runs). */
   readonly inboxSources: (() => NeedsYouItem[])[] = [];
@@ -239,7 +242,7 @@ export class SessionService {
     this.repos.sessions.insert(session);
     this.append(id, { type: 'session.state_changed', from: null, to: state, reason: state === 'queued' ? 'Waiting for a free slot' : null });
     this.repos.queue.push(id, input.prompt);
-    this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}), ...(input.modelId ? { modelId: input.modelId } : {}) });
+    this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}), ...(input.modelId ? { modelId: input.modelId } : {}), ...(input.skills?.length ? { skills: input.skills } : {}) });
     this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
@@ -278,6 +281,11 @@ export class SessionService {
       if (opts.bringChanges) {
         const res = await bringChanges(workspace.rootPath, session.worktreePath!);
         this.append(sessionId, { type: 'notice', level: 'info', text: `Brought ${res.files.length} changed file(s) from your checkout.` });
+      }
+      if (opts.skills?.length) {
+        if (!this.installSkills) throw new Error('Skills are not available.');
+        const copied = await this.installSkills(workspace.rootPath, session.worktreePath!, session.agentId, opts.skills);
+        this.append(sessionId, { type: 'notice', level: 'info', text: `Loaded skills for this session: ${opts.skills.join(', ')}${copied.length < opts.skills.length ? ' (the repository already has some of them)' : ''}.` });
       }
       await this.startAgent(sessionId);
       if (opts.modeId) await this.setMode(sessionId, opts.modeId).catch(() => undefined);

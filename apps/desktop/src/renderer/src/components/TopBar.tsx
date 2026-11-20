@@ -7,6 +7,7 @@ const TABS: { tab: Tab; label: string }[] = [
   { tab: 'sessions', label: 'Sessions' },
   { tab: 'work-items', label: 'Work items' },
   { tab: 'workflows', label: 'Workflows' },
+  { tab: 'skills', label: 'Skills' },
   { tab: 'terminals', label: 'Terminals' },
   { tab: 'run', label: 'Run' },
   { tab: 'review', label: 'Review' },
