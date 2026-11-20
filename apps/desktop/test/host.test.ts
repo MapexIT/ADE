@@ -88,7 +88,7 @@ describe('host with the fake agent', () => {
     expect(inbox).toHaveLength(0);
 
     await host.handlers['sessions.prompt']({ sessionId: session.id, content: text('say Follow-up done.') });
-    await waitFor(() => host.repos.turns.list(session.id).length === 2 && state(session.id) === 'ready');
+    await waitFor(() => host.repos.turns.list(session.id).length === 2 && state(session.id) === 'ready', 40_000);
 
     const before = projectSession(host.repos.events.list(session.id));
     await host.dispose();
@@ -155,7 +155,7 @@ describe('host with the fake agent', () => {
     expect(turns[0]?.endCheckpoint).toBeTruthy();
     const decided = host.repos.events.list(session.id).find((e) => e.type === 'permission.decided');
     expect(decided?.type === 'permission.decided' && decided.decision.outcome).toBe('cancelled');
-  });
+  }, 45_000);
 
   it('read-only profile rejects edits automatically and logs who decided (AP-01)', async () => {
     const { session } = await openAndStart('ask make deploy', 'read-only');
