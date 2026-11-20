@@ -452,17 +452,31 @@ export class SessionService {
 
   // ---------------------------------------------------------------- turns
 
+  /** Sessions whose next turn is being set up; `live.turn` is only set after the start checkpoint. */
+  private readonly sending = new Set<string>();
+
   private async sendNext(sessionId: string): Promise<void> {
     const live = this.live.get(sessionId);
-    if (live?.turn) return;
+    if (live?.turn || this.sending.has(sessionId)) return;
     const session = this.repos.sessions.require(sessionId);
     if (!['starting', 'ready', 'interrupted'].includes(session.state)) return;
     const next = this.repos.queue.shift(sessionId);
     if (!next) return;
-    await this.runTurn(sessionId, next.content);
+    this.sending.add(sessionId);
+    let started = false;
+    try {
+      // runTurn runs the whole turn and may start the next one itself, so the flag is cleared as soon as this
+      // turn is live, and only cleared here when it never started.
+      await this.runTurn(sessionId, next.content, () => {
+        started = true;
+        this.sending.delete(sessionId);
+      });
+    } finally {
+      if (!started) this.sending.delete(sessionId);
+    }
   }
 
-  private async runTurn(sessionId: string, content: PromptBlock[]): Promise<void> {
+  private async runTurn(sessionId: string, content: PromptBlock[], onStarted?: () => void): Promise<void> {
     let session = this.repos.sessions.require(sessionId);
     const limits = this.limits();
     if (this.repos.turns.list(sessionId).length >= limits.maxTurns) {
@@ -477,6 +491,7 @@ export class SessionService {
     const startCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'start'), `ADE turn ${index} start`).catch(() => null);
     const turn = this.repos.turns.start(sessionId, startCommit);
     live.turn = turn;
+    onStarted?.();
     this.append(sessionId, { type: 'user.message', content, queued: false }, turn.id);
     this.append(sessionId, { type: 'turn.started', turnId: turn.id, index: turn.index }, turn.id);
     if (startCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: startCommit, at: 'start' }, turn.id);
