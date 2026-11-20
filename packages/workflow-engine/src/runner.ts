@@ -9,10 +9,17 @@ export interface NodeResult {
   costUsd?: number;
 }
 
-/** Strategy per node type (M6-T02). Agent nodes start a normal session; command nodes call the code runner. */
+/** What an executor can tell the runner while it works. */
+export interface ExecutionContext {
+  signal: AbortSignal;
+  /** Call as soon as the node has a session, so the run view links to it while it is still running. */
+  reportSession(sessionId: string): void;
+}
+
+/** Strategy per node type (M6-T02). Agent nodes start a normal session; command nodes run a command. */
 export interface NodeExecutor<T extends WorkflowNode = WorkflowNode> {
   readonly type: T['type'];
-  execute(node: T, packet: HandOff, signal: AbortSignal): Promise<NodeResult>;
+  execute(node: T, packet: HandOff, ctx: ExecutionContext): Promise<NodeResult>;
 }
 
 /** Persistence for run state (`workflow_runs` in the host's SQLite). */
@@ -86,12 +93,20 @@ export class WorkflowRunner {
         if (!executor) result = { outcome: 'fail', packet: { summary: `No executor for ${node.type} nodes.` } };
         else {
           try {
-            result = await executor.execute(node, effect.packet, this.abort.signal);
+            let reported = false;
+            const ctx: ExecutionContext = {
+              signal: this.abort.signal,
+              reportSession: (sessionId) => {
+                reported = true;
+                void this.apply({ type: 'node.session', nodeId: node.id, sessionId });
+              },
+            };
+            result = await executor.execute(node, effect.packet, ctx);
+            if (result.sessionId && !reported) await this.apply({ type: 'node.session', nodeId: node.id, sessionId: result.sessionId });
           } catch (err) {
             result = { outcome: 'fail', packet: { summary: (err as Error).message } };
           }
         }
-        if (result.sessionId) await this.apply({ type: 'node.started', nodeId: node.id, sessionId: result.sessionId, at: Date.now() }).then(() => undefined);
         queue = [
           ...queue,
           ...(await this.apply({ type: 'node.finished', nodeId: node.id, outcome: result.outcome, packet: result.packet, ...(result.turns !== undefined ? { turns: result.turns } : {}), ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}), at: Date.now() })),
@@ -135,6 +150,6 @@ export class WorkflowRunner {
 
   /** WF-11: run one node on sample input, outside any run. */
   static async testNode(executor: NodeExecutor, node: WorkflowNode, packet: Partial<HandOff> = {}): Promise<NodeResult> {
-    return executor.execute(node, { ...emptyHandOff(), ...packet }, new AbortController().signal);
+    return executor.execute(node, { ...emptyHandOff(), ...packet }, { signal: new AbortController().signal, reportSession: () => undefined });
   }
 }

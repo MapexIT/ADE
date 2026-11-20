@@ -13,6 +13,8 @@ import { readWorkspaceConfig } from './workspace-config.ts';
 import { listWorkflows } from './workflows.ts';
 import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './connectors.ts';
 import { WorkItemService } from './work-items.ts';
+import { commandResolver } from './executors.ts';
+import { WorkflowService } from './workflow-service.ts';
 
 export interface HostConfig {
   userData: string;
@@ -70,6 +72,13 @@ export function createHost(config: HostConfig) {
   workItems.register(shortcut);
   const github = new GitHubCliProvider(credentials);
   if (github.available()) workItems.register(github);
+  const workflows = new WorkflowService(
+    repos,
+    bus,
+    { repos, bus, sessions, review, worktreesDir: paths.worktrees, resolveCommand: commandResolver(config.node, config.nodeEnv) },
+    () => sessions.refreshInbox(),
+  );
+  sessions.inboxSources.push(() => workflows.inbox());
   const startedAt = new Date().toISOString();
 
   const workspaceRoot = (workspaceId: string) => {
@@ -159,6 +168,12 @@ export function createHost(config: HostConfig) {
     'runs.history': ({ workspaceId }) => repos.runs.history(workspaceId),
     'audit.list': ({ workspaceId }) => repos.audit.list(workspaceId),
     'workflows.list': ({ workspaceId }) => listWorkflows(workspaceId ? workspaceRoot(workspaceId) : null),
+    'workflows.start': (input) => workflows.start(input),
+    'workflows.runs': ({ workspaceId }) => workflows.list(workspaceId),
+    'workflows.decideGate': ({ runId, nodeId, approved }) => workflows.decideGate(runId, nodeId, approved),
+    'workflows.resume': ({ runId }) => workflows.resume(runId),
+    'workflows.retryFrom': ({ runId, nodeId }) => workflows.retryFrom(runId, nodeId),
+    'workflows.cancel': ({ runId }) => workflows.cancel(runId),
     'workItems.sources': () => workItems.sources(),
     'workItems.list': ({ source, query }) => workItems.list(source, query),
   };
@@ -172,6 +187,7 @@ export function createHost(config: HostConfig) {
   };
 
   sessions.recover();
+  workflows.recover();
   void review.prunePatches();
 
   return {
@@ -181,6 +197,7 @@ export function createHost(config: HostConfig) {
     sessions,
     review,
     workItems,
+    workflows,
     paths,
     /** Main hands over decrypted connector tokens; they stay in memory only. */
     setCredentials(values: Partial<Record<'shortcut' | 'github', string>>) {
@@ -188,6 +205,7 @@ export function createHost(config: HostConfig) {
       void shortcut.reset();
     },
     async dispose() {
+      await workflows.dispose();
       await sessions.shutdown();
       db.close();
     },

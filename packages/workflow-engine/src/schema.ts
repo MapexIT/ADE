@@ -22,6 +22,14 @@ export const BranchNode = z.object({ ...base, type: z.literal('branch'), conditi
 export const ConnectorNode = z.object({ ...base, type: z.literal('connector'), connector: z.enum(['shortcut', 'github']), action: z.string().min(1) });
 export const LandNode = z.object({ ...base, type: z.literal('land'), mode: z.enum(['apply', 'commit', 'pull-request']) });
 
+export type AgentNode = z.infer<typeof AgentNode>;
+export type CommandNode = z.infer<typeof CommandNode>;
+export type GateNode = z.infer<typeof GateNode>;
+export type LoopNode = z.infer<typeof LoopNode>;
+export type BranchNode = z.infer<typeof BranchNode>;
+export type ConnectorNode = z.infer<typeof ConnectorNode>;
+export type LandNode = z.infer<typeof LandNode>;
+
 export const WorkflowNode = z.discriminatedUnion('type', [AgentNode, CommandNode, GateNode, LoopNode, BranchNode, ConnectorNode, LandNode]);
 export type WorkflowNode = z.infer<typeof WorkflowNode>;
 export type NodeType = WorkflowNode['type'];

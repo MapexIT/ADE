@@ -12,6 +12,7 @@ import {
   type ClientConnection,
   type InitializeResponse,
   type McpServer,
+  type SessionConfigOption,
   type SessionModeState,
   type Stream,
 } from '@agentclientprotocol/sdk';
@@ -279,21 +280,25 @@ export class AcpAgentSession implements AgentSession {
     // HTTP servers are passed only to agents that advertise HTTP MCP support (ACP session setup).
     const mcpServers = (this.opts.mcpServers ?? []).filter((s) => !('url' in s) || this.capabilities.mcpHttp).map(toMcp);
     let modes: SessionModeState | null | undefined;
+    let configOptions: SessionConfigOption[] | null | undefined;
     try {
       if (this.opts.resumeSessionId && this.capabilities.loadSession) {
         const res = await agent.request('session/load', { sessionId: this.opts.resumeSessionId, cwd: this.cwd, mcpServers });
         this.agentSessionId = this.opts.resumeSessionId;
         modes = res?.modes;
+        configOptions = res?.configOptions;
       } else {
         const res = await agent.request('session/new', { cwd: this.cwd, mcpServers });
         this.agentSessionId = res.sessionId;
         modes = res.modes;
+        configOptions = res.configOptions;
       }
     } catch (err) {
       // ACP reserves -32000 for "authentication required".
       if (err instanceof RequestError && err.code === -32000) throw new AgentAuthRequiredError(err.message);
       throw err;
     }
+    this.readModels(configOptions);
     if (modes) {
       this.modes = modes.availableModes.map((m) => ({ id: m.id, name: m.name, description: m.description ?? null }));
       this.currentModeId = modes.currentModeId;
@@ -327,6 +332,25 @@ export class AcpAgentSession implements AgentSession {
   async setMode(modeId: string): Promise<void> {
     await this.connection.agent.request('session/set_mode', { sessionId: this.agentSessionId, modeId });
     this.currentModeId = modeId;
+  }
+
+  private modelOptionId: string | null = null;
+  models: { id: string; name: string }[] = [];
+  currentModelId: string | null = null;
+
+  private readModels(options: SessionConfigOption[] | null | undefined) {
+    const opt = options?.find((o) => o.category === 'model' && o.type === 'select');
+    if (!opt || opt.type !== 'select') return;
+    this.modelOptionId = opt.id;
+    this.currentModelId = String(opt.currentValue);
+    this.models = opt.options.flatMap((o) => ('group' in o ? o.options : [o])).map((o) => ({ id: o.value, name: o.name }));
+  }
+
+  async setModel(modelId: string): Promise<void> {
+    if (!this.modelOptionId || !this.models.some((m) => m.id === modelId)) throw new Error(`The agent does not offer the model ${modelId}.`);
+    const res = await this.connection.agent.request('session/set_config_option', { sessionId: this.agentSessionId, configId: this.modelOptionId, value: modelId });
+    this.readModels(res?.configOptions);
+    this.currentModelId = modelId;
   }
 
   async close(): Promise<void> {

@@ -1,7 +1,7 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { RpcError, type DiffText, type FileChange, type Session } from '@ade/contracts';
-import { applyToCheckout, changedFiles, commitFiles, discardWorktree, fileAt, looksBinary, restoreSnapshot, snapshot } from '@ade/git';
+import { applyToCheckout, changedFiles, commitFiles, discardWorktree, fileAt, git, looksBinary, restoreSnapshot, snapshot } from '@ade/git';
 import type { Repositories } from './repositories.ts';
 import type { HostPaths, SessionService } from './session-service.ts';
 
@@ -58,17 +58,23 @@ export class ReviewService {
     this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: 'turn.undone', detail: { turnIndex, checkpoint: turn.startCheckpoint } });
   }
 
-  /** RV-07: nothing lands without this explicit call. */
-  async land(sessionId: string, mode: 'apply' | 'commit', files: string[], message?: string): Promise<void> {
+  /**
+   * RV-07: nothing lands without this explicit call. `base` lets a workflow land everything since the run
+   * started (its sessions chain from one another's checkpoints) instead of only the last session's part.
+   */
+  async land(sessionId: string, mode: 'apply' | 'commit', files: string[], message?: string, base?: string): Promise<void> {
     const s = this.requireWorktree(sessionId);
     if (this.sessions.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish before landing.');
     const workspace = this.repos.workspaces.get(s.workspaceId)!;
+    const from = base ?? s.baseCommit;
     let detail: Record<string, unknown>;
     if (mode === 'apply') {
       const head = await snapshot(s.worktreePath, null, 'ADE land');
-      const how = await applyToCheckout(s.worktreePath, workspace.rootPath, s.baseCommit, head, files);
+      const how = await applyToCheckout(s.worktreePath, workspace.rootPath, from, head, files);
       detail = { files, how };
     } else {
+      // One commit on top of the run's base, so checkpoint commits never reach the branch history.
+      if (base && base !== s.baseCommit) await git(['reset', '--soft', base], { cwd: s.worktreePath });
       const commit = await commitFiles(s.worktreePath, files, message?.trim() || s.title);
       detail = { files, commit, branch: s.branch };
     }

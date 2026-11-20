@@ -37,6 +37,7 @@ export interface RunState {
 export type RunEvent =
   | { type: 'start'; workItem?: Record<string, string>; at: number }
   | { type: 'node.started'; nodeId: string; sessionId?: string; at: number }
+  | { type: 'node.session'; nodeId: string; sessionId: string }
   | { type: 'node.finished'; nodeId: string; outcome: 'pass' | 'fail'; packet: Partial<HandOff>; turns?: number; costUsd?: number; at: number }
   | { type: 'gate.decided'; nodeId: string; approved: boolean; at: number }
   | { type: 'tick'; minutes: number }
@@ -134,6 +135,11 @@ export function reduce(wf: Workflow, s: RunState, e: RunEvent): { state: RunStat
       const nr = s.nodes[e.nodeId];
       if (!nr) throw new RunError(`Unknown node ${e.nodeId}`);
       return { state: { ...s, nodes: { ...s.nodes, [e.nodeId]: { ...nr, sessionId: e.sessionId ?? nr.sessionId, attempts: nr.attempts + 1 } } }, effects: [] };
+    }
+    case 'node.session': {
+      const nr = s.nodes[e.nodeId];
+      if (!nr) throw new RunError(`Unknown node ${e.nodeId}`);
+      return { state: { ...s, nodes: { ...s.nodes, [e.nodeId]: { ...nr, sessionId: e.sessionId } } }, effects: [] };
     }
     case 'node.finished': {
       if (s.current !== e.nodeId || s.status !== 'running') throw new RunError(`${e.nodeId} is not the running node.`);

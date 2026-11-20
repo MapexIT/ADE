@@ -125,9 +125,8 @@ task with each of the three agents from prompt to landed change, then restart wi
 ## M6 - v1: workflows and skills
 
 - [x] **M6-T01** Workflow YAML schema, validation and engine state machine with persistence (WF-03).
-- [ ] **M6-T02** Node executors: agent, command, gate, loop, branch, connector, land; hand-off packet;
-      agent and model per node (WF-05, WF-09). The runner, executor interface, hand-off packet and prompt
-      rendering exist; executors that drive real sessions in the host are open.
+- [x] **M6-T02** Node executors: agent, command, gate, loop, branch, connector, land; hand-off packet;
+      agent and model per node (WF-05, WF-09). Connector nodes say "not supported yet" until CO-05.
 - [ ] **M6-T03** Node canvas with React Flow, node settings, run view, test a node (WF-01, WF-06, WF-11).
       A read-only canvas of real workflow files with validation is built; editing and the run view are open.
 - [ ] **M6-T04** Budgets, stop rules, retry from step, triggers, workflow picker, templates (WF-02, WF-04,

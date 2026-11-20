@@ -89,6 +89,14 @@ probed yet; CI runs the fake-agent suite on Ubuntu.
 | Run of a `.cmd` file on Windows | npm shims are resolved to `node script.js`; other batch files run through `cmd.exe /d /c` with the user's own arguments. | Windows cannot start batch files without cmd; arguments never come from an agent. |
 | Work items | GitHub items and Shortcut stories come through a `WorkItemProvider` registry; unconnected sources return an empty list. | Keeps the panel connector-neutral. |
 | CI | Build, then test. Ubuntu on pull requests; Windows joins on pushes to main. `--ignore-scripts`, pnpm cache, docs-only changes skipped, superseded runs cancelled. e2e and installers run locally. | The user asked for the fewest CI minutes; Windows minutes cost double. |
+| Workflow hand-off (WF-05) | Each agent node is a normal session whose worktree starts from the previous node's end checkpoint. Its last message becomes `{{summary}}` and its diff against the node's start becomes `{{diff}}`; command output becomes `{{checkOutput}}`. | Later nodes build on earlier work while every node keeps its own worktree, approvals, review and audit. |
+| Workflow land | A land node lands everything since the run's base commit: `apply` applies that range to the checkout; `commit` soft-resets the last session's branch to the base and makes one commit. | Checkpoint commits never reach branch history, and earlier nodes' work is not lost. The schema requires an approved gate before any land, which is the explicit user action rule 4 asks for. |
+| Pull-request land mode | Commits on the session branch and says that ADE does not open pull requests yet. | Opening pull requests (RV-14) is M7-T03; pushing is outward-facing. |
+| Command nodes | Run in the host as an argument array in the run's latest worktree (a detached scratch worktree if no agent node ran yet), pass on exit 0, and appear in the run history. | The code runner lives in the pty process for interactive runs; a workflow only needs the exit code and output. |
+| Model per node (WF-09) | Set through the ACP session config option whose category is `model` (`session/set_config_option`). A session whose agent does not offer the model fails to start with that reason. | The M0 probe showed Claude Code and Codex both expose a `model` config option. Failing is more honest than silently using another model. |
+| Agent overrides | Starting a run can map a node's agent to another (for example when Codex is not installed). | WF-09 asks for mixed agents; templates name agents the user may not have. |
+| Connector nodes | Fail with "not supported yet" until connector actions (CO-05 to CO-10) arrive in M7. | No connector write actions exist yet. |
+| Runs and restarts | A run that was running when ADE closed comes back paused; a run waiting at a gate stays waiting. | Nothing restarts without the user. |
 
 ## Facts to verify (`VERIFY` markers in the docs)
 

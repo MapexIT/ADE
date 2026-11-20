@@ -1,10 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { WorkflowSummary } from '@ade/contracts';
 import { TEMPLATES, validate, Workflow, WorkflowError, type WorkflowNode } from '@ade/workflow-engine';
 import { parse } from 'yaml';
 
-const detailOf = (n: WorkflowNode): string => {
+export const detailOf = (n: WorkflowNode): string => {
   switch (n.type) {
     case 'agent':
       return `${n.agent} · ${n.profile}${n.skills.length ? ` · skills: ${n.skills.join(', ')}` : ''}`;
@@ -59,4 +59,15 @@ export async function listWorkflows(repoRoot: string | null): Promise<WorkflowSu
   }
   for (const [id, text] of Object.entries(TEMPLATES)) out.push(summarise(`template:${id}`, 'template', null, text));
   return out;
+}
+
+/** The YAML behind a workflow id from `listWorkflows` (`template:<id>` or `repo:<file>`). */
+export async function loadWorkflowSource(repoRoot: string, id: string): Promise<string | null> {
+  if (id.startsWith('template:')) return TEMPLATES[id.slice('template:'.length)] ?? null;
+  if (id.startsWith('repo:')) {
+    const file = id.slice('repo:'.length);
+    if (basename(file) !== file || !/\.ya?ml$/i.test(file)) return null;
+    return readFile(join(repoRoot, '.ade', 'workflows', file), 'utf8').catch(() => null);
+  }
+  return null;
 }
