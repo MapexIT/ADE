@@ -1,0 +1,216 @@
+import { DiffEditor } from '@monaco-editor/react';
+import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
+import type { DiffText } from '@ade/contracts';
+import { isLive } from '@ade/session-core';
+import { useEffect, useRef, useState } from 'react';
+import type * as Monaco from 'monaco-editor';
+import { host } from '../lib/bridge.ts';
+import { agentLabel, joinPath, languageOf } from '../lib/format.ts';
+import { EDITOR_OPTIONS } from '../lib/monaco.ts';
+import { attempt, selectedSession, useStore } from '../lib/store.ts';
+import { TurnPicker, useChanges } from './Inspector.tsx';
+
+/** Review and land (RV-01, RV-03, RV-05, RV-06, RV-07, RV-08). Review is the product. */
+export function ReviewScreen() {
+  const session = useStore(selectedSession);
+  const set = useStore((s) => s.set);
+  const ask = useStore((s) => s.ask);
+  const openEditor = useStore((s) => s.openEditor);
+  const [turnIndex, setTurnIndex] = useState<number | null>(null);
+  const changes = useChanges(session?.id ?? null, turnIndex);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [active, setActive] = useState<string | null>(null);
+  const [diff, setDiff] = useState<DiffText | null>(null);
+  const [inline, setInline] = useState(false);
+  const [comment, setComment] = useState<{ line: number; text: string } | null>(null);
+  const [commitMessage, setCommitMessage] = useState('');
+  const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
+
+  useEffect(() => {
+    setSelected(new Set(changes.map((c) => c.path)));
+    setActive((a) => (a && changes.some((c) => c.path === a) ? a : (changes[0]?.path ?? null)));
+  }, [changes]);
+
+  useEffect(() => {
+    if (!session || !active) {
+      setDiff(null);
+      return;
+    }
+    void attempt(() => host.call('sessions.diff', { sessionId: session.id, path: active, turnIndex })).then((d) => setDiff(d ?? null));
+  }, [session, active, turnIndex]);
+
+  if (!session) return <EmptyState title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
+
+  const busy = isLive(session.state);
+  const ended = session.state === 'landed' || session.state === 'discarded';
+  const files = [...selected];
+
+  const sendComment = (mode: 'now') => {
+    if (!comment || !active) return;
+    const text = `Review comment on ${active}:${comment.line}\n${comment.text}`;
+    void attempt(() => host.call(mode === 'now' ? 'sessions.prompt' : 'sessions.queue', { sessionId: session.id, content: [{ type: 'text', text }] })).then((ok) => {
+      if (ok) {
+        setComment(null);
+        useStore.getState().toast(busy ? 'Comment queued for the agent.' : 'Comment sent to the agent.');
+      }
+    });
+  };
+
+  const land = (mode: 'apply' | 'commit') =>
+    ask({
+      title: mode === 'apply' ? `Apply ${files.length} file(s) to your checkout?` : `Commit ${files.length} file(s) on ${session.branch}?`,
+      body:
+        mode === 'apply'
+          ? 'The selected changes are written into your checkout as uncommitted changes. The session then ends and its worktree stays until you discard it.'
+          : 'The selected files are committed on the session branch with your Git identity. The session then ends.',
+      confirmLabel: mode === 'apply' ? 'Apply to my checkout' : 'Commit to branch',
+      onConfirm: () =>
+        void attempt(() => host.call('sessions.land', { sessionId: session.id, mode, files, ...(commitMessage.trim() ? { message: commitMessage.trim() } : {}) })).then((ok) => ok && useStore.getState().toast('Landed.')),
+    });
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-3">
+        <h1 className="m-0 text-[16px] font-semibold">Review: {session.title}</h1>
+        <Badge>{agentLabel(session.agentId)}</Badge>
+        {session.branch ? <Badge className="font-mono text-[12px]">{session.branch}</Badge> : null}
+        <div className="ml-3">
+          <TurnPicker sessionId={session.id} value={turnIndex} onChange={setTurnIndex} />
+        </div>
+      </div>
+      {ended ? (
+        <EmptyState title={`This session has ${session.state === 'landed' ? 'landed' : 'been discarded'}`} body="Its worktree is gone. The audit log records what landed and who decided." />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-wrap">
+          <aside aria-label="Changed files" className="flex min-h-0 w-72 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
+            <SectionLabel>{changes.length} files · computed from Git</SectionLabel>
+            {changes.map((c) => (
+              <div key={c.path} className={cx('flex flex-col gap-1.5 rounded-[var(--radius)] border p-2.5', active === c.path ? 'border-2 border-accent bg-accent-tint' : 'border-line')}>
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`f-${c.path}`}
+                    type="checkbox"
+                    checked={selected.has(c.path)}
+                    onChange={(e) => {
+                      const next = new Set(selected);
+                      if (e.target.checked) next.add(c.path);
+                      else next.delete(c.path);
+                      setSelected(next);
+                    }}
+                    className="size-5 accent-[var(--accent)]"
+                    aria-label={`Include ${c.path}`}
+                  />
+                  <button type="button" onClick={() => setActive(c.path)} className="min-w-0 flex-1 text-left font-mono text-[12px] break-all hover:underline">
+                    {c.path}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-[12px]">
+                  <span className="text-accent-soft">+{c.additions}</span>
+                  <span className="text-danger">-{c.deletions}</span>
+                  <Badge>{c.status}</Badge>
+                  <Badge tone={c.editedByUser ? 'accent' : 'neutral'}>{c.editedByUser ? 'You edited' : 'Agent'}</Badge>
+                </div>
+              </div>
+            ))}
+            {changes.length === 0 ? <p className="m-0 text-ink-muted">No changes in this range.</p> : null}
+          </aside>
+
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+            {active && diff ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-medium">{active}</span>
+                  <div className="ml-auto flex gap-1.5">
+                    <Button size="dense" aria-pressed={!inline} variant={!inline ? 'primary' : 'secondary'} onClick={() => setInline(false)}>
+                      Side by side
+                    </Button>
+                    <Button size="dense" aria-pressed={inline} variant={inline ? 'primary' : 'secondary'} onClick={() => setInline(true)}>
+                      Inline
+                    </Button>
+                    <Button size="dense" onClick={() => session.worktreePath && openEditor(joinPath(session.worktreePath, active), session.id)} disabled={busy}>
+                      Edit this file
+                    </Button>
+                    <Button
+                      size="dense"
+                      onClick={() => {
+                        const line = editorRef.current?.getModifiedEditor().getPosition()?.lineNumber ?? 1;
+                        setComment({ line, text: '' });
+                      }}
+                    >
+                      Comment on line
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-h-64 flex-1 overflow-hidden rounded-[var(--radius)] border border-line">
+                  {diff.binary ? (
+                    <EmptyState title="Binary file" body="Binary changes cannot be shown as text. They land like any other file." />
+                  ) : (
+                    <DiffEditor
+                      theme="ade-dark"
+                      original={diff.oldText}
+                      modified={diff.newText}
+                      language={languageOf(active)}
+                      onMount={(e) => (editorRef.current = e)}
+                      options={{ ...EDITOR_OPTIONS, readOnly: true, renderSideBySide: !inline, originalEditable: false }}
+                    />
+                  )}
+                </div>
+                {comment ? (
+                  <section aria-label={`Comment on line ${comment.line}`} className="flex flex-col gap-2 rounded-[var(--radius)] border border-accent bg-surface p-3">
+                    <label htmlFor="line-comment" className="font-semibold">
+                      Comment on line {comment.line} for the agent
+                    </label>
+                    <textarea id="line-comment" rows={2} value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} autoFocus className="rounded-[var(--radius)] border border-line bg-bg p-2.5 text-ink focus:border-accent focus:outline-none" />
+                    <div className="flex gap-2">
+                      <Button variant="primary" disabled={!comment.text.trim()} onClick={() => sendComment('now')}>
+                        {busy ? 'Queue as the next prompt' : 'Send now as a prompt'}
+                      </Button>
+                      <Button variant="ghost" onClick={() => setComment(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <EmptyState title="Select a file" body="Pick a changed file to see its diff against the base commit." />
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-line bg-surface p-3">
+              <span className="font-semibold">
+                Land {files.length} of {changes.length} files
+              </span>
+              <span className="text-ink-muted">{busy ? 'Wait for the turn to finish before landing.' : 'Nothing lands without one of these actions.'}</span>
+              <label htmlFor="commit-msg" className="sr-only">
+                Commit message
+              </label>
+              <input id="commit-msg" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 text-ink focus:border-accent focus:outline-none" />
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button disabled={busy || !files.length} onClick={() => land('apply')}>
+                  Apply to my checkout
+                </Button>
+                <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
+                  Commit to branch
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() =>
+                    ask({
+                      title: 'Discard this session?',
+                      body: 'The worktree and the branch are deleted and the agent is stopped. The final patch is kept for 30 days in the app data folder.',
+                      confirmLabel: 'Discard session',
+                      danger: true,
+                      onConfirm: () => void attempt(() => host.call('sessions.discard', { sessionId: session.id })),
+                    })
+                  }
+                >
+                  Discard session
+                </Button>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
+    </div>
+  );
+}

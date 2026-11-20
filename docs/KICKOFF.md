@@ -2,7 +2,7 @@
 
 ## Before you start (for the human)
 
-1. Create an empty Git repository and copy `CLAUDE.md`, `KICKOFF.md` and the `docs/` folder into it.
+1. Create an empty Git repository and copy `CLAUDE.md`, `KICKOFF.md` and the `docs/` folder into it. (Done: they live at the repository root.)
 2. Install Node.js (current LTS), pnpm and Git.
 3. Install Codex, Claude Code and OpenCode and sign in to each one in its own terminal UI.
 4. Have two real repositories at hand for the spike (one .NET, one Node works well).

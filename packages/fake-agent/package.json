@@ -1,0 +1,19 @@
+{
+  "name": "@ade/fake-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A scripted ACP agent for tests. Never shipped to users.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "ade-fake-agent": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^2.8.0"
+  }
+}

@@ -1,0 +1,169 @@
+import { Button, cx, EmptyState, SectionLabel, Tabs } from '@ade/ui';
+import type { FileChange, FileEntry } from '@ade/contracts';
+import { isLive } from '@ade/session-core';
+import { useEffect, useMemo, useState } from 'react';
+import { host, main } from '../lib/bridge.ts';
+import { joinPath } from '../lib/format.ts';
+import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../lib/store.ts';
+
+export function TurnPicker({ sessionId, value, onChange }: { sessionId: string; value: number | null; onChange: (v: number | null) => void }) {
+  const turns = useStore((s) => s.turns[sessionId] ?? EMPTY);
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Turn">
+      {[null, ...turns.map((t) => t.index)].map((idx) => (
+        <Button key={String(idx)} size="dense" variant={value === idx ? 'primary' : 'secondary'} className={cx(value === idx && 'border-accent bg-accent-tint text-accent-soft')} aria-pressed={value === idx} onClick={() => onChange(idx)}>
+          {idx === null ? 'All turns' : `Turn ${idx + 1}`}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+export function useChanges(sessionId: string | null, turnIndex: number | null) {
+  const [changes, setChanges] = useState<FileChange[]>([]);
+  const items = useStore((s) => (sessionId ? s.views[sessionId]?.lastSeq : 0));
+  const state = useStore((s) => (sessionId ? s.sessions[sessionId]?.state : undefined));
+  useEffect(() => {
+    if (!sessionId || state === 'landed' || state === 'discarded') {
+      setChanges([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(() => {
+      void host.call('sessions.changes', { sessionId, turnIndex }).then((c) => live && setChanges(c), () => live && setChanges([]));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [sessionId, turnIndex, items, state]);
+  return changes;
+}
+
+export function ChangeRow({ c }: { c: FileChange }) {
+  return (
+    <div className="flex items-center gap-2 rounded-[var(--radius-small)] border border-line px-2 py-1.5 font-mono text-[12px]">
+      <span className="min-w-0 flex-1 break-all">{c.path}</span>
+      <span className="text-ink-muted">{c.status === 'binary' ? 'binary' : c.status}</span>
+      <span className="text-accent-soft">+{c.additions}</span>
+      <span className="text-danger">-{c.deletions}</span>
+    </div>
+  );
+}
+
+function FileTree({ root, sessionId }: { root: string; sessionId: string | null }) {
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [filter, setFilter] = useState('');
+  const openEditor = useStore((s) => s.openEditor);
+  useEffect(() => {
+    void attempt(() => host.call('files.list', { root })).then((f) => setFiles(f ?? []));
+  }, [root]);
+  const shown = useMemo(() => files.filter((f) => !f.isDir && f.path.toLowerCase().includes(filter.toLowerCase())).slice(0, 400), [files, filter]);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <label htmlFor="tree-filter" className="sr-only">
+        Filter files
+      </label>
+      <input id="tree-filter" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter files" className="min-h-9 rounded-[var(--radius)] border border-line bg-bg px-2.5 text-ink focus:border-accent focus:outline-none" />
+      <ul className="m-0 min-h-0 flex-1 list-none overflow-auto p-0">
+        {shown.map((f) => (
+          <li key={f.path}>
+            <button type="button" onClick={() => openEditor(joinPath(root, f.path), sessionId)} className="w-full truncate rounded px-2 py-1 text-left font-mono text-[12px] hover:bg-surface-raised" title={f.path}>
+              {f.path}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Right-hand inspector: changes, checkpoints and files for the selected session. */
+export function Inspector() {
+  const session = useStore(selectedSession);
+  const workspace = useStore(currentWorkspace);
+  const turns = useStore((s) => (session ? (s.turns[session.id] ?? EMPTY) : EMPTY));
+  const setTab = useStore((s) => s.setTab);
+  const ask = useStore((s) => s.ask);
+  const [tab, setInspectorTab] = useState<'changes' | 'files'>('changes');
+  const [turnIndex, setTurnIndex] = useState<number | null>(null);
+  const changes = useChanges(session?.id ?? null, turnIndex);
+
+  if (!session) {
+    return workspace ? (
+      <div className="flex h-full flex-col gap-2 bg-surface p-3">
+        <SectionLabel>Files · {workspace.name}</SectionLabel>
+        <FileTree root={workspace.rootPath} sessionId={null} />
+      </div>
+    ) : (
+      <EmptyState title="Inspector" body="Details for the selected session appear here." />
+    );
+  }
+
+  const root = session.worktreePath ?? workspace?.rootPath ?? '';
+  const ended = session.state === 'landed' || session.state === 'discarded';
+  return (
+    <aside aria-label="Inspector" className="flex h-full flex-col gap-3 overflow-hidden bg-surface p-3">
+      <Tabs
+        label="Inspector"
+        value={tab}
+        onChange={setInspectorTab}
+        size="dense"
+        items={[
+          { value: 'changes', label: 'Changes' },
+          { value: 'files', label: 'Files' },
+        ]}
+      />
+      {tab === 'changes' ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
+          {ended ? (
+            <p className="m-0 text-ink-muted">The worktree is gone; the audit log keeps what landed.</p>
+          ) : (
+            <>
+              <TurnPicker sessionId={session.id} value={turnIndex} onChange={setTurnIndex} />
+              <div className="flex flex-col gap-1.5">
+                {changes.length ? changes.map((c) => <ChangeRow key={c.path} c={c} />) : <span className="text-ink-muted">No changes yet.</span>}
+              </div>
+              <Button variant="secondary" className="border-accent font-semibold text-accent" onClick={() => setTab('review')} disabled={!changes.length}>
+                Review changes
+              </Button>
+              {session.worktreePath ? (
+                <Button onClick={() => void attempt(() => main('main.openInEditor', { path: session.worktreePath! }))}>Open worktree in my editor</Button>
+              ) : null}
+              <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-dashed border-line p-2.5 text-ink-muted">
+                <span className="font-semibold text-ink">Checkpoints</span>
+                {turns.length === 0 ? <span>A snapshot is saved at the start and end of every turn.</span> : null}
+                {turns.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <span className="flex-1">
+                      Turn {t.index + 1} · {t.endedAt ? 'snapshot saved' : 'in progress'}
+                    </span>
+                    {t.startCheckpoint && !isLive(session.state) ? (
+                      <Button
+                        size="dense"
+                        variant="ghost"
+                        onClick={() =>
+                          ask({
+                            title: `Undo turn ${t.index + 1}?`,
+                            body: `The worktree goes back to how it was before turn ${t.index + 1}. Every change from that turn and later turns is lost, including files they created.`,
+                            confirmLabel: 'Undo turn',
+                            danger: true,
+                            onConfirm: () => void attempt(() => host.call('sessions.undoTurn', { sessionId: session.id, turnIndex: t.index })),
+                          })
+                        }
+                      >
+                        Undo
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ) : root ? (
+        <FileTree root={root} sessionId={session.worktreePath ? session.id : null} />
+      ) : null}
+    </aside>
+  );
+}
