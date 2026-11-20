@@ -1,0 +1,325 @@
+import { useShallow } from 'zustand/react/shallow';
+import { Badge, Button, cx, Kbd, SectionLabel } from '@ade/ui';
+import type { ProtocolMessage } from '@ade/contracts';
+import { Command } from 'cmdk';
+import { useEffect, useMemo, useState } from 'react';
+import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
+import { host, main, pty } from '../lib/bridge.ts';
+import { attempt, useStore } from '../lib/store.ts';
+import { useTerminals } from '../lib/terminals.ts';
+import { Field, inputClass, Modal } from './Modal.tsx';
+
+export function CommandPalette() {
+  const open = useStore((s) => s.paletteOpen);
+  const set = useStore((s) => s.set);
+  const commands = useMemo(() => (open ? buildCommands() : []), [open]);
+  const groups = [...new Set(commands.map((c) => c.group))];
+  return (
+    <Modal open={open} onOpenChange={(o) => set({ paletteOpen: o })} title="Search and commands">
+      <Command label="Command palette" className="flex flex-col gap-2">
+        <Command.Input autoFocus placeholder="Type a command" className={inputClass} />
+        <Command.List className="max-h-96 overflow-auto">
+          <Command.Empty className="p-3 text-ink-muted">No matching command.</Command.Empty>
+          {groups.map((g) => (
+            <Command.Group key={g} heading={g} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-ink-muted [&_[cmdk-group-heading]]:uppercase">
+              {commands
+                .filter((c) => c.group === g)
+                .map((c) => (
+                  <Command.Item
+                    key={c.id}
+                    value={`${c.group} ${c.title}`}
+                    onSelect={() => {
+                      set({ paletteOpen: false });
+                      void c.run();
+                    }}
+                    className="flex min-h-9 cursor-pointer items-center justify-between rounded px-2 data-[selected=true]:bg-accent-tint"
+                  >
+                    {c.title}
+                    {c.shortcut ? <Kbd>{c.shortcut}</Kbd> : null}
+                  </Command.Item>
+                ))}
+            </Command.Group>
+          ))}
+        </Command.List>
+      </Command>
+    </Modal>
+  );
+}
+
+/** AP-04: one keyboard-driven list of everything waiting on the user. */
+export function InboxDialog() {
+  const open = useStore((s) => s.inboxOpen);
+  const inbox = useStore((s) => s.inbox);
+  const set = useStore((s) => s.set);
+  const selectSession = useStore((s) => s.selectSession);
+  const views = useStore((s) => s.views);
+  const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
+  const [index, setIndex] = useState(0);
+  const items = [
+    ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
+    ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, requestId: null })),
+  ];
+  const go = (sessionId: string | null) => {
+    if (sessionId) selectSession(sessionId);
+    set({ inboxOpen: false, tab: 'sessions' });
+  };
+  const answer = (sessionId: string, requestId: string, kind: 'allow' | 'reject') => {
+    const view = views[sessionId];
+    const item = view?.items.find((i) => i.kind === 'permission' && i.requestId === requestId);
+    const option = item?.kind === 'permission' ? item.options.find((o) => o.kind.startsWith(kind === 'allow' ? 'allow' : 'reject')) : undefined;
+    if (!option) return go(sessionId);
+    void attempt(() => host.call('sessions.answerPermission', { sessionId, requestId, optionId: option.optionId }));
+  };
+  return (
+    <Modal open={open} onOpenChange={(o) => set({ inboxOpen: o })} title="Needs you" description="Arrow keys move, Enter opens, A allows once, R rejects.">
+      <ul
+        role="listbox"
+        aria-label="Needs you"
+        tabIndex={0}
+        autoFocus
+        className="m-0 flex list-none flex-col gap-2 p-0 outline-none"
+        onKeyDown={(e) => {
+          const cur = items[index];
+          if (e.key === 'ArrowDown') setIndex((i) => Math.min(items.length - 1, i + 1));
+          else if (e.key === 'ArrowUp') setIndex((i) => Math.max(0, i - 1));
+          else if (e.key === 'Enter' && cur) go(cur.sessionId);
+          else if ((e.key === 'a' || e.key === 'r') && cur?.requestId && cur.sessionId) answer(cur.sessionId, cur.requestId, e.key === 'a' ? 'allow' : 'reject');
+          else return;
+          e.preventDefault();
+        }}
+      >
+        {items.length === 0 ? <li className="p-2 text-ink-muted">Nothing is waiting on you.</li> : null}
+        {items.map((it, i) => (
+          <li key={it.key} role="option" aria-selected={i === index}>
+            <button type="button" onClick={() => go(it.sessionId)} className={cx('flex w-full flex-col gap-0.5 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}>
+              <span className="font-semibold">{it.title}</span>
+              <span className="text-ink-muted">
+                {it.sub} · {it.kind === 'question' ? 'Question' : it.kind === 'permission' ? 'Approval' : it.kind === 'terminal' ? 'Terminal' : it.kind === 'setup-failed' ? 'Setup failed' : 'Interrupted'}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Modal>
+  );
+}
+
+/** HI-05: agents, workspace setup, notifications, retention, external editor, connectors. No telemetry setting. */
+export function SettingsDialog() {
+  const open = useStore((s) => s.settingsOpen);
+  const set = useStore((s) => s.set);
+  const workspaceId = useStore((s) => s.workspaceId);
+  const toast = useStore((s) => s.toast);
+  const [cap, setCap] = useState(3);
+  const [limits, setLimits] = useState({ maxTurns: 50, maxTurnMinutes: 60 });
+  const [setupFile, setSetupFile] = useState<{ exists: boolean; content: string } | null>(null);
+  const [creds, setCreds] = useState<{ available: boolean; backend: string; stored: string[] } | null>(null);
+  const [token, setToken] = useState({ shortcut: '', github: '' });
+
+  useEffect(() => {
+    if (!open) return;
+    void host.call('settings.get', { key: 'concurrencyCap' }).then((v) => setCap(typeof v.value === 'number' ? v.value : 3));
+    void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
+    void main('main.credentials.status', {}).then(setCreds);
+    if (workspaceId) void host.call('workspace.setupFile', { workspaceId }).then(setSetupFile);
+  }, [open, workspaceId]);
+
+  const save = async () => {
+    await attempt(() => host.call('settings.set', { key: 'concurrencyCap', value: Math.max(1, Math.min(10, cap)) }));
+    await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
+    toast('Settings saved.');
+    set({ settingsOpen: false });
+  };
+
+  return (
+    <Modal open={open} onOpenChange={(o) => set({ settingsOpen: o })} title="Settings" wide footer={<><Button onClick={() => set({ settingsOpen: false })}>Close</Button><Button variant="primary" onClick={() => void save()}>Save</Button></>}>
+      <div className="grid gap-6 md:grid-cols-2">
+        <section className="flex flex-col gap-3">
+          <SectionLabel>Sessions</SectionLabel>
+          <Field label="Sessions running at once" htmlFor="set-cap" hint="Extra sessions wait as Queued.">
+            <input id="set-cap" type="number" min={1} max={10} value={cap} onChange={(e) => setCap(Number(e.target.value))} className={inputClass} />
+          </Field>
+          <Field label="Maximum turns per session" htmlFor="set-turns">
+            <input id="set-turns" type="number" min={1} value={limits.maxTurns} onChange={(e) => setLimits({ ...limits, maxTurns: Number(e.target.value) })} className={inputClass} />
+          </Field>
+          <Field label="Maximum minutes per turn" htmlFor="set-mins">
+            <input id="set-mins" type="number" min={1} value={limits.maxTurnMinutes} onChange={(e) => setLimits({ ...limits, maxTurnMinutes: Number(e.target.value) })} className={inputClass} />
+          </Field>
+          <p className="m-0 text-ink-muted">Discarded sessions keep their final patch for 30 days. Notifications appear when a session needs you, finishes or fails, while ADE is in the background. The external editor comes from the ADE_EDITOR environment variable, or your system default.</p>
+        </section>
+        <section className="flex flex-col gap-3">
+          <SectionLabel>Workspace setup</SectionLabel>
+          <p className="m-0 text-ink-muted">Setup commands and files to copy live in .ade/workspace.yaml, versioned with your code.</p>
+          <pre className="m-0 max-h-40 overflow-auto rounded-[var(--radius)] border border-line bg-surface-sunken p-2.5 font-mono text-[12px]">{setupFile?.exists ? setupFile.content : 'setup:\n  - ["pnpm", "install"]\ncopy:\n  - .env.local'}</pre>
+          {!setupFile?.exists ? <span className="text-[12px] text-ink-muted">No file yet; the example above shows the format.</span> : null}
+          <SectionLabel className="mt-2">Connectors</SectionLabel>
+          {creds && !creds.available ? <p className="m-0 text-danger">No secure credential store is available ({creds.backend}). Install and unlock a keyring to connect.</p> : null}
+          {(['shortcut', 'github'] as const).map((k) => (
+            <div key={k} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">{k === 'shortcut' ? 'Shortcut' : 'GitHub'}</span>
+                <Badge tone={creds?.stored.includes(k) ? 'ok' : 'neutral'}>{creds?.stored.includes(k) ? 'Connected' : 'Not connected'}</Badge>
+              </div>
+              <div className="flex gap-2">
+                <label htmlFor={`tok-${k}`} className="sr-only">
+                  {k} token
+                </label>
+                <input id={`tok-${k}`} type="password" autoComplete="off" value={token[k]} onChange={(e) => setToken({ ...token, [k]: e.target.value })} placeholder="Read-only token" className={`${inputClass} flex-1`} disabled={!creds?.available} />
+                <Button
+                  disabled={!token[k] || !creds?.available}
+                  onClick={() =>
+                    void attempt(() => main('main.credentials.set', { key: k, secret: token[k] })).then(async () => {
+                      setToken({ ...token, [k]: '' });
+                      setCreds(await main('main.credentials.status', {}));
+                    })
+                  }
+                >
+                  Save
+                </Button>
+                {creds?.stored.includes(k) ? (
+                  <Button variant="ghost" onClick={() => void attempt(() => main('main.credentials.delete', { key: k })).then(async () => setCreds(await main('main.credentials.status', {})))}>
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          <p className="m-0 text-[12px] text-ink-muted">Tokens are encrypted by your operating system's credential store and never written to the database, logs or prompts.</p>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+/** PK-02: one screen with Git, shells, agents and their sign-in state, connectors and sandbox state. */
+export function FirstRunDialog() {
+  const open = useStore((s) => s.firstRunOpen);
+  const set = useStore((s) => s.set);
+  const agents = useStore((s) => s.agents);
+  const refreshAgents = useStore((s) => s.refreshAgents);
+  const workspaces = useStore((s) => s.workspaces);
+  const shells = useTerminals((t) => t.shells);
+  const [info, setInfo] = useState<{ platform: string } | null>(null);
+  const [creds, setCreds] = useState<{ available: boolean; backend: string } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    void main('main.info', {}).then(setInfo);
+    void main('main.credentials.status', {}).then(setCreds);
+    void pty.call('pty.shells', {}).then((s) => useTerminals.setState({ shells: s }));
+  }, [open]);
+  const finish = () => {
+    void host.call('settings.set', { key: 'firstRunDone', value: true });
+    set({ firstRunOpen: false });
+  };
+  const row = (label: string, ok: boolean, detail: string) => (
+    <div className="flex items-center gap-3 rounded-[var(--radius)] border border-line px-3 py-2">
+      <span className="w-40 font-semibold">{label}</span>
+      <span className="flex-1 text-ink-muted">{detail}</span>
+      <Badge tone={ok ? 'ok' : 'attention'}>{ok ? 'Ready' : 'Needs attention'}</Badge>
+    </div>
+  );
+  return (
+    <Modal
+      open={open}
+      onOpenChange={(o) => !o && finish()}
+      title="Welcome to ADE"
+      description="ADE supervises the coding agents you already use. Nothing leaves this machine except what agents and connectors send themselves."
+      wide
+      footer={
+        <>
+          <Button onClick={() => void refreshAgents(true)}>Check again</Button>
+          {workspaces.length === 0 ? (
+            <Button variant="primary" onClick={() => void pickAndOpenWorkspace().then(finish)}>
+              Open a repository
+            </Button>
+          ) : null}
+          <Button variant={workspaces.length ? 'primary' : 'secondary'} onClick={finish}>
+            Done
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <SectionLabel>This machine</SectionLabel>
+        {row('Shells', shells.length > 0, shells.map((s) => s.label).join(', ') || 'No supported shell found')}
+        {row('Credential store', !!creds?.available, creds ? `${creds.backend}${creds.available ? '' : ' · install a keyring to connect Shortcut or GitHub'}` : 'Checking…')}
+        <SectionLabel className="mt-3">Agents</SectionLabel>
+        {agents
+          .filter((a) => a.id !== 'fake')
+          .map((a) => (
+            <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-line px-3 py-2">
+              <span className="w-40 font-semibold">{a.label}</span>
+              <span className="flex-1 text-ink-muted">{a.health === 'not-installed' ? a.reason : `${a.version ?? 'version unknown'}${a.path ? ` · ${a.path}` : ' · runs through the bundled adapter'}`}</span>
+              <Badge tone="attention" title="Shown honestly: ADE does not switch on an agent sandbox it has not verified">
+                Not sandboxed{info?.platform === 'win32' ? ' on Windows' : ''}
+              </Badge>
+              <Badge tone={a.health === 'ready' ? 'ok' : 'attention'}>{a.health === 'ready' ? 'Ready' : a.health === 'needs-sign-in' ? 'Needs sign-in' : 'Not installed'}</Badge>
+              {a.health === 'not-installed' ? (
+                <Button size="dense" onClick={() => void main('main.openExternal', { url: a.id === 'opencode' ? 'https://opencode.ai/docs/' : a.id === 'codex' ? 'https://developers.openai.com/codex/cli' : 'https://code.claude.com/docs/en/setup' })}>
+                  Get {a.label}
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        <p className="m-0 mt-2 text-[12px] text-ink-muted">Sign-in always happens in each agent's own flow: start its terminal UI from a session and sign in there. ADE never reads or stores agent credentials.</p>
+      </div>
+    </Modal>
+  );
+}
+
+/** WA-05: raw ACP messages for a session, with search. Credentials are redacted in the host. */
+export function ProtocolDialog() {
+  const sessionId = useStore((s) => s.protocolSessionId);
+  const set = useStore((s) => s.set);
+  const [messages, setMessages] = useState<ProtocolMessage[]>([]);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    if (!sessionId) return;
+    void attempt(() => host.call('sessions.protocol', { sessionId })).then((m) => setMessages(m ?? []));
+  }, [sessionId]);
+  const shown = messages.filter((m) => !q || m.body.toLowerCase().includes(q.toLowerCase())).slice(-500);
+  return (
+    <Modal open={!!sessionId} onOpenChange={(o) => !o && set({ protocolSessionId: null })} title="Protocol messages" description="Messages exchanged with the agent while it ran in this app session." wide>
+      <div className="flex flex-col gap-2">
+        <label htmlFor="proto-search" className="sr-only">
+          Search messages
+        </label>
+        <input id="proto-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className={inputClass} />
+        {shown.length === 0 ? <p className="m-0 text-ink-muted">No messages. The log covers the agent process started in this run of ADE.</p> : null}
+        <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto font-mono text-[11.5px]">
+          {shown.map((m, i) => (
+            <div key={i} className="rounded border border-line p-1.5">
+              <span className={m.direction === 'out' ? 'text-accent-soft' : 'text-attention'}>{m.direction === 'out' ? 'ADE → agent' : 'agent → ADE'}</span> <span className="text-ink-muted">{m.ts.slice(11, 23)}</span>
+              <div className="break-all whitespace-pre-wrap">{m.body.length > 4000 ? `${m.body.slice(0, 4000)}…` : m.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function Toasts() {
+  const toasts = useStore((s) => s.toasts);
+  return (
+    <div aria-live="polite" className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
+      {toasts.map((t) => (
+        <div key={t.id} role={t.tone === 'danger' ? 'alert' : 'status'} className={cx('pointer-events-auto max-w-md rounded-[var(--radius)] border px-3 py-2 shadow-xl', t.tone === 'danger' ? 'border-danger-line bg-danger-tint text-danger' : 'border-line bg-surface-raised text-ink')}>
+          {t.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ReconnectBanner() {
+  const connection = useStore((s) => s.connection);
+  const down = [!connection.host && 'host', !connection.pty && 'terminal'].filter(Boolean);
+  if (!down.length) return null;
+  return (
+    <div role="status" className="flex items-center gap-2 border-b border-attention-line bg-attention-tint px-4 py-1.5 text-attention">
+      <span className="inline-block size-2 animate-pulse rounded-full bg-attention" aria-hidden="true" />
+      Reconnecting to the {down.join(' and ')} process… Running sessions that were mid-turn will show as Interrupted.
+    </div>
+  );
+}

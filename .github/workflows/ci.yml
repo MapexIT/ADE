@@ -1,0 +1,70 @@
+name: CI
+
+# Two stages, build then test. No deploy: ADE is a desktop app.
+# Kept cheap: Ubuntu by default (Windows runners cost twice as much and only run on main), no install
+# scripts (nothing native is needed to build or test), a cached pnpm store, docs-only changes skipped and
+# superseded runs cancelled.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE', '.gitattributes']
+  pull_request:
+    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE', '.gitattributes']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  HUSKY: '0'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+
+  test:
+    name: Test (${{ matrix.os }})
+    needs: build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest","windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Git identity for test repositories
+        run: |
+          git config --global user.name "ADE CI"
+          git config --global user.email "ci@ade.invalid"
+          git config --global init.defaultBranch main
+      - run: pnpm test

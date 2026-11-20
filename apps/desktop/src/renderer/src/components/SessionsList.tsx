@@ -1,0 +1,95 @@
+import { useShallow } from 'zustand/react/shallow';
+import { Button, cx, SectionLabel } from '@ade/ui';
+import type { Session } from '@ade/contracts';
+import { groupOf, STATE_LABELS, type SessionGroup } from '@ade/session-core';
+import { useMemo, useState } from 'react';
+import { agentLabel } from '../lib/format.ts';
+import { useStore } from '../lib/store.ts';
+import { useTerminals } from '../lib/terminals.ts';
+
+const GROUPS: { id: SessionGroup; label: string }[] = [
+  { id: 'needs-you', label: 'Needs you' },
+  { id: 'working', label: 'Working' },
+  { id: 'ready', label: 'Ready for review' },
+  { id: 'done', label: 'Done' },
+];
+
+/** PL-01: every session grouped by what it needs from the user; updates live. */
+export function SessionsList() {
+  const sessions = useStore((s) => s.sessions);
+  const selected = useStore((s) => s.selectedSessionId);
+  const select = useStore((s) => s.selectSession);
+  const inbox = useStore((s) => s.inbox);
+  const set = useStore((s) => s.set);
+  const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
+  const [showDone, setShowDone] = useState(false);
+
+  const grouped = useMemo(() => {
+    const out: Record<SessionGroup, Session[]> = { 'needs-you': [], working: [], ready: [], done: [] };
+    for (const s of Object.values(sessions).sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+      const terminalWaiting = waitingTerminals.some((t) => t.sessionId === s.id);
+      out[terminalWaiting && groupOf(s.state) !== 'done' ? 'needs-you' : groupOf(s.state)].push(s);
+    }
+    return out;
+  }, [sessions, waitingTerminals]);
+
+  const detail = (s: Session) => {
+    const pending = inbox.filter((i) => i.sessionId === s.id);
+    if (pending[0]) return { text: pending[0].kind === 'question' ? 'Has a question' : pending[0].kind === 'permission' ? 'Asks for approval' : pending[0].title, attention: true };
+    if (waitingTerminals.some((t) => t.sessionId === s.id)) return { text: 'Agent terminal is waiting', attention: true };
+    return { text: STATE_LABELS[s.state], attention: false };
+  };
+
+  return (
+    <aside aria-label="Sessions" className="flex h-full flex-col gap-3 overflow-auto bg-surface p-3">
+      <Button variant="primary" onClick={() => set({ newSession: {} })}>
+        New session
+      </Button>
+      {Object.keys(sessions).length === 0 ? (
+        <p className="m-0 p-2 text-ink-muted">No sessions yet. Start one to give an agent a task in its own worktree.</p>
+      ) : null}
+      {GROUPS.map((g) => {
+        const list = grouped[g.id];
+        if (!list.length) return null;
+        if (g.id === 'done' && !showDone) {
+          return (
+            <Button key={g.id} className="justify-start border-dashed text-ink-muted" onClick={() => setShowDone(true)}>
+              Done · show {list.length}
+            </Button>
+          );
+        }
+        return (
+          <section key={g.id} className="flex flex-col gap-2" aria-label={g.label}>
+            <SectionLabel className={cx(g.id === 'needs-you' && 'text-attention')}>
+              {g.label} · {list.length}
+            </SectionLabel>
+            {list.map((s) => {
+              const d = detail(s);
+              const isSel = s.id === selected;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => select(s.id)}
+                  aria-current={isSel ? 'true' : undefined}
+                  className={cx(
+                    'flex min-h-11 flex-col gap-1 rounded-[var(--radius)] border px-3 py-2.5 text-left transition-colors duration-[var(--motion-fast)]',
+                    d.attention ? 'border-attention-line' : 'border-line',
+                    isSel ? (d.attention ? 'border-2 bg-attention-tint' : 'border-accent bg-accent-tint') : 'bg-surface hover:bg-surface-raised',
+                  )}
+                >
+                  <span className="font-semibold">{s.title}</span>
+                  <span className="text-ink-muted">
+                    {agentLabel(s.agentId)}
+                    {s.workItemRef ? ` · ${s.workItemRef}` : ''}
+                  </span>
+                  <span className={d.attention ? 'text-attention' : 'text-ink-muted'}>{d.text}</span>
+                </button>
+              );
+            })}
+          </section>
+        );
+      })}
+    </aside>
+  );
+}

@@ -36,7 +36,18 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        // The dev server needs its websocket for hot reload; the packaged app allows nothing but itself.
+        name: 'ade-csp',
+        transformIndexHtml: {
+          order: 'pre',
+          handler: (html, ctx) => html.replace('__ADE_DEV_CONNECT__', ctx.server ? 'ws://localhost:* http://localhost:*' : ''),
+        },
+      },
+    ],
     worker: { format: 'es' },
     build: {
       outDir: resolve(__dirname, 'out/renderer'),

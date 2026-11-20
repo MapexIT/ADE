@@ -1,0 +1,113 @@
+@import 'tailwindcss';
+@import '@ade/ui/tokens.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+@source '../../../../../packages/ui/src';
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-soft: var(--accent-soft);
+  --color-attention: var(--attention);
+  --color-attention-tint: var(--attention-tint);
+  --color-attention-line: var(--attention-line);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-danger-line: var(--danger-line);
+  --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-tint);
+}
+
+* {
+  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+/* Dockview themed with ADE tokens. */
+.dockview-theme-ade {
+  --dv-background-color: var(--bg);
+  --dv-paneview-header-border-color: var(--line);
+  --dv-tabs-and-actions-container-background-color: var(--surface);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-activegroup-visiblepanel-tab-color: var(--ink);
+  --dv-activegroup-hiddenpanel-tab-color: var(--ink-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--ink-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--ink-muted);
+  --dv-separator-border: var(--line);
+  --dv-paneview-active-outline-color: var(--accent);
+  --dv-tab-divider-color: var(--line);
+  --dv-group-view-background-color: var(--bg);
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-tabs-and-actions-container-font-size: 13px;
+  --dv-drag-over-background-color: rgba(127, 166, 245, 0.12);
+  --dv-drag-over-border-color: var(--accent);
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--accent);
+}
+
+.xterm {
+  padding: 6px 8px;
+}
+
+@keyframes ade-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 136, 43, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(217, 136, 43, 0);
+  }
+}
+
+.attention-ring {
+  border-color: var(--attention-line) !important;
+  animation: ade-ring 1.6s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attention-ring {
+    animation: none;
+  }
+}
