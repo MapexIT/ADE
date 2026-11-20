@@ -58,3 +58,14 @@ describe('WorkItemService', () => {
     expect(await service.list('github', 'zzz')).toHaveLength(0);
   });
 });
+
+describe('workflow summaries', () => {
+  it('summarises templates and reports problems for broken files', async () => {
+    const { summarise, listWorkflows } = await import('../src/host/workflows.ts');
+    const all = await listWorkflows(null);
+    expect(all.length).toBeGreaterThanOrEqual(5);
+    expect(all.every((w) => w.problems.every((p) => p.level !== 'error'))).toBe(true);
+    const broken = summarise('repo:x.yaml', 'repository', '.ade/workflows/x.yaml', 'name: x\nnodes:\n  - { id: a, type: agent, agent: codex, prompt: p }\n  - { id: l, type: land, mode: commit }\nedges:\n  - { from: a, to: l }\n');
+    expect(broken.problems.some((p) => p.level === 'error' && p.nodeId === 'l')).toBe(true);
+  });
+});

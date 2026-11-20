@@ -7,6 +7,10 @@ import { defineConfig } from 'electron-vite';
 // workspace packages, which ship TypeScript sources) is bundled.
 const external = ['electron', 'node-pty', /^node:/];
 
+// Libraries and workspace packages shared by the entries go to one chunk, never into another entry (otherwise
+// loading main could run the host's top-level code). The fake agent's own entry file is excluded.
+const SHARED = /^(?!.*fake-agent[\\/]src[\\/]main\.ts$).*(?:node_modules|[\\/]packages[\\/])/;
+
 export default defineConfig({
   main: {
     build: {
@@ -19,6 +23,13 @@ export default defineConfig({
           host: resolve(__dirname, 'src/host/index.ts'),
           pty: resolve(__dirname, 'src/pty/index.ts'),
           'fake-agent': resolve(__dirname, '../../packages/fake-agent/src/main.ts'),
+        },
+        // Shared code goes to its own chunk, never into another entry: otherwise loading main could run the
+        // host's top-level code.
+        output: {
+          codeSplitting: {
+            groups: [{ name: 'shared', test: SHARED }],
+          },
         },
       },
     },

@@ -10,6 +10,7 @@ import { ReviewService } from './review-service.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig } from './workspace-config.ts';
+import { listWorkflows } from './workflows.ts';
 import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './connectors.ts';
 import { WorkItemService } from './work-items.ts';
 
@@ -157,6 +158,7 @@ export function createHost(config: HostConfig) {
     },
     'runs.history': ({ workspaceId }) => repos.runs.history(workspaceId),
     'audit.list': ({ workspaceId }) => repos.audit.list(workspaceId),
+    'workflows.list': ({ workspaceId }) => listWorkflows(workspaceId ? workspaceRoot(workspaceId) : null),
     'workItems.sources': () => workItems.sources(),
     'workItems.list': ({ source, query }) => workItems.list(source, query),
   };
