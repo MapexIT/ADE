@@ -129,7 +129,7 @@ task with each of the three agents from prompt to landed change, then restart wi
       agent and model per node (WF-05, WF-09). Connector nodes say "not supported yet" until CO-05.
 - [x] **M6-T03** Node canvas with React Flow, node settings, run view, test a node (WF-01, WF-06, WF-11).
       Node positions on the canvas are not saved; the layout is computed from the graph.
-- [ ] **M6-T04** Budgets, stop rules, retry from step, triggers, workflow picker, templates (WF-02, WF-04,
+- [x] **M6-T04** Budgets, stop rules, retry from step, triggers, workflow picker, templates (WF-02, WF-04,
       WF-07, WF-08, WF-10).
 - [ ] **M6-T05** Skills: library, builder, draft with an agent, per-node skills, sync to agents (SK-01 to
       SK-05).

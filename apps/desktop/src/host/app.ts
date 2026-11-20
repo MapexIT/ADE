@@ -162,6 +162,7 @@ export function createHost(config: HostConfig) {
     'runs.record': (run) => {
       const ws = run.sessionId ? repos.sessions.get(run.sessionId)?.workspaceId : repos.workspaces.list().find((w) => run.worktreePath.startsWith(w.rootPath))?.id;
       const saved = repos.runs.record(run, ws ?? null);
+      workflows.onRunRecorded(run, ws ?? null);
       if (run.sessionId) sessions.record(run.sessionId, { type: 'run.finished', runId: saved.id, exitCode: run.exitCode });
       return saved;
     },

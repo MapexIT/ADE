@@ -78,6 +78,10 @@ export const WorkflowSummary = z.object({
   description: z.string(),
   source: z.enum(['template', 'repository']),
   path: z.string().nullable(),
+  /** WF-10: how the workflow is meant to start. */
+  trigger: z.enum(['manual', 'work-item', 'failed-check', 'ready-session', 'terminal-command']),
+  /** Agents its steps name, so a picker can offer stand-ins for agents that are not ready (WF-09). */
+  agents: z.array(AgentId),
   nodes: z.array(z.object({ id: z.string(), type: z.string(), title: z.string(), detail: z.string() })),
   edges: z.array(z.object({ from: z.string(), to: z.string(), when: z.enum(['pass', 'fail']).nullable() })),
   problems: z.array(z.object({ level: z.enum(['error', 'warning']), message: z.string(), nodeId: z.string().nullable() })),
@@ -118,19 +122,22 @@ export const WorkflowRunView = z.object({
 });
 export type WorkflowRunView = z.infer<typeof WorkflowRunView>;
 
+export const HandOffSample = z.object({ summary: z.string().max(200_000).default(''), diff: z.string().max(400_000).default(''), checkOutput: z.string().max(200_000).default('') });
+
 export const StartWorkflowInput = z.object({
   workspaceId: Id,
   workflowId: z.string().min(1).max(300),
   workItem: z.record(z.string(), z.string().max(20_000)).default({}),
   /** WF-09: run a node written for one agent with another, for example when that agent is not installed. */
   agentOverrides: z.partialRecord(AgentId, AgentId).default({}),
+  /** Seeds the first step's hand-off, for example a failed command's output as `{{checkOutput}}`. */
+  handOff: HandOffSample.partial().optional(),
 });
 export type StartWorkflowInput = z.input<typeof StartWorkflowInput>;
 
 export const WorkflowDetail = z.object({ summary: WorkflowSummary, yaml: z.string(), definition: z.unknown() });
 export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
 
-export const HandOffSample = z.object({ summary: z.string().max(200_000).default(''), diff: z.string().max(400_000).default(''), checkOutput: z.string().max(200_000).default('') });
 
 /** Requests served by the host utility process. */
 export const hostApi = defineApi({

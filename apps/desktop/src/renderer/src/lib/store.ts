@@ -24,6 +24,10 @@ export interface NewSessionPrefill {
   title?: string;
   workItem?: WorkItem;
   attachments?: PromptBlock[];
+  /** Open with "A workflow" selected (WF-02). */
+  mode?: 'agent' | 'workflow';
+  /** Seeds the workflow's first hand-off, for example a failed command's output (WF-10). */
+  handOff?: { summary?: string; checkOutput?: string };
 }
 
 interface State {

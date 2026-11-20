@@ -1,9 +1,9 @@
 import { Button } from '@ade/ui';
 import type { AgentId, HandOffSample } from '@ade/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { type z } from 'zod';
-import { useStore } from '../../lib/store.ts';
 import { inputClass, Modal } from '../Modal.tsx';
+import { AgentOverrideFields, useAgentOverrides } from './AgentOverrides.tsx';
 
 type Sample = z.input<typeof HandOffSample>;
 
@@ -32,26 +32,12 @@ export function StartRunDialog({
   withSample: boolean;
   onStart: (req: StartRequest) => void;
 }) {
-  const agents = useStore((s) => s.agents);
   const [itemTitle, setItemTitle] = useState('');
   const [itemBody, setItemBody] = useState('');
   const [summary, setSummary] = useState('');
   const [checkOutput, setCheckOutput] = useState('');
-  const ready = useMemo(() => agents.filter((a) => a.health === 'ready'), [agents]);
-  const [overrides, setOverrides] = useState<Partial<Record<AgentId, AgentId>>>({});
-
-  useEffect(() => {
-    if (!open) return;
-    const next: Partial<Record<AgentId, AgentId>> = {};
-    for (const id of agentsUsed) {
-      const status = agents.find((a) => a.id === id);
-      if (status?.health !== 'ready' && ready[0]) next[id] = ready[0].id;
-    }
-    setOverrides(next);
-  }, [open, agentsUsed, agents, ready]);
-
-  const missing = agentsUsed.filter((id) => agents.find((a) => a.id === id)?.health !== 'ready');
-  const blocked = missing.some((id) => !overrides[id]);
+  const stand = useAgentOverrides(agentsUsed, open);
+  const { overrides, blocked } = stand;
 
   return (
     <Modal
@@ -141,26 +127,7 @@ export function StartRunDialog({
             </div>
           </>
         ) : null}
-        {missing.map((id) => (
-          <div key={id} className="flex flex-col gap-1">
-            <label htmlFor={`run-override-${id}`} className="font-semibold">
-              {agents.find((a) => a.id === id)?.label ?? id} is not ready. Use instead:
-            </label>
-            <select
-              id={`run-override-${id}`}
-              value={overrides[id] ?? ''}
-              onChange={(e) => setOverrides((o) => ({ ...o, [id]: e.target.value as AgentId }))}
-              className={inputClass}
-            >
-              {ready.length === 0 ? <option value="">No agent is ready</option> : null}
-              {ready.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
+        <AgentOverrideFields state={stand} />
       </div>
     </Modal>
   );

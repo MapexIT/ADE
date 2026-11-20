@@ -12,12 +12,12 @@ export function summarise(id: string, source: WorkflowSummary['source'], path: s
   try {
     raw = parse(yamlText);
   } catch (err) {
-    return { id, name: id, description: '', source, path, nodes: [], edges: [], problems: [{ level: 'error', message: `The YAML is invalid: ${(err as Error).message}`, nodeId: null }] };
+    return { id, name: id, description: '', source, path, trigger: 'manual', agents: [], nodes: [], edges: [], problems: [{ level: 'error', message: `The YAML is invalid: ${(err as Error).message}`, nodeId: null }] };
   }
   const parsed = Workflow.safeParse(raw);
   if (!parsed.success) {
     const err = new WorkflowError(parsed.error.issues.map((i) => ({ level: 'error' as const, message: `${i.path.join('.')}: ${i.message}` })));
-    return { id, name: (raw as { name?: string })?.name ?? id, description: '', source, path, nodes: [], edges: [], problems: err.problems.map((p) => ({ ...p, nodeId: null })) };
+    return { id, name: (raw as { name?: string })?.name ?? id, description: '', source, path, trigger: 'manual', agents: [], nodes: [], edges: [], problems: err.problems.map((p) => ({ ...p, nodeId: null })) };
   }
   const wf = parsed.data;
   return {
@@ -26,6 +26,8 @@ export function summarise(id: string, source: WorkflowSummary['source'], path: s
     description: wf.description,
     source,
     path,
+    trigger: wf.trigger,
+    agents: [...new Set(wf.nodes.flatMap((n) => (n.type === 'agent' ? [n.agent] : [])))],
     nodes: wf.nodes.map((n) => ({ id: n.id, type: n.type, title: n.title ?? n.id, detail: detailOf(n) })),
     edges: wf.edges.map((e) => ({ from: e.from, to: e.to, when: e.when ?? null })),
     problems: validate(wf).map((p) => ({ level: p.level, message: p.message, nodeId: p.nodeId ?? null })),

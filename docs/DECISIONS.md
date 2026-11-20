@@ -99,6 +99,7 @@ probed yet; CI runs the fake-agent suite on Ubuntu.
 | Runs and restarts | A run that was running when ADE closed comes back paused; a run waiting at a gate stays waiting. | Nothing restarts without the user. |
 | Workflow editing | Templates are read-only; "Copy to repository" saves one to `.ade/workflows/` for editing. Edits are validated live in the renderer with the same engine code; saving writes YAML; a run needs a saved, error-free file. | Workflows are versioned with the code (WF-03), and the canvas never shows a different verdict from the host. |
 | Test a node (WF-11) | Runs as a one-step workflow run with the sample hand-off, shown in the run view. Gates, loops, branches and land steps cannot be tested alone. | Reuses the run machinery and its audit; a land step must never run without a gate. |
+| Workflow triggers (WF-10) | Manual: the Run button, and "A workflow" in the New session dialog (also used for work items). Terminal command: a failed command block offers "Run a workflow" with its output as `{{checkOutput}}`. Ready session and failed check: repository workflows with that trigger start by themselves, only when "Let workflows start on events" is on (off by default). Templates never start on their own, and sessions a workflow started never fire triggers. | Starting agents costs money and time, so automatic starts are opt-in; gates still guard every land. "Failed check" means a failed code-runner run until CI checks arrive (RV-09). |
 
 ## Facts to verify (`VERIFY` markers in the docs)
 

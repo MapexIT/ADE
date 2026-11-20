@@ -22,7 +22,7 @@ import type { SessionService } from './session-service.ts';
 const MAX_DIFF = 40_000;
 const MAX_OUTPUT = 20_000;
 
-const tail = (text: string, max: number) =>
+export const tail = (text: string, max: number) =>
   text.length > max ? `[earlier output cut]\n${text.slice(-max)}` : text;
 
 /** Where the run's work currently lives. Agent nodes move it forward; commands and land read it. */
@@ -56,6 +56,8 @@ export interface ExecutorDeps {
   resolveCommand(argv: string[]): { command: Command; env: Record<string, string> } | null;
   /** Called when the context changes so the service can persist it. */
   saveContext(ctx: RunContext): void;
+  /** Marks a session as started by a workflow, so it never fires workflow triggers itself. */
+  claimSession(sessionId: string): void;
 }
 
 const text = (t: string): PromptBlock[] => [{ type: 'text', text: t }];
@@ -100,6 +102,7 @@ export class AgentExecutor implements NodeExecutor<AgentNode> {
         ...(packet.workItem.ref ? { workItemRef: packet.workItem.ref } : {}),
       });
       sessionId = session.id;
+      this.deps.claimSession(session.id);
       exec.reportSession(session.id);
 
       const ended = await new Promise<{ stopReason: string; costUsd: number | null } | { failed: string }>(
@@ -165,7 +168,7 @@ export class AgentExecutor implements NodeExecutor<AgentNode> {
 }
 
 /** The agent's messages from its latest turn, which become the next node's `{{summary}}`. */
-function lastMessage(events: SessionEvent[]): string {
+export function lastMessage(events: SessionEvent[]): string {
   let start = 0;
   events.forEach((e, i) => {
     if (e.type === 'turn.started') start = i;

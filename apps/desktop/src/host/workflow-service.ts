@@ -9,7 +9,7 @@ import {
   type WorkflowRunView,
   type WorkflowSummary,
 } from '@ade/contracts';
-import { git, revParse } from '@ade/git';
+import { diffPatch, git, revParse, snapshot } from '@ade/git';
 import {
   parseWorkflow,
   Workflow,
@@ -29,9 +29,12 @@ import {
   LandExecutor,
   type ExecutorDeps,
   type RunContext,
+  type RunHead,
+  lastMessage,
+  tail,
 } from './executors.ts';
 import type { Repositories, WorkflowRunRow } from './repositories.ts';
-import { detailOf, loadWorkflowSource, summarise } from './workflows.ts';
+import { detailOf, listWorkflows, loadWorkflowSource, summarise } from './workflows.ts';
 
 interface ActiveRun {
   runner: WorkflowRunner;
@@ -43,6 +46,20 @@ interface ActiveRun {
 
 const LIVE_STATUSES = ['running', 'waiting-gate', 'paused'];
 
+interface LaunchOptions {
+  workItem: Record<string, string>;
+  packet?: Partial<HandOff>;
+  agentOverrides: RunContext['agentOverrides'];
+  /** Who started it: the user, or the event trigger that fired (WF-10). */
+  actor: 'user' | 'ready-session' | 'failed-check';
+  /** Event triggers continue from an existing session instead of the checkout's HEAD. */
+  head?: RunHead;
+  baseCommit?: string;
+}
+
+/** Setting that lets event triggers start workflows on their own. Off by default. */
+export const AUTO_TRIGGERS_SETTING = 'workflows.autoTriggers';
+
 /**
  * Runs workflows against real sessions (M6-T02). A Facade over the pure engine: it loads and validates the
  * workflow, wires the executors (Strategy) to this run's context, persists every state, and turns gates and
@@ -52,11 +69,14 @@ export class WorkflowService {
   private readonly active = new Map<string, ActiveRun>();
   private readonly ticker: ReturnType<typeof setInterval>;
   private disposed = false;
+  private readonly lastState = new Map<string, string>();
+  private owned: Set<string> | null = null;
+  private readonly offs: (() => void)[] = [];
 
   constructor(
     private readonly repos: Repositories,
     private readonly bus: EventBus,
-    private readonly deps: Omit<ExecutorDeps, 'saveContext'>,
+    private readonly deps: Omit<ExecutorDeps, 'saveContext' | 'claimSession'>,
     private readonly refreshInbox: () => void,
   ) {
     // WF-07: the minutes budget counts wall-clock time while a node runs.
@@ -65,20 +85,110 @@ export class WorkflowService {
         if (run.runner.current.status === 'running') void run.runner.tick(1).catch(() => undefined);
     }, 60_000);
     this.ticker.unref?.();
+    // WF-10: a session that finishes a turn can start `ready-session` workflows.
+    this.offs.push(
+      bus.on('session.changed', ({ session }) => {
+        const prev = this.lastState.get(session.id);
+        this.lastState.set(session.id, session.state);
+        if (session.state === 'ready' && prev === 'working') {
+          void this.fire('ready-session', session.workspaceId, {
+            sessionId: session.id,
+            title: session.title,
+          }).catch((err) => console.error('[host] ready-session trigger failed', err));
+        }
+      }),
+    );
+  }
+
+  /** WF-10: a failed run (code runner) can start `failed-check` workflows. */
+  onRunRecorded(
+    run: { sessionId: string | null; command: string[]; exitCode: number | null; output: string },
+    workspaceId: string | null,
+  ) {
+    if (!workspaceId || run.exitCode === null || run.exitCode === 0) return;
+    const command = run.command.join(' ');
+    void this.fire('failed-check', workspaceId, {
+      sessionId: run.sessionId,
+      title: `Fix: ${command}`,
+      checkOutput: tail(`$ ${command}\n${run.output.trimEnd()}\n[exit ${run.exitCode}]`, 20_000),
+    }).catch((err) => console.error('[host] failed-check trigger failed', err));
+  }
+
+  /** Sessions started by workflow steps. They never fire triggers, so a workflow cannot start itself. */
+  private ownedSessions(): Set<string> {
+    this.owned ??= new Set(this.repos.workflowRuns.allSessionIds());
+    return this.owned;
+  }
+
+  /**
+   * Starts every valid repository workflow whose trigger matches, when the user allowed event triggers.
+   * Templates never start on their own. A ready session's work is the run's starting point.
+   */
+  async fire(
+    trigger: 'ready-session' | 'failed-check',
+    workspaceId: string,
+    seed: { sessionId: string | null; title: string; checkOutput?: string },
+  ): Promise<WorkflowRunView[]> {
+    if (this.disposed || !this.repos.settings.get<boolean>(AUTO_TRIGGERS_SETTING, false)) return [];
+    if (seed.sessionId && this.ownedSessions().has(seed.sessionId)) return [];
+    const workspace = this.repos.workspaces.get(workspaceId);
+    if (!workspace) return [];
+    const matching = (await listWorkflows(workspace.rootPath)).filter(
+      (w) =>
+        w.source === 'repository' && w.trigger === trigger && !w.problems.some((p) => p.level === 'error'),
+    );
+    if (!matching.length) return [];
+
+    let head: RunHead | undefined;
+    let baseCommit: string | undefined;
+    const packet: Partial<HandOff> = seed.checkOutput ? { checkOutput: seed.checkOutput } : {};
+    const session = seed.sessionId ? this.repos.sessions.get(seed.sessionId) : null;
+    if (session?.worktreePath && session.baseCommit && session.state === 'ready') {
+      const commit =
+        this.repos.turns.list(session.id).at(-1)?.endCheckpoint ??
+        (await snapshot(session.worktreePath, null, 'ADE workflow trigger'));
+      head = { sessionId: session.id, worktree: session.worktreePath, commit };
+      baseCommit = session.baseCommit;
+      packet.summary = lastMessage(this.repos.events.list(session.id));
+      packet.diff = tail(
+        (await diffPatch(session.worktreePath, session.baseCommit, commit)).toString('utf8'),
+        40_000,
+      );
+    }
+
+    const started: WorkflowRunView[] = [];
+    for (const w of matching) {
+      const yaml = await loadWorkflowSource(workspace.rootPath, w.id);
+      if (!yaml) continue;
+      const run = await this.launch(workspace, w.id, yaml, {
+        workItem: { title: seed.title },
+        packet,
+        agentOverrides: {},
+        actor: trigger,
+        ...(head ? { head } : {}),
+        ...(baseCommit ? { baseCommit } : {}),
+      });
+      const why = trigger === 'ready-session' ? 'a session finished' : 'a check failed';
+      this.bus.emit('notify', {
+        sessionId: seed.sessionId ?? '',
+        title: 'A workflow started',
+        body: `${w.name} (${why})`,
+      });
+      started.push(run);
+    }
+    return started;
   }
 
   async start(input: StartWorkflowInput): Promise<WorkflowRunView> {
     const workspace = this.workspace(input.workspaceId);
     const yaml = await loadWorkflowSource(workspace.rootPath, input.workflowId);
     if (yaml === null) throw new RpcError('not_found', 'Unknown workflow');
-    return this.launch(
-      workspace,
-      input.workflowId,
-      yaml,
-      input.workItem ?? {},
-      undefined,
-      input.agentOverrides ?? {},
-    );
+    return this.launch(workspace, input.workflowId, yaml, {
+      workItem: input.workItem ?? {},
+      agentOverrides: input.agentOverrides ?? {},
+      ...(input.handOff ? { packet: input.handOff } : {}),
+      actor: 'user',
+    });
   }
 
   /** WF-11: one node on sample input, as a one-step run the run view shows like any other. */
@@ -101,14 +211,12 @@ export class WorkflowService {
     if (node.type === 'land')
       throw new RpcError('not_testable', 'Land steps only run after a gate inside a workflow.');
     const yaml = stringify({ name: `Test: ${node.title ?? node.id}`, nodes: [node] });
-    return this.launch(
-      this.workspace(input.workspaceId),
-      `test:${node.id}`,
-      yaml,
-      input.workItem,
-      input.sample,
-      input.agentOverrides,
-    );
+    return this.launch(this.workspace(input.workspaceId), `test:${node.id}`, yaml, {
+      workItem: input.workItem,
+      packet: input.sample,
+      agentOverrides: input.agentOverrides,
+      actor: 'user',
+    });
   }
 
   private workspace(id: string) {
@@ -121,10 +229,9 @@ export class WorkflowService {
     workspace: { id: string; rootPath: string },
     workflowId: string,
     yaml: string,
-    workItem: Record<string, string>,
-    packet: Partial<HandOff> | undefined,
-    agentOverrides: RunContext['agentOverrides'],
+    opts: LaunchOptions,
   ): Promise<WorkflowRunView> {
+    const { workItem, packet, agentOverrides } = opts;
     let wf: Workflow;
     try {
       wf = parseWorkflow(yaml);
@@ -138,9 +245,14 @@ export class WorkflowService {
           : (err as Error).message;
       throw new RpcError('invalid_workflow', `The workflow cannot run: ${message}`);
     }
-    const baseCommit = await revParse(workspace.rootPath, 'HEAD').catch(() => {
-      throw new RpcError('no_commit', 'The repository needs at least one commit before a workflow can run.');
-    });
+    const baseCommit =
+      opts.baseCommit ??
+      (await revParse(workspace.rootPath, 'HEAD').catch(() => {
+        throw new RpcError(
+          'no_commit',
+          'The repository needs at least one commit before a workflow can run.',
+        );
+      }));
     const id = randomUUID();
     const ctx: RunContext = {
       runId: id,
@@ -148,7 +260,7 @@ export class WorkflowService {
       workspaceId: workspace.id,
       repoRoot: workspace.rootPath,
       baseCommit,
-      head: null,
+      head: opts.head ?? null,
       agentOverrides,
       scratchWorktree: null,
     };
@@ -165,9 +277,14 @@ export class WorkflowService {
     this.repos.audit.append({
       workspaceId: workspace.id,
       sessionId: null,
-      actor: 'user',
-      action: 'workflow.started',
-      detail: { runId: id, workflow: workflowId, agentOverrides },
+      actor: opts.actor === 'user' ? 'user' : 'workflow',
+      action: opts.actor === 'user' ? 'workflow.started' : 'workflow.triggered',
+      detail: {
+        runId: id,
+        workflow: workflowId,
+        agentOverrides,
+        ...(opts.actor !== 'user' ? { trigger: opts.actor } : {}),
+      },
     });
     void run.runner.start(workItem, packet).catch((err) => this.fail(id, err as Error));
     return this.view(run, row.id);
@@ -220,7 +337,11 @@ export class WorkflowService {
   ): ActiveRun {
     const saveContext = (c: RunContext) =>
       this.repos.workflowRuns.save(row.id, active.runner.current.status, active.runner.current, c);
-    const deps: ExecutorDeps = { ...this.deps, saveContext };
+    const deps: ExecutorDeps = {
+      ...this.deps,
+      saveContext,
+      claimSession: (id) => this.ownedSessions().add(id),
+    };
     const store: RunStore = {
       save: (runId, _name, s) => this.repos.workflowRuns.save(runId, s.status, s, ctx),
       load: (runId) => (this.repos.workflowRuns.get(runId)?.state as RunState | null) ?? null,
@@ -425,6 +546,7 @@ export class WorkflowService {
   async dispose(): Promise<void> {
     this.disposed = true;
     clearInterval(this.ticker);
+    for (const off of this.offs) off();
     for (const [runId, run] of this.active) {
       if (run.ctx.scratchWorktree && !LIVE_STATUSES.includes(run.runner.current.status)) {
         await git(['worktree', 'remove', '--force', run.ctx.scratchWorktree], {
