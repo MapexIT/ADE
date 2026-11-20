@@ -16,6 +16,9 @@ import { PromptBlock, SessionEvent } from './events.ts';
 import { defineApi, defineTopics, method } from './rpc.ts';
 
 const Id = z.string().min(1).max(200);
+
+/** SK-03: portable Agent Skills names (lower-case kebab case, 1 to 64 characters). */
+export const SkillName = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'use lower-case letters, digits and single dashes').max(64);
 const AbsPath = z.string().min(1).max(4096);
 const Ok = z.object({ ok: z.literal(true) });
 
@@ -51,6 +54,8 @@ export const CreateSessionInput = z.object({
   modeId: z.string().max(200).optional(),
   /** WF-09: a model from the agent's model option; the session fails to start when the agent does not offer it. */
   modelId: z.string().max(200).optional(),
+  /** SK-01: skills (by name) copied into the agent's skills folder in the worktree for this session only. */
+  skills: z.array(SkillName).max(20).optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
 
@@ -139,6 +144,23 @@ export const WorkflowDetail = z.object({ summary: WorkflowSummary, yaml: z.strin
 export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
 
 
+
+/** SK-02: one skill as the library shows it. */
+export const Skill = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  /** repository: `.ade/skills`; personal: ADE's own library; installed: an agent's own skills folder. */
+  location: z.enum(['repository', 'personal', 'installed']),
+  /** For installed skills, the agent folder it was found in. */
+  agentFolder: z.string().nullable(),
+  path: z.string(),
+  /** SK-05: agents whose user skills folder holds a copy ADE synced. */
+  syncedTo: z.array(z.enum(['claude-code', 'codex', 'opencode'])),
+  problems: z.array(z.string()),
+});
+export type Skill = z.infer<typeof Skill>;
+
 /** Requests served by the host utility process. */
 export const hostApi = defineApi({
   'app.ping': method(z.object({}), z.object({ pid: z.number(), startedAt: z.string() })),
@@ -210,6 +232,24 @@ export const hostApi = defineApi({
   'workflows.resume': method(z.object({ runId: Id }), Ok),
   'workflows.retryFrom': method(z.object({ runId: Id, nodeId: z.string() }), Ok),
   'workflows.cancel': method(z.object({ runId: Id }), Ok),
+  'skills.list': method(z.object({ workspaceId: Id.nullable() }), z.array(Skill)),
+  'skills.read': method(z.object({ workspaceId: Id.nullable(), id: z.string() }), z.object({ skill: Skill, content: z.string() })),
+  'skills.save': method(
+    z.object({
+      workspaceId: Id.nullable(),
+      location: z.enum(['repository', 'personal']),
+      name: SkillName,
+      description: z.string().min(1).max(1024),
+      body: z.string().max(200_000),
+      overwrite: z.boolean().default(false),
+    }),
+    Skill,
+  ),
+  'skills.draft': method(
+    z.object({ workspaceId: Id, agentId: AgentId, name: SkillName, description: z.string().min(1).max(4000), fromSessionId: Id.optional() }),
+    Session,
+  ),
+  'skills.sync': method(z.object({ workspaceId: Id.nullable(), id: z.string(), enabled: z.boolean() }), Skill),
   'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
   'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional() }), z.array(WorkItem)),
 });

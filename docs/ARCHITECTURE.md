@@ -187,7 +187,7 @@ XML) and scratchpads are v1.
 A skill is a folder with a `SKILL.md` whose frontmatter has `name` and `description` (the Agent Skills
 format). Repository skills live in `.ade/skills/<name>/`; personal ones in the app data folder. Before an
 agent node or session starts, ADE copies its selected skills into that agent's skills folder inside the
-worktree and excludes them from the change set. `VERIFY` each agent's skills folder name and discovery rules.
+worktree and excludes them from the change set. Folder names and discovery rules were verified in M6-T05 (see `docs/DECISIONS.md`).
 
 ## 10. Connectors
 

@@ -99,6 +99,7 @@ export class AgentExecutor implements NodeExecutor<AgentNode> {
         permissionProfile: node.profile,
         baseRef: base,
         ...(node.model ? { modelId: node.model } : {}),
+        ...(node.skills.length ? { skills: node.skills } : {}),
         ...(packet.workItem.ref ? { workItemRef: packet.workItem.ref } : {}),
       });
       sessionId = session.id;

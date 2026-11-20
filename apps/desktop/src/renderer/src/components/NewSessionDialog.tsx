@@ -138,6 +138,7 @@ export function NewSessionDialog() {
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
         ...(prefill?.workItem ? { workItemRef: prefill.workItem.ref } : {}),
+        ...(prefill?.skills?.length ? { skills: prefill.skills } : {}),
       }),
     );
     setBusy(false);
@@ -234,6 +235,11 @@ export function NewSessionDialog() {
                 {prefill.handOff.checkOutput}
               </pre>
             </div>
+          ) : null}
+          {mode === 'agent' && prefill?.skills?.length ? (
+            <p className="m-0 text-ink-muted">
+              Skills loaded for this session only: {prefill.skills.join(', ')}
+            </p>
           ) : null}
           {mode === 'agent' && (prefill?.workItem || prefill?.attachments?.length) ? (
             <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-dashed border-line p-3">

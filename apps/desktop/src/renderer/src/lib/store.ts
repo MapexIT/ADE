@@ -3,7 +3,7 @@ import { applyEvent, emptyView, projectSession, type SessionView } from '@ade/se
 import { create } from 'zustand';
 import { host } from './bridge.ts';
 
-export type Tab = 'sessions' | 'work-items' | 'workflows' | 'terminals' | 'run' | 'review';
+export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review';
 
 export interface ConfirmSpec {
   title: string;
@@ -24,6 +24,8 @@ export interface NewSessionPrefill {
   title?: string;
   workItem?: WorkItem;
   attachments?: PromptBlock[];
+  /** SK-01: skills loaded into the new session only. */
+  skills?: string[];
   /** Open with "A workflow" selected (WF-02). */
   mode?: 'agent' | 'workflow';
   /** Seeds the workflow's first hand-off, for example a failed command's output (WF-10). */
