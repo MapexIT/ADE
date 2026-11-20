@@ -66,6 +66,18 @@ export const ProtocolMessage = z.object({
 });
 export type ProtocolMessage = z.infer<typeof ProtocolMessage>;
 
+export const WorkflowSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  source: z.enum(['template', 'repository']),
+  path: z.string().nullable(),
+  nodes: z.array(z.object({ id: z.string(), type: z.string(), title: z.string(), detail: z.string() })),
+  edges: z.array(z.object({ from: z.string(), to: z.string(), when: z.enum(['pass', 'fail']).nullable() })),
+  problems: z.array(z.object({ level: z.enum(['error', 'warning']), message: z.string(), nodeId: z.string().nullable() })),
+});
+export type WorkflowSummary = z.infer<typeof WorkflowSummary>;
+
 /** Requests served by the host utility process. */
 export const hostApi = defineApi({
   'app.ping': method(z.object({}), z.object({ pid: z.number(), startedAt: z.string() })),
@@ -122,6 +134,7 @@ export const hostApi = defineApi({
 
   'audit.list': method(z.object({ workspaceId: Id }), z.array(AuditEntry)),
 
+  'workflows.list': method(z.object({ workspaceId: Id.nullable() }), z.array(WorkflowSummary)),
   'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
   'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional() }), z.array(WorkItem)),
 });

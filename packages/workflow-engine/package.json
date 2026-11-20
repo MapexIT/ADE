@@ -1,0 +1,18 @@
+{
+  "name": "@ade/workflow-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "v1: agent workflows. YAML schema, validation, a pure run state machine and a runner.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ade/contracts": "workspace:*",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}
