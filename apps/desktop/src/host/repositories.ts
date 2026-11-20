@@ -436,6 +436,16 @@ export class WorkflowRunRepo {
     return this.db.all<R>('SELECT * FROM workflow_runs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 100', workspaceId).map(this.map);
   }
 
+  /** Every session a workflow step ever started. */
+  allSessionIds(): string[] {
+    const ids: string[] = [];
+    for (const r of this.db.all<R>('SELECT state_json FROM workflow_runs')) {
+      const state = JSON.parse(String(r.state_json)) as { nodes?: Record<string, { sessionId?: string | null }> } | null;
+      for (const n of Object.values(state?.nodes ?? {})) if (n.sessionId) ids.push(n.sessionId);
+    }
+    return ids;
+  }
+
   inStatuses(statuses: string[]): WorkflowRunRow[] {
     return this.db.all<R>(`SELECT * FROM workflow_runs WHERE status IN (${statuses.map(() => '?').join(', ')})`, ...statuses).map(this.map);
   }

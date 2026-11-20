@@ -279,4 +279,84 @@ edges:
       }),
     ).rejects.toMatchObject({ code: 'not_testable' });
   }, 30_000);
+
+  it('event triggers start repository workflows only when allowed, and never from their own sessions (WF-10)', async () => {
+    writeWorkflow(
+      'on-ready',
+      `name: Second opinion
+trigger: ready-session
+nodes:
+  - { id: check, type: agent, agent: fake, profile: read-only, prompt: "say Checked: {{summary}}" }
+  - { id: ok, type: gate }
+edges:
+  - { from: check, to: ok }
+`,
+    );
+    writeWorkflow(
+      'on-fail',
+      `name: Fix it
+trigger: failed-check
+nodes:
+  - { id: fix, type: agent, agent: fake, prompt: "say Fixing: {{checkOutput}}" }
+  - { id: ok, type: gate }
+edges:
+  - { from: fix, to: ok }
+`,
+    );
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const text = (t: string) => [{ type: 'text' as const, text: t }];
+    const start = (prompt: string) =>
+      host.handlers['sessions.create']({
+        workspaceId: ws.id,
+        agentId: 'fake',
+        prompt: text(prompt),
+        permissionProfile: 'auto-edit',
+        bringChanges: false,
+      });
+
+    // Off by default: a ready session starts nothing.
+    const quiet = await start('say Nothing to see.');
+    await waitFor(() => host.repos.sessions.require(quiet.id).state === 'ready');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(host.workflows.list(ws.id)).toHaveLength(0);
+
+    host.repos.settings.set('workflows.autoTriggers', true);
+    const session = await start('edit notes.txt hello\nsay Wrote the notes.');
+    const triggered = await waitFor(() =>
+      host.workflows.list(ws.id).find((r) => r.workflowName === 'Second opinion'),
+    );
+    const r = await until(triggered.id, 'waiting-gate', 'ok');
+    const checker = host.repos.sessions.require(node(r, 'check').sessionId!);
+    // The run continues from the session's work, and its own session finishing triggered nothing more.
+    expect(readFileSync(join(checker.worktreePath!, 'notes.txt'), 'utf8')).toBe('hello');
+    expect(
+      host.repos.events
+        .list(checker.id)
+        .some((e) => e.type === 'agent.message' && e.text === 'Checked: Wrote the notes.'),
+    ).toBe(true);
+    expect(host.workflows.list(ws.id).filter((x) => x.workflowName === 'Second opinion')).toHaveLength(1);
+    expect(
+      host.repos.audit.list(ws.id).some((a) => a.action === 'workflow.triggered' && a.actor === 'workflow'),
+    ).toBe(true);
+
+    // A failed run starts the failed-check workflow with the output as {{checkOutput}}.
+    host.handlers['runs.record']({
+      runConfigId: null,
+      sessionId: session.id,
+      worktreePath: session.worktreePath!,
+      command: ['pnpm', 'test'],
+      startedAt: new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      exitCode: 1,
+      output: 'boom',
+    });
+    const fix = await waitFor(() => host.workflows.list(ws.id).find((x) => x.workflowName === 'Fix it'));
+    const fr = await until(fix.id, 'waiting-gate', 'ok');
+    const fixer = node(fr, 'fix').sessionId!;
+    expect(
+      host.repos.events
+        .list(fixer)
+        .some((e) => e.type === 'agent.message' && e.text === 'Fixing: $ pnpm test'),
+    ).toBe(true);
+  }, 60_000);
 });

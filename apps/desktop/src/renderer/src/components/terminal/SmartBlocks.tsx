@@ -47,6 +47,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
   const terminal = useTerminals((t) => t.terminals[terminalId]);
   const attach = useStore((s) => s.attach);
   const toast = useStore((s) => s.toast);
+  const setStore = useStore((s) => s.set);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState(-1);
   const listRef = useRef<HTMLDivElement>(null);
@@ -125,6 +126,23 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   {failed ? (
                     <Button size="dense" variant="primary" onClick={() => void fixWithAgent(b)}>
                       Fix with agent
+                    </Button>
+                  ) : null}
+                  {failed ? (
+                    <Button
+                      size="dense"
+                      onClick={() =>
+                        setStore({
+                          newSession: {
+                            mode: 'workflow',
+                            title: `Fix: ${b.command}`,
+                            prompt: `The command ${b.command} failed with exit code ${b.exitCode}.`,
+                            handOff: { checkOutput: blockAsText(b) },
+                          },
+                        })
+                      }
+                    >
+                      Run a workflow
                     </Button>
                   ) : null}
                   <Button size="dense" onClick={() => (sessionId ? (attach(sessionId, attachmentText(`Command: ${b.command}`, blockAsText(b))), toast('Attached to the next prompt.')) : toast('This terminal is not linked to a session.', 'danger'))}>

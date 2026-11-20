@@ -42,7 +42,10 @@ test('M6 gate: the story workflow runs end to end and stops at both gates', asyn
 
   await page.getByRole('button', { name: 'Workflows', exact: true }).click();
   const list = page.getByRole('complementary', { name: 'Workflows' });
-  await list.getByRole('button', { name: /Story to pull request/ }).first().click();
+  await list
+    .getByRole('button', { name: /Story to pull request/ })
+    .first()
+    .click();
   await expect(page.locator('span', { hasText: '.ade/workflows/story.yaml' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Run workflow' }).click();
@@ -59,7 +62,9 @@ test('M6 gate: the story workflow runs end to end and stops at both gates', asyn
   await decision.getByRole('button', { name: 'Approve and continue' }).click();
 
   // Gate 2 after build, tests and review.
-  await expect(decision.getByText('Review the change before the pull request')).toBeVisible({ timeout: 30_000 });
+  await expect(decision.getByText('Review the change before the pull request')).toBeVisible({
+    timeout: 30_000,
+  });
   await decision.getByRole('button', { name: 'Approve and continue' }).click();
   await expect(details.getByText('Succeeded', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
@@ -77,7 +82,10 @@ test('M6-T03: copy a template, add a step, save it to the repository', async () 
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
 
   await page.getByRole('button', { name: 'Workflows', exact: true }).click();
-  await page.getByRole('complementary', { name: 'Workflows' }).getByRole('button', { name: /Cross-review/ }).click();
+  await page
+    .getByRole('complementary', { name: 'Workflows' })
+    .getByRole('button', { name: /Cross-review/ })
+    .click();
   await page.getByRole('button', { name: 'Copy to repository to edit' }).click();
   await expect(page.getByText('Saved .ade/workflows/cross-review.yaml')).toBeVisible();
 
@@ -89,5 +97,34 @@ test('M6-T03: copy a template, add a step, save it to the repository', async () 
   await settings.getByLabel('Title').fill('Lint');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Unsaved changes')).toBeHidden();
+  await app.close();
+});
+
+test('M6-T04: the new session dialog starts a workflow instead of one agent (WF-02)', async () => {
+  const repo = makeRepo();
+  mkdirSync(join(repo, '.ade', 'workflows'), { recursive: true });
+  writeFileSync(
+    join(repo, '.ade', 'workflows', 'quick.yaml'),
+    'name: Quick check\nnodes:\n  - { id: look, type: agent, agent: fake, profile: read-only, prompt: "say Looked at {{workItem.title}}." }\n  - { id: ok, type: gate, question: "Happy with it?" }\nedges:\n  - { from: look, to: ok }\n',
+  );
+  const { app, page } = await launch(userDataDir());
+  await page.getByRole('button', { name: 'Done' }).click();
+  await stubDirectoryPicker(app, repo);
+  await page.keyboard.press('Control+o');
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
+
+  await page.keyboard.press('Control+n');
+  await page.getByRole('tab', { name: 'A workflow' }).click();
+  await page.getByRole('radio', { name: /Quick check/ }).check();
+  await page.getByLabel(/Title \(fills/).fill('The login page');
+  await page.getByLabel(/What is the work/).fill('Check it.');
+  await page.getByRole('button', { name: 'Start run' }).click();
+
+  const decision = page
+    .getByRole('complementary', { name: 'Run details' })
+    .getByRole('region', { name: 'Decision' });
+  await expect(decision.getByText('Happy with it?')).toBeVisible({ timeout: 30_000 });
+  await decision.getByRole('button', { name: 'Open latest session' }).click();
+  await expect(page.getByText('Looked at The login page.').first()).toBeVisible();
   await app.close();
 });

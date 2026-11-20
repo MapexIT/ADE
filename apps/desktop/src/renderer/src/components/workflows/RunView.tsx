@@ -44,6 +44,11 @@ export function RunView({ run }: { run: WorkflowRunView }) {
   const node = run.nodes.find((n) => n.id === (selected ?? run.current)) ?? null;
   const gate = run.status === 'waiting-gate' ? run.nodes.find((n) => n.id === run.current) : null;
   const status = RUN_STATUS[run.status];
+  // The session of the step that most recently finished: what a gate asks you to review.
+  const latestSession =
+    [...run.nodes]
+      .filter((n) => n.sessionId && n.endedAt)
+      .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))[0]?.sessionId ?? null;
 
   const openSession = (id: string) => {
     selectSession(id);
@@ -92,9 +97,16 @@ export function RunView({ run }: { run: WorkflowRunView }) {
             <SectionLabel>Your decision</SectionLabel>
             <p className="m-0 font-semibold text-ink">{gate.detail}</p>
             <p className="m-0 text-[12px] text-ink-muted">
-              Open the latest session to review its changes before you decide.
+              {latestSession
+                ? 'Review the latest session before you decide.'
+                : 'No step has made changes yet.'}
             </p>
             <div className="flex flex-wrap gap-2">
+              {latestSession ? (
+                <Button size="dense" onClick={() => openSession(latestSession)}>
+                  Open latest session
+                </Button>
+              ) : null}
               <Button
                 variant="primary"
                 size="dense"

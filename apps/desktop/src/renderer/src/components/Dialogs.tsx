@@ -128,6 +128,7 @@ export function SettingsDialog() {
   const [creds, setCreds] = useState<{ available: boolean; backend: string; stored: string[] } | null>(null);
   const [token, setToken] = useState({ shortcut: '', github: '' });
   const [share, setShare] = useState(false);
+  const [autoTriggers, setAutoTriggers] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +136,7 @@ export function SettingsDialog() {
     void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
+    void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
     if (workspaceId) void host.call('workspace.setupFile', { workspaceId }).then(setSetupFile);
   }, [open, workspaceId]);
 
@@ -142,6 +144,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'concurrencyCap', value: Math.max(1, Math.min(10, cap)) }));
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
+    await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     toast('Settings saved.');
     set({ settingsOpen: false });
   };
@@ -205,6 +208,18 @@ export function SettingsDialog() {
             <span>
               Give new sessions the Shortcut connector as an MCP server
               <span className="block text-[12px] text-ink-muted">The agent then holds your Shortcut token. Off by default; only agents that support HTTP MCP receive it.</span>
+            </span>
+          </label>
+        </section>
+        <section className="flex flex-col gap-2" aria-label="Workflows">
+          <SectionLabel>Workflows</SectionLabel>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={autoTriggers} onChange={(e) => setAutoTriggers(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Let workflows start on events
+              <span className="block text-[12px] text-ink-muted">
+                Workflows in .ade/workflows/ with the trigger ready-session or failed-check start by themselves when a session finishes a turn or a run fails. Templates never do. Nothing lands without your approval at a gate.
+              </span>
             </span>
           </label>
         </section>
