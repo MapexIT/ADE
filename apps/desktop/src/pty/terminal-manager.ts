@@ -102,6 +102,7 @@ export class TerminalManager {
     command?: string[];
     title?: string;
     runId?: string;
+    env?: Record<string, string>;
   }): TerminalInfo {
     const id = randomUUID();
     let file: string;
@@ -124,7 +125,7 @@ export class TerminalManager {
       smart = launch.integrated;
     }
 
-    const env = { ...(process.env as Record<string, string>), ...extraEnv, TERM_PROGRAM: 'ADE', COLORTERM: 'truecolor' };
+    const env = { ...(process.env as Record<string, string>), ...extraEnv, ...(opts.env ?? {}), TERM_PROGRAM: 'ADE', COLORTERM: 'truecolor' };
     const pty = this.spawnPty(file, args, { cwd: opts.cwd, env, cols: opts.cols, rows: opts.rows, name: 'xterm-256color' });
     const info: TerminalInfo = {
       id,
@@ -232,7 +233,7 @@ export class TerminalManager {
   }
 
   /** CR-02/03: a run is a program in a pty (no shell), reported as a terminal and as a run result. */
-  run(opts: { command: string[]; cwd: string; sessionId: string | null; runId: string; cols?: number; rows?: number }): { terminalId: string } {
+  run(opts: { command: string[]; cwd: string; sessionId: string | null; runId: string; cols?: number; rows?: number; env?: Record<string, string> }): { terminalId: string } {
     const info = this.create({
       kind: 'plain',
       cwd: opts.cwd,
@@ -242,6 +243,7 @@ export class TerminalManager {
       command: opts.command,
       title: `Run · ${opts.command.join(' ')}`,
       runId: opts.runId,
+      ...(opts.env ? { env: opts.env } : {}),
     });
     return { terminalId: info.id };
   }

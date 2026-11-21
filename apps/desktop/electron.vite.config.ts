@@ -23,6 +23,7 @@ export default defineConfig({
           host: resolve(__dirname, 'src/host/index.ts'),
           pty: resolve(__dirname, 'src/pty/index.ts'),
           'fake-agent': resolve(__dirname, '../../packages/fake-agent/src/main.ts'),
+          'runner-mcp': resolve(__dirname, 'src/runner-mcp/main.ts'),
         },
         // Shared code goes to its own chunk, never into another entry: otherwise loading main could run the
         // host's top-level code.

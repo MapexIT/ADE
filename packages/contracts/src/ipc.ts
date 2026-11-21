@@ -195,6 +195,26 @@ export const TerminalLayout = z.object({
 });
 export type TerminalLayout = z.infer<typeof TerminalLayout>;
 
+/** CR-11: a named set of variables for runs. Secret values live in the OS credential store, never here. */
+export const EnvSet = z.object({
+  id: Id,
+  name: z.string().trim().min(1).max(100),
+  vars: z
+    .array(
+      z.object({
+        name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'use letters, digits and underscores').max(100),
+        /** Plain value; empty for secrets. */
+        value: z.string().max(10_000),
+        secret: z.boolean(),
+      }),
+    )
+    .max(100),
+});
+export type EnvSet = z.infer<typeof EnvSet>;
+
+export const ScratchLanguage = z.enum(['javascript', 'typescript', 'python', 'csharp']);
+export type ScratchLanguage = z.infer<typeof ScratchLanguage>;
+
 /** TM-07: a named command for this workspace's terminals. */
 export const SavedCommand = z.object({
   id: Id,
@@ -417,6 +437,15 @@ export const hostApi = defineApi({
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
   'layout.get': method(z.object({ workspaceId: Id }), TerminalLayout.nullable()),
   'layout.save': method(z.object({ workspaceId: Id, layout: TerminalLayout }), Ok),
+  /** CR-07: writes a snippet into a fresh scratch folder and says how to run it (and whether that is sandboxed). */
+  'scratch.prepare': method(
+    z.object({ language: ScratchLanguage, code: z.string().max(200_000) }),
+    z.object({ dir: z.string(), file: z.string(), command: z.array(z.string()), env: z.record(z.string(), z.string()), sandboxed: z.boolean(), note: z.string().nullable() }),
+  ),
+  /** CR-05: a selection saved as a file next to nothing, so it can run with the file's interpreter. */
+  'scratch.write': method(z.object({ extension: z.string().regex(/^[a-z0-9]{1,8}$/), content: z.string().max(200_000) }), z.object({ path: z.string() })),
+  'envSets.list': method(z.object({ workspaceId: Id }), z.array(EnvSet)),
+  'envSets.save': method(z.object({ workspaceId: Id, sets: z.array(EnvSet).max(50) }), Ok),
   'checks.settings': method(z.object({ workspaceId: Id }), CheckSettings),
   'checks.saveSettings': method(z.object({ workspaceId: Id, settings: CheckSettings }), Ok),
   'checks.run': method(z.object({ sessionId: Id }), z.array(CheckResult)),
@@ -439,7 +468,8 @@ export const hostApi = defineApi({
 
   'runs.configs': method(z.object({ workspaceId: Id }), z.array(RunConfig)),
   'runs.saveConfig': method(RunConfig.omit({ id: true, source: true }).extend({ id: Id.optional() }), RunConfig),
-  'runs.record': method(Run.omit({ id: true }), Run),
+  /** `workspaceId` names the workspace when the folder is outside it (scratchpad and selection runs). */
+  'runs.record': method(Run.omit({ id: true }).extend({ workspaceId: Id.optional() }), Run),
   'runs.history': method(z.object({ workspaceId: Id }), z.array(Run)),
 
   'audit.list': method(z.object({ workspaceId: Id }), z.array(AuditEntry)),
@@ -537,6 +567,8 @@ export const ptyApi = defineApi({
       sessionId: z.string().nullable(),
       command: z.array(z.string()).optional(),
       title: z.string().optional(),
+      /** CR-11: extra variables for this program only. */
+      env: z.record(z.string(), z.string()).optional(),
     }),
     TerminalInfo,
   ),
@@ -547,7 +579,7 @@ export const ptyApi = defineApi({
   'pty.list': method(z.object({}), z.array(TerminalInfo)),
   'pty.blocks': method(z.object({ id: Id }), z.array(CommandBlock)),
   'pty.run': method(
-    z.object({ command: z.array(z.string()).min(1), cwd: AbsPath, sessionId: z.string().nullable(), runId: Id }),
+    z.object({ command: z.array(z.string()).min(1), cwd: AbsPath, sessionId: z.string().nullable(), runId: Id, env: z.record(z.string(), z.string()).optional() }),
     z.object({ terminalId: z.string() }),
   ),
 });
@@ -579,6 +611,12 @@ export const mainApi = defineApi({
     z.object({ version: z.string(), platform: z.string(), userData: z.string(), isPackaged: z.boolean() }),
   ),
   'main.restartProcess': method(z.object({ which: z.enum(['host', 'pty']) }), Ok),
+  /** CR-11: secret values of environment sets, kept with safeStorage like connector tokens. */
+  'main.envSecret.set': method(z.object({ key: z.string().regex(/^env:[\w-]+:[A-Za-z_][A-Za-z0-9_]*$/), value: z.string().min(1).max(10_000) }), Ok),
+  'main.envSecret.delete': method(z.object({ key: z.string().regex(/^env:[\w-]+:[A-Za-z_][A-Za-z0-9_]*$/) }), Ok),
+  'main.envSecret.get': method(z.object({ keys: z.array(z.string().regex(/^env:[\w-]+:[A-Za-z_][A-Za-z0-9_]*$/)).max(100) }), z.record(z.string(), z.string())),
+  /** CR-10: opens a local web app in an isolated preview window (localhost only). */
+  'main.openPreview': method(z.object({ url: z.url({ protocol: /^https?$/ }) }), Ok),
 });
 export type MainApi = typeof mainApi;
 

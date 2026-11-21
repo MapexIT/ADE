@@ -4,6 +4,7 @@
  */
 import type { MessagePortMain } from 'electron';
 import { createPublisher, emitterPort, hostApi, hostTopics, serveApi } from '@ade/contracts';
+import { join } from 'node:path';
 import { createHost } from './app.ts';
 import { KEEP_RUNNING_SETTING } from '../main/background.ts';
 
@@ -16,6 +17,7 @@ const host = createHost({
   node: { command: process.execPath, args: [] },
   nodeEnv: { ELECTRON_RUN_AS_NODE: '1' },
   ...(process.env.ADE_FAKE_AGENT_ENTRY ? { fakeAgentEntry: process.env.ADE_FAKE_AGENT_ENTRY } : {}),
+  runnerMcpEntry: join(__dirname, 'runner-mcp.js'),
 });
 
 type Publish = ReturnType<typeof createPublisher<typeof hostTopics>>;

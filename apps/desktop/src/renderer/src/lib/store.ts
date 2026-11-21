@@ -3,6 +3,7 @@ import { applyEvent, emptyView, projectSession, type SessionView } from '@ade/se
 import { create } from 'zustand';
 import { host } from './bridge.ts';
 import { extractShellCommands } from './terminal-intel.ts';
+import type { ActiveRun } from './runs.ts';
 import { AGENT_LABELS } from '@ade/contracts';
 
 export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review';
@@ -67,6 +68,10 @@ interface State {
   /** `rev` changes when the open file should be reloaded (follow mode after the agent edited it). */
   editor: { path: string; sessionId: string | null; rev?: number } | null;
   suggestions: Suggestion[];
+  /** The run shown in the Run tab (CR-02); see lib/runs.ts. */
+  activeRun: ActiveRun | null;
+  /** Bumped when a run is recorded, so history views refresh. */
+  runsVersion: number;
   /** PL-03: the compare run shown side by side, by its group id. */
   compareGroup: string | null;
   /** SR-07: the session being handed to another agent. */
@@ -158,6 +163,8 @@ export const useStore = create<State & Actions>((set, get) => ({
   compareGroup: null,
   handOffSessionId: null,
   suggestions: [],
+  activeRun: null,
+  runsVersion: 0,
   newSession: null,
   paletteOpen: false,
   inboxOpen: false,

@@ -16,6 +16,7 @@ import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
 import { useStore, type Tab } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
+import { wireRuns } from './lib/runs.ts';
 
 // SM-11: every finished terminal command goes into the searchable history.
 onBlockFinished((terminal, block) => {
@@ -35,7 +36,10 @@ function useWiring() {
       }),
       pty.onConnection((up) => {
         useStore.setState((st) => ({ connection: { ...st.connection, pty: up } }));
-        if (up) wireTerminals();
+        if (up) {
+          wireTerminals();
+          wireRuns();
+        }
       }),
       host.on('session.event', (e) => useStore.getState().onEvent(e)),
       host.on('session.changed', ({ session }) => useStore.getState().upsertSession(session)),
