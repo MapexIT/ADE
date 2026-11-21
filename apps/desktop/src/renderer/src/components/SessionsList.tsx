@@ -58,6 +58,9 @@ export function SessionsList() {
       <Button variant="primary" onClick={() => set({ newSession: {} })}>
         New session
       </Button>
+      <Button variant="ghost" onClick={() => set({ sessionSearchOpen: true })}>
+        Search sessions
+      </Button>
       {Object.keys(sessions).length === 0 ? (
         <p className="m-0 p-2 text-ink-muted">No sessions yet. Start one to give an agent a task in its own worktree.</p>
       ) : null}

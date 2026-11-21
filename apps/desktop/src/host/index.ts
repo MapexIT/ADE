@@ -50,8 +50,40 @@ host.bus.on('notify', (e) => {
   parent.postMessage({ type: 'notify', ...e });
 });
 
+// HI-08: the preview window lives in main; the agent's tools reach it through these requests.
+let previewSeq = 0;
+const previewWaiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+const previewCall = (action: string, args: Record<string, string>) =>
+  new Promise<unknown>((resolve, reject) => {
+    const id = ++previewSeq;
+    const timer = setTimeout(() => {
+      previewWaiting.delete(id);
+      reject(new Error('The preview did not answer in time.'));
+    }, 30_000);
+    previewWaiting.set(id, {
+      resolve: (v) => (clearTimeout(timer), resolve(v)),
+      reject: (e) => (clearTimeout(timer), reject(e)),
+    });
+    parent.postMessage({ type: 'preview-request', id, action, args });
+  });
+host.setPreviewDriver({
+  open: async (url) => void (await previewCall('open', { url })),
+  screenshot: async () => Buffer.from(String(await previewCall('screenshot', {})), 'base64'),
+  click: async (selector) => void (await previewCall('click', { selector })),
+  type: async (selector, text) => void (await previewCall('type', { selector, text })),
+  text: async () => String(await previewCall('text', {})),
+});
+
 parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
   const msg = event.data as { type?: string } | null;
+  if (msg?.type === 'preview-response') {
+    const r = msg as { id: number; ok: boolean; result?: unknown; error?: string };
+    const w = previewWaiting.get(r.id);
+    previewWaiting.delete(r.id);
+    if (r.ok) w?.resolve(r.result);
+    else w?.reject(new Error(r.error ?? 'The preview failed.'));
+    return;
+  }
   if (msg?.type === 'renderer-port' && event.ports[0]) {
     const raw = event.ports[0];
     const port = emitterPort(raw);

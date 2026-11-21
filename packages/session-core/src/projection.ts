@@ -39,7 +39,8 @@ export type TimelineItem =
       note: string | null;
     }
   | { kind: 'turn'; key: string; turnId: string; index: number; stopReason: string | null }
-  | { kind: 'notice'; key: string; level: 'info' | 'warning' | 'error'; text: string };
+  | { kind: 'notice'; key: string; level: 'info' | 'warning' | 'error'; text: string }
+  | { kind: 'screenshot'; key: string; url: string; file: string };
 
 export interface SessionView {
   items: TimelineItem[];
@@ -215,6 +216,9 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
       return v;
     case 'notice':
       v.items = [...v.items, { kind: 'notice', key: `notice:${event.seq}`, level: event.level, text: event.text }];
+      return v;
+    case 'preview.screenshot':
+      v.items = [...v.items, { kind: 'screenshot', key: `shot:${event.seq}`, url: event.url, file: event.file }];
       return v;
     case 'checkpoint.created':
     case 'session.state_changed':

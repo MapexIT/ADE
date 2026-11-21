@@ -54,21 +54,8 @@ export function isMultiLinePaste(text: string): boolean {
   return text.replace(/\r?\n$/, '').includes('\n');
 }
 
-const SECRETS: [RegExp, string][] = [
-  [/-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, 'a private key'],
-  [/\bAKIA[0-9A-Z]{16}\b/, 'an AWS access key'],
-  [/\bgh[pousr]_[A-Za-z0-9]{36,}\b/, 'a GitHub token'],
-  [/\bgithub_pat_[A-Za-z0-9_]{60,}\b/, 'a GitHub token'],
-  [/\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}\b/, 'an API key'],
-  [/\bxox[abpr]-[A-Za-z0-9-]{10,}\b/, 'a Slack token'],
-  [/\bAIza[0-9A-Za-z_-]{35}\b/, 'a Google API key'],
-  [/\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*["']?[^\s"']{8,}/i, 'a password or key'],
-];
-
-/** SM-14: kinds of secret found in text about to go to an agent. */
-export function findSecrets(text: string): string[] {
-  return [...new Set(SECRETS.filter(([re]) => re.test(text)).map(([, what]) => what))];
-}
+/** SM-14: kinds of secret found in text about to go to an agent (patterns shared with the audit export). */
+export { findSecrets } from '@ade/contracts';
 
 export interface TestSummary {
   framework: 'vitest' | 'jest' | 'pytest' | 'go' | 'dotnet';

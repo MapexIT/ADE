@@ -24,6 +24,10 @@ import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { askOnce } from './one-shot.ts';
 import { ScratchService } from './scratch.ts';
+import { instructionStatus } from './instruction-files.ts';
+import { exportAudit, searchSessions } from './history-search.ts';
+import { LspService } from './lsp.ts';
+import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -50,6 +54,8 @@ export interface HostConfig {
   homeDir?: string;
   /** RV-12: overrides the GitHub CLI and how it is run (tests only). */
   github?: { gh: string | null; run: Runner };
+  /** HI-08: drives the preview window (main implements it); without one, agents get no preview tools. */
+  previewDriver?: PreviewDriver;
   /** CR-08: the runner MCP server's entry; when set, sessions get the `ade-runner` tools. */
   runnerMcpEntry?: string;
   /** CO-05, CO-08, CO-09: replaces the Shortcut MCP actions (tests only). */
@@ -158,6 +164,14 @@ export function createHost(config: HostConfig) {
     ingestRunner(sessionId);
     await checks.afterTurn(sessionId);
   };
+  const lsp = new LspService((path) => files.rootOf(path), undefined, config.node.command);
+  let previewDriver: PreviewDriver | null = config.previewDriver ?? null;
+  const screenshotsDir = join(config.userData, 'screenshots');
+  const preview = new PreviewMcp(
+    () => previewDriver,
+    screenshotsDir,
+    (sessionId, url, file) => sessions.record(sessionId, { type: 'preview.screenshot', url, file }),
+  );
   const scratch = new ScratchService(join(config.userData, 'scratch'), containment, config.node, config.nodeEnv);
   const branches = new BranchService(repos, sessions);
   const gh = config.github ? config.github.gh : findOnPath('gh');
@@ -348,6 +362,31 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'checks.run': ({ sessionId }) => checks.run(sessionId),
+    'instructions.status': ({ workspaceId }) => instructionStatus(workspaceRoot(workspaceId)),
+    'history.sessions': ({ workspaceId, query }) => searchSessions(repos, query, workspaceId),
+    'audit.export': ({ workspaceId }) => {
+      const ws = repos.workspaces.get(workspaceId);
+      if (!ws) throw new RpcError('not_found', 'Unknown workspace');
+      const worktrees = repos.sessions.list(workspaceId).map((s) => s.worktreePath).filter((p): p is string => !!p && p !== ws.rootPath);
+      repos.audit.append({ workspaceId, sessionId: null, actor: 'user', action: 'audit.exported', detail: {} });
+      return {
+        fileName: `ade-audit-${ws.name.replace(/[^\w.-]+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`,
+        content: exportAudit(repos.audit.exportAll(workspaceId), { workspace: ws.rootPath, userData: config.userData, worktrees }),
+      };
+    },
+    'lsp.open': ({ path, text }) => lsp.open(path, text),
+    'lsp.change': ({ path, text }) => {
+      lsp.change(path, text);
+      return { ok: true };
+    },
+    'lsp.close': ({ path }) => {
+      lsp.close(path);
+      return { ok: true };
+    },
+    'lsp.diagnostics': ({ path }) => lsp.diagnostics(path),
+    'lsp.hover': ({ path, line, character }) => lsp.hover(path, line, character),
+    'lsp.definition': ({ path, line, character }) => lsp.definition(path, line, character),
+    'screenshots.read': async ({ file }) => ({ dataUrl: `data:image/png;base64,${(await readFile(join(screenshotsDir, file))).toString('base64')}` }),
     'scratch.prepare': ({ language, code }) => scratch.prepare(language, code),
     'scratch.write': ({ extension, content }) => scratch.write(extension, content),
     'envSets.list': ({ workspaceId }) => {
@@ -516,6 +555,8 @@ export function createHost(config: HostConfig) {
         });
       }
     }
+    // HI-08: the preview tools, when ADE can drive a preview window (agents without HTTP MCP do not get them).
+    if (previewDriver && repos.settings.get<boolean>('preview.forAgents', true)) servers.push(await preview.specFor(sessionId));
     // CO-10: the user's personal servers, for every workspace.
     const personal = resolveMcpServers(personalMcp(), process.env);
     servers.push(...personal.servers);
@@ -551,8 +592,14 @@ export function createHost(config: HostConfig) {
       credentials.set(values);
       void shortcut.reset();
     },
+    /** HI-08: main hands over the preview driver once its window code is ready. */
+    setPreviewDriver(driver: PreviewDriver | null) {
+      previewDriver = driver;
+    },
     async dispose() {
       clearInterval(mergeTimer);
+      await lsp.dispose();
+      await preview.dispose();
       await workflows.dispose();
       await sessions.shutdown();
       db.close();

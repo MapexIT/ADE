@@ -88,6 +88,8 @@ export const SessionEvent = z.discriminatedUnion('type', [
     content: z.array(ToolContent).nullable(),
   }),
   z.object({ ...base, type: z.literal('plan.updated'), entries: z.array(PlanEntry) }),
+  /** HI-08: the agent took a screenshot of the preview; `file` is in ADE's screenshots folder. */
+  z.object({ ...base, type: z.literal('preview.screenshot'), url: z.string(), file: z.string() }),
   z.object({
     ...base,
     type: z.literal('permission.requested'),

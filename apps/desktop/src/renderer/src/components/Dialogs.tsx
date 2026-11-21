@@ -11,6 +11,7 @@ import { Field, inputClass, Modal } from './Modal.tsx';
 import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
 import { WorkspaceRules } from './WorkspaceRules.tsx';
 import { PersonalMcpSettings, WorkItemSyncSettings } from './ConnectorSettings.tsx';
+import { ExportAuditButton, InstructionFiles } from './HistoryTools.tsx';
 
 /** CN-07: one line describing the host sandbox on this machine. */
 export function sandboxSummary(s: ContainmentStatus | null): string {
@@ -282,6 +283,13 @@ export function SettingsDialog() {
         </section>
         {workspaceId ? <WorkspaceRules workspaceId={workspaceId} /> : null}
         {workspaceId ? <WorkItemSyncSettings workspaceId={workspaceId} /> : null}
+        {workspaceId ? <InstructionFiles workspaceId={workspaceId} /> : null}
+        {workspaceId ? (
+          <section aria-label="Audit log" className="flex flex-col gap-2">
+            <SectionLabel>Audit log</SectionLabel>
+            <ExportAuditButton workspaceId={workspaceId} />
+          </section>
+        ) : null}
         <PersonalMcpSettings />
       </div>
     </Modal>

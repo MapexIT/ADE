@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import { interpreterFor } from '../lib/runner.ts';
 import { startRun } from '../lib/runs.ts';
+import { registerLspProviders, showDiagnostics, trackModel } from '../lib/lsp-monaco.ts';
 import { host, main } from '../lib/bridge.ts';
 import { basename, languageOf } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
@@ -25,6 +26,8 @@ export function EditorPanel() {
   const [missing, setMissing] = useState(false);
   const monacoRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const [platform, setPlatform] = useState('linux');
+  const [lsp, setLsp] = useState<{ server: string | null; reason: string | null } | null>(null);
+  const [mounted, setMounted] = useState(0);
   useEffect(() => {
     void main('main.info', {}).then((i) => setPlatform(i.platform)).catch(() => undefined);
   }, []);
@@ -53,6 +56,41 @@ export function EditorPanel() {
     setContent(null);
     void load();
   }, [load]);
+
+  // ED-03: the file goes to its language server; diagnostics come back a moment after each change.
+  const loaded = content !== null;
+  useEffect(() => {
+    const ed = monacoRef.current;
+    const model = ed?.getModel();
+    if (!editor || !loaded || !model) return;
+    registerLspProviders();
+    trackModel(model, editor.path, editor.sessionId);
+    const path = editor.path;
+    let alive = true;
+    const pull = () => void host.call('lsp.diagnostics', { path }).then((d) => alive && !model.isDisposed() && showDiagnostics(model, d)).catch(() => undefined);
+    void host
+      .call('lsp.open', { path, text: model.getValue() })
+      .then((r) => {
+        if (!alive) return;
+        setLsp(r);
+        if (r.server) setTimeout(pull, 800);
+      })
+      .catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const sub = model.onDidChangeContent(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void host.call('lsp.change', { path, text: model.getValue() }).then(() => setTimeout(pull, 600)).catch(() => undefined);
+      }, 400);
+    });
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      sub.dispose();
+      void host.call('lsp.close', { path }).catch(() => undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor?.path, loaded, mounted]);
 
   const dirtyNow = content !== null && content !== saved;
   useEffect(() => {
@@ -157,6 +195,11 @@ export function EditorPanel() {
         </span>
         {editor.sessionId ? <Badge tone="accent">Session worktree</Badge> : <Badge>Your checkout</Badge>}
         {dirty ? <Badge tone="attention">Unsaved</Badge> : null}
+        {lsp ? (
+          <Badge tone={lsp.server ? 'accent' : 'neutral'} title={lsp.reason ?? `Diagnostics, hover and go to definition from ${lsp.server}`}>
+            {lsp.server ?? 'No language server'}
+          </Badge>
+        ) : null}
         {followButton}
         {runner ? (
           <>
@@ -178,7 +221,10 @@ export function EditorPanel() {
       <div className="min-h-0 flex-1">
         {missing ? <p className="m-3 text-ink-muted">This file does not exist yet.</p> : null}
         {content === null ? null : (
-          <Editor theme="ade-dark" path={editor.path} value={content} language={languageOf(editor.path)} onChange={(v) => setContent(v ?? '')} onMount={(e) => (monacoRef.current = e)} options={EDITOR_OPTIONS} />
+          <Editor theme="ade-dark" path={editor.path} value={content} language={languageOf(editor.path)} onChange={(v) => setContent(v ?? '')} onMount={(e) => {
+              monacoRef.current = e;
+              setMounted((n) => n + 1);
+            }} options={EDITOR_OPTIONS} />
         )}
       </div>
       {picker}

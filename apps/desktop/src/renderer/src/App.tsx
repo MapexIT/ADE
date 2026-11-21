@@ -4,6 +4,7 @@ import { ConfirmDialog } from './components/Modal.tsx';
 import { CommandPalette, FirstRunDialog, InboxDialog, ProtocolDialog, ReconnectBanner, SettingsDialog, Toasts } from './components/Dialogs.tsx';
 import { NewSessionDialog } from './components/NewSessionDialog.tsx';
 import { CompareDialog, HandOffDialog } from './components/ParallelDialogs.tsx';
+import { SessionSearchDialog } from './components/HistoryTools.tsx';
 import { ReviewScreen } from './components/ReviewScreen.tsx';
 import { RunScreen } from './components/RunScreen.tsx';
 import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
@@ -100,6 +101,7 @@ export function App() {
       </div>
       <NewSessionDialog />
       <CompareDialog />
+      <SessionSearchDialog />
       <HandOffDialog />
       <CommandPalette />
       <InboxDialog />

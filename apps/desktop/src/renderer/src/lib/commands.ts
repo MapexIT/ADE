@@ -41,6 +41,7 @@ export function buildCommands(): Command[] {
     { id: 'inbox.open', title: 'Open the Needs-you inbox', group: 'Navigate', shortcut: 'Ctrl I', run: () => s.set({ inboxOpen: true }) },
     ...TABS.map((t, i) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: `Ctrl ${i + 1}`, run: () => s.setTab(t.tab) })),
     { id: 'app.settings', title: 'Settings', group: 'App', shortcut: 'Ctrl ,', run: () => s.set({ settingsOpen: true }) },
+    { id: 'sessions.search', title: 'Search sessions', group: 'Session', run: () => s.set({ sessionSearchOpen: true }) },
     { id: 'app.setup', title: 'First-run setup', group: 'App', run: () => s.set({ firstRunOpen: true }) },
     { id: 'app.agents', title: 'Check agents again', group: 'App', run: () => s.refreshAgents(true) },
     { id: 'app.restart-host', title: 'Restart the host process', group: 'App', run: () => void main('main.restartProcess', { which: 'host' }) },
