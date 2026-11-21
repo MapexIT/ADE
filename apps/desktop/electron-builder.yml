@@ -42,16 +42,18 @@ linux:
   artifactName: ADE-${version}-${arch}.${ext}
 deb:
   depends: [git]
-# PK-04: a .dmg for each architecture, and a .zip that electron-updater uses to update in place.
+# PK-04: a .dmg for Apple silicon, and a .zip that electron-updater uses to update in place. Intel Macs are not
+# built: pnpm installs only the build machine's platform packages, so an x64 app would lack the darwin-x64
+# binaries the Claude Code and Codex adapters need.
 # Signing uses CSC_LINK and CSC_KEY_PASSWORD (a Developer ID Application certificate). Notarisation runs when
 # APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER are set (electron-builder 26 with @electron/notarize).
 # Never commit any of them.
 mac:
   target:
     - target: dmg
-      arch: [arm64, x64]
+      arch: [arm64]
     - target: zip
-      arch: [arm64, x64]
+      arch: [arm64]
   category: public.app-category.developer-tools
   icon: resources/icon.png
   hardenedRuntime: true
