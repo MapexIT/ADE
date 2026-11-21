@@ -1,7 +1,9 @@
-import { DockviewReact, themeDark, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps } from 'dockview-react';
+import { DockviewReact, themeDark, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps, type IWatermarkPanelProps } from 'dockview-react';
 import 'dockview-react/dist/styles/dockview.css';
+import { Button } from '@ade/ui';
 import { useEffect, useRef } from 'react';
 import { host } from '../lib/bridge.ts';
+import { defaultLayout, PANELS, showPanel, workspaceLayout } from '../lib/layout.ts';
 import { useStore } from '../lib/store.ts';
 import { EditorPanel } from './EditorPanel.tsx';
 import { Inspector } from './Inspector.tsx';
@@ -21,11 +23,23 @@ const components: Record<string, React.FunctionComponent<IDockviewPanelProps>> =
 
 const theme = { ...themeDark, name: 'ade', className: `${themeDark.className} dockview-theme-ade` };
 
-function defaultLayout(api: DockviewApi) {
-  api.addPanel({ id: 'session', component: 'session', title: 'Session' });
-  api.addPanel({ id: 'sessions', component: 'sessions', title: 'Sessions', position: { referencePanel: 'session', direction: 'left' }, initialWidth: 280 });
-  api.addPanel({ id: 'inspector', component: 'inspector', title: 'Inspector', position: { referencePanel: 'session', direction: 'right' }, initialWidth: 320 });
-  api.addPanel({ id: 'terminal', component: 'terminal', title: 'Terminal', position: { referencePanel: 'session', direction: 'below' }, initialHeight: 240 });
+/** Shown when every panel is closed, so the user is never left with an empty screen. */
+function EmptyDock({ containerApi }: IWatermarkPanelProps) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-ink-muted">All panels are closed.</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {PANELS.map((p) => (
+          <Button key={p.id} size="dense" variant="secondary" onClick={() => showPanel(containerApi, p.id)}>
+            Show {p.title.toLowerCase()}
+          </Button>
+        ))}
+        <Button size="dense" variant="primary" onClick={() => defaultLayout(containerApi)}>
+          Reset layout
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** Screen 1 as a Dockview workspace. The layout is saved in the host and survives a restart (M1-T04). */
@@ -33,8 +47,11 @@ export function SessionsWorkspace() {
   const apiRef = useRef<DockviewApi | null>(null);
   const editor = useStore((s) => s.editor);
 
+  useEffect(() => () => workspaceLayout.attach(null), []);
+
   const onReady = (event: DockviewReadyEvent) => {
     apiRef.current = event.api;
+    workspaceLayout.attach(event.api);
     void host
       .call('settings.get', { key: LAYOUT_KEY })
       .then(({ value }) => {
@@ -42,11 +59,14 @@ export function SessionsWorkspace() {
           if (value) event.api.fromJSON(value as Parameters<DockviewApi['fromJSON']>[0]);
           else defaultLayout(event.api);
         } catch {
-          event.api.clear();
           defaultLayout(event.api);
         }
       })
-      .catch(() => defaultLayout(event.api));
+      .catch(() => defaultLayout(event.api))
+      // A file opened before the saved layout loaded still gets its editor.
+      .finally(() => {
+        if (useStore.getState().editor) showPanel(event.api, 'editor');
+      });
     let timer: ReturnType<typeof setTimeout> | null = null;
     const persist = () => {
       if (timer) clearTimeout(timer);
@@ -54,6 +74,7 @@ export function SessionsWorkspace() {
       void host.call('settings.set', { key: LAYOUT_KEY, value: event.api.toJSON() });
     };
     event.api.onDidLayoutChange(() => {
+      workspaceLayout.changed();
       if (timer) clearTimeout(timer);
       timer = setTimeout(persist, 150);
     });
@@ -61,14 +82,11 @@ export function SessionsWorkspace() {
     window.addEventListener('beforeunload', () => timer && persist());
   };
 
-  // Opening a file shows the editor panel next to the session, and remembers its place.
+  // Opening a file shows the editor panel, next to whatever panels are still open.
   useEffect(() => {
     const api = apiRef.current;
-    if (!api || !editor) return;
-    const existing = api.getPanel('editor');
-    if (existing) existing.api.setActive();
-    else api.addPanel({ id: 'editor', component: 'editor', title: 'Editor', position: { referencePanel: 'session', direction: 'within' } });
+    if (api && editor) showPanel(api, 'editor');
   }, [editor]);
 
-  return <DockviewReact className="h-full" components={components} onReady={onReady} theme={theme} />;
+  return <DockviewReact className="h-full" components={components} onReady={onReady} theme={theme} watermarkComponent={EmptyDock} />;
 }

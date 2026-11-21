@@ -1,12 +1,21 @@
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { ConfirmDialog } from './components/Modal.tsx';
-import { CommandPalette, FirstRunDialog, InboxDialog, ProtocolDialog, ReconnectBanner, SettingsDialog, Toasts } from './components/Dialogs.tsx';
+import {
+  CommandPalette,
+  FirstRunDialog,
+  InboxDialog,
+  ProtocolDialog,
+  ReconnectBanner,
+  SettingsDialog,
+  Toasts,
+} from './components/Dialogs.tsx';
 import { NewSessionDialog } from './components/NewSessionDialog.tsx';
 import { CompareDialog, HandOffDialog } from './components/ParallelDialogs.tsx';
 import { SessionSearchDialog } from './components/HistoryTools.tsx';
 import { ReviewScreen } from './components/ReviewScreen.tsx';
 import { RunScreen } from './components/RunScreen.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
 import { TerminalsScreen } from './components/terminal/TerminalsScreen.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -22,7 +31,15 @@ import { wireRuns } from './lib/runs.ts';
 // SM-11: every finished terminal command goes into the searchable history.
 onBlockFinished((terminal, block) => {
   const workspaceId = useStore.getState().workspaceId;
-  void host.call('history.record', { workspaceId, sessionId: terminal.sessionId, command: block.command.slice(0, 10_000), cwd: block.cwd ?? terminal.cwd, exitCode: block.exitCode }).catch(() => undefined);
+  void host
+    .call('history.record', {
+      workspaceId,
+      sessionId: terminal.sessionId,
+      command: block.command.slice(0, 10_000),
+      cwd: block.cwd ?? terminal.cwd,
+      exitCode: block.exitCode,
+    })
+    .catch(() => undefined);
 });
 
 const TAB_ORDER: Tab[] = ['sessions', 'work-items', 'workflows', 'terminals', 'run', 'review'];
@@ -33,7 +50,11 @@ function useWiring() {
     const offs = [
       host.onConnection((up) => {
         useStore.setState((st) => ({ connection: { ...st.connection, host: up } }));
-        if (up) void useStore.getState().init().catch((err: Error) => s.toast(err.message, 'danger'));
+        if (up)
+          void useStore
+            .getState()
+            .init()
+            .catch((err: Error) => s.toast(err.message, 'danger'));
       }),
       pty.onConnection((up) => {
         useStore.setState((st) => ({ connection: { ...st.connection, pty: up } }));
@@ -65,7 +86,10 @@ function useShortcuts() {
       else if (key === 'n') s.set({ newSession: {} });
       else if (key === 'i') s.set({ inboxOpen: true });
       else if (key === ',') s.set({ settingsOpen: true });
-      else if (key === 'o') void buildCommands().find((c) => c.id === 'workspace.open')?.run();
+      else if (key === 'o')
+        void buildCommands()
+          .find((c) => c.id === 'workspace.open')
+          ?.run();
       else if (/^[1-6]$/.test(key)) s.setTab(TAB_ORDER[Number(key) - 1]!);
       else return;
       e.preventDefault();
@@ -86,16 +110,26 @@ export function App() {
       <div className="relative min-h-0 flex-1">
         {/* The sessions workspace stays mounted so its layout, terminals and scroll positions survive tab switches. */}
         <div className="absolute inset-0" hidden={tab !== 'sessions'}>
-          <SessionsWorkspace />
+          <ErrorBoundary>
+            <SessionsWorkspace />
+          </ErrorBoundary>
         </div>
         {tab !== 'sessions' ? (
-          <motion.div key={tab} className="absolute inset-0" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
-            {tab === 'work-items' ? <WorkItemsScreen /> : null}
-            {tab === 'workflows' ? <WorkflowsScreen /> : null}
-            {tab === 'skills' ? <SkillsScreen /> : null}
-            {tab === 'terminals' ? <TerminalsScreen /> : null}
-            {tab === 'run' ? <RunScreen /> : null}
-            {tab === 'review' ? <ReviewScreen /> : null}
+          <motion.div
+            key={tab}
+            className="absolute inset-0"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
+            <ErrorBoundary>
+              {tab === 'work-items' ? <WorkItemsScreen /> : null}
+              {tab === 'workflows' ? <WorkflowsScreen /> : null}
+              {tab === 'skills' ? <SkillsScreen /> : null}
+              {tab === 'terminals' ? <TerminalsScreen /> : null}
+              {tab === 'run' ? <RunScreen /> : null}
+              {tab === 'review' ? <ReviewScreen /> : null}
+            </ErrorBoundary>
           </motion.div>
         ) : null}
       </div>
