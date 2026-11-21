@@ -1,5 +1,5 @@
 import { Badge, Button, cx, Tabs } from '@ade/ui';
-import type { AgentId, PermissionProfile, WorkflowSummary } from '@ade/contracts';
+import type { AgentId, ContainmentStatus, PermissionProfile, WorkflowSummary } from '@ade/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { host } from '../lib/bridge.ts';
 import { PROFILE_LABELS, promptPreview, textPrompt } from '../lib/format.ts';
@@ -13,6 +13,9 @@ const PROFILES: { id: PermissionProfile; hint: string }[] = [
   { id: 'read-only', hint: 'Edits and commands are refused automatically.' },
   { id: 'autonomous', hint: 'Nothing asks. Only for sandboxed sessions.' },
 ];
+
+/** CN-07: shown next to the sandbox checkbox, so nobody reads more into "sandboxed" than it enforces. */
+export const SANDBOX_SCOPE = 'Writes are limited to the worktree, its Git data and the agent\'s own folders. Reads and the network are not limited.';
 
 /**
  * ST-02 composer for a new session; CO-02 shows exactly what is sent before sending. WF-02: the same dialog can
@@ -34,6 +37,10 @@ export function NewSessionDialog() {
   const [baseRef, setBaseRef] = useState('HEAD');
   const [profile, setProfile] = useState<PermissionProfile>('ask');
   const [bringChanges, setBringChanges] = useState(false);
+  const [containment, setContainment] = useState<ContainmentStatus | null>(null);
+  const [sandboxed, setSandboxed] = useState(false);
+  const [inPlaceAllowed, setInPlaceAllowed] = useState(false);
+  const [inPlace, setInPlace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'agent' | 'workflow'>('agent');
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
@@ -49,7 +56,13 @@ export function NewSessionDialog() {
     setBaseRef('HEAD');
     setProfile('ask');
     setBringChanges(false);
+    setInPlace(false);
     setMode(prefill?.mode ?? 'agent');
+    void attempt(() => host.call('containment.status', {})).then((s) => {
+      setContainment(s ?? null);
+      setSandboxed(!!s?.defaultOn);
+    });
+    void attempt(() => host.call('settings.get', { key: 'sessions.runInPlace' })).then((r) => setInPlaceAllowed(r?.value === true));
   }, [open, prefill]);
 
   // Runnable workflows: repository files first, then templates; ones whose trigger matches the context first.
@@ -81,6 +94,17 @@ export function NewSessionDialog() {
   }, [open, agents]);
 
   const agent = agents.find((a) => a.id === agentId);
+  const sandboxLabel = containment?.kind === 'wsl' ? `Run inside WSL${containment.distro ? ` (${containment.distro})` : ''}` : 'Run in the sandbox';
+  const agentMissingInSandbox = !!containment?.available && !!agentId && !containment.agents.includes(agentId);
+  const sandboxBlocked = !containment?.available || agentMissingInSandbox;
+  const sandboxOn = sandboxed && !sandboxBlocked;
+  const sandboxHint = !containment
+    ? 'Checking the sandbox…'
+    : !containment.available
+      ? (containment.reason ?? 'Not available on this machine.')
+      : agentMissingInSandbox
+        ? `${agent?.label ?? 'This agent'} is not installed inside ${containment.distro ?? 'the sandbox'}.`
+        : SANDBOX_SCOPE;
   const startDisabledReason = !workspaceId
     ? 'Open a repository first.'
     : !agent
@@ -89,8 +113,8 @@ export function NewSessionDialog() {
         ? (agent.reason ?? `${agent.label} needs you to sign in through its own terminal UI.`)
         : !prompt.trim()
           ? 'Write what the agent should do.'
-          : profile === 'autonomous'
-            ? 'Autonomous needs a sandboxed session, and no agent is sandboxed on this platform yet.'
+          : profile === 'autonomous' && !sandboxOn
+            ? 'Autonomous needs a sandboxed session.'
             : null;
 
   const runDisabledReason = !workspaceId
@@ -134,9 +158,11 @@ export function NewSessionDialog() {
         agentId,
         prompt: content,
         permissionProfile: profile,
-        bringChanges,
+        bringChanges: inPlace ? false : bringChanges,
+        hostSandbox: sandboxOn,
+        ...(inPlace ? { inPlace: true } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
-        ...(baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
+        ...(!inPlace && baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
         ...(prefill?.workItem ? { workItemRef: prefill.workItem.ref } : {}),
         ...(prefill?.skills?.length ? { skills: prefill.skills } : {}),
       }),
@@ -324,11 +350,25 @@ export function NewSessionDialog() {
             <Field label="Base branch or commit" htmlFor="ns-base">
               <input
                 id="ns-base"
-                value={baseRef}
+                value={inPlace ? 'Your checkout' : baseRef}
+                disabled={inPlace}
                 onChange={(e) => setBaseRef(e.target.value)}
                 className={cx(inputClass, 'font-mono')}
               />
             </Field>
+            <div className="flex flex-col gap-1">
+              <label className={cx('flex min-h-11 items-center gap-2', sandboxBlocked && 'opacity-60')}>
+                <input
+                  type="checkbox"
+                  checked={sandboxOn}
+                  disabled={sandboxBlocked}
+                  onChange={(e) => setSandboxed(e.target.checked)}
+                  className="size-5 accent-[var(--accent)]"
+                />
+                {sandboxLabel}
+              </label>
+              <span className="text-[12px] text-ink-muted">{sandboxHint}</span>
+            </div>
             <Field
               label="Permission profile"
               htmlFor="ns-profile"
@@ -341,22 +381,39 @@ export function NewSessionDialog() {
                 className={inputClass}
               >
                 {PROFILES.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.id === 'autonomous'}>
+                  <option key={p.id} value={p.id} disabled={p.id === 'autonomous' && !sandboxOn}>
                     {PROFILE_LABELS[p.id]}
                     {p.id === 'autonomous' ? ' (needs a sandbox)' : ''}
                   </option>
                 ))}
               </select>
             </Field>
-            <label className="flex min-h-11 items-center gap-2">
+            <label className={cx('flex min-h-11 items-center gap-2', inPlace && 'opacity-60')}>
               <input
                 type="checkbox"
-                checked={bringChanges}
+                checked={bringChanges && !inPlace}
+                disabled={inPlace}
                 onChange={(e) => setBringChanges(e.target.checked)}
                 className="size-5 accent-[var(--accent)]"
               />
               Bring my uncommitted changes
             </label>
+            {inPlaceAllowed ? (
+              <div className="flex flex-col gap-1">
+                <label className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={inPlace}
+                    onChange={(e) => setInPlace(e.target.checked)}
+                    className="size-5 accent-[var(--accent)]"
+                  />
+                  Work in my checkout
+                </label>
+                <span className="text-[12px] text-ink-muted">
+                  No worktree. ADE takes a snapshot first, and Discard puts every file back. One session at a time.
+                </span>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

@@ -42,12 +42,42 @@ export interface WorktreeSpec {
   baseCommit: string;
   branch: string;
   path: string;
+  /**
+   * Link the worktree and the repository with relative paths (Git 2.48+), so Git inside WSL can follow the
+   * link that Git for Windows wrote (CN-07).
+   */
+  relativePaths?: boolean;
 }
 
 /** `git worktree add -b <branch> <path> <base>`. The worktree lives outside the repository folder (CN-01). */
 export async function createWorktree(spec: WorktreeSpec): Promise<void> {
   await mkdir(dirname(spec.path), { recursive: true });
-  await git(['worktree', 'add', '-b', spec.branch, spec.path, spec.baseCommit], { cwd: spec.repo });
+  const relative = spec.relativePaths ? ['--relative-paths'] : [];
+  await git(['worktree', 'add', ...relative, '-b', spec.branch, spec.path, spec.baseCommit], { cwd: spec.repo });
+}
+
+/** The repository's shared Git folder (objects and refs), as an absolute path. Worktree commits write here. */
+export async function gitCommonDir(cwd: string): Promise<string> {
+  return resolve(cwd, (await git(['rev-parse', '--git-common-dir'], { cwd })).trim());
+}
+
+/** Deletes every ref under `prefix` (for example `refs/ade/checkpoints/<session>/`). */
+export async function deleteRefs(repo: string, prefix: string): Promise<void> {
+  const refs = (await git(['for-each-ref', '--format=%(refname)', prefix], { cwd: repo })).split('\n').filter(Boolean);
+  for (const r of refs) await git(['update-ref', '-d', r], { cwd: repo });
+}
+
+/** Puts `files` back to how they were in `commit`, deleting the ones it lacks. Never touches the index. */
+export async function restoreFiles(cwd: string, commit: string, files: string[]): Promise<void> {
+  for (const f of files) {
+    const content = await fileAt(cwd, commit, f);
+    const full = join(cwd, f);
+    if (content === null) await unlink(full).catch(() => undefined);
+    else {
+      await mkdir(dirname(full), { recursive: true });
+      await writeFile(full, content);
+    }
+  }
 }
 
 export async function removeWorktree(repo: string, path: string, branch: string | null): Promise<void> {
@@ -105,14 +135,14 @@ export const checkpointRef = (sessionId: string, n: number) => `refs/ade/checkpo
  * session branch or the worktree's index: build a tree with a temporary index, `commit-tree` it, and point
  * `ref` at the commit. Returns the commit id.
  */
-export async function snapshot(worktree: string, ref: string | null, message = 'ADE checkpoint'): Promise<string> {
+export async function snapshot(worktree: string, ref: string | null, message = 'ADE checkpoint', raw = false): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'ade-index-'));
   const index = join(dir, 'index');
   try {
     const realIndex = resolve(worktree, (await git(['rev-parse', '--git-path', 'index'], { cwd: worktree })).trim());
     await copyFile(realIndex, index).catch(() => undefined);
-    const env = { GIT_INDEX_FILE: index };
-    await git(['add', '-A', '--', '.'], { cwd: worktree, env });
+    const env = { GIT_INDEX_FILE: index, ...(raw ? await rawEnv(worktree) : {}) };
+    await git([...(raw ? RAW_CONFIG : []), 'add', '-A', '--', '.'], { cwd: worktree, env });
     const tree = (await git(['write-tree'], { cwd: worktree, env })).trim();
     const head = (await git(['rev-parse', 'HEAD'], { cwd: worktree })).trim();
     const commit = (
@@ -125,18 +155,30 @@ export async function snapshot(worktree: string, ref: string | null, message = '
   }
 }
 
-/** RV-04: restore the worktree to a checkpoint, including deleting files the checkpoint lacks. */
-export async function restoreSnapshot(worktree: string, commit: string): Promise<void> {
-  const current = await snapshot(worktree, null, 'ADE pre-restore');
+/** Turns off line-ending conversion, so a snapshot holds the exact bytes on disk (CN-08). */
+const RAW_CONFIG = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'core.safecrlf=false'];
+
+/** Reads attributes from the empty tree, so `.gitattributes` text and eol rules do not convert either. */
+async function rawEnv(cwd: string): Promise<Record<string, string>> {
+  const emptyTree = (await git(['hash-object', '-t', 'tree', '--stdin'], { cwd, input: Buffer.alloc(0) })).trim();
+  return { GIT_ATTR_SOURCE: emptyTree };
+}
+
+/**
+ * RV-04: restore the worktree to a checkpoint, including deleting files the checkpoint lacks. `raw` must match
+ * how the checkpoint was taken; raw snapshots are restored byte for byte.
+ */
+export async function restoreSnapshot(worktree: string, commit: string, raw = false): Promise<void> {
+  const current = await snapshot(worktree, null, 'ADE pre-restore', raw);
   const added = (await git(['diff', '--name-only', '--no-renames', '--diff-filter=A', '-z', commit, current], { cwd: worktree }))
     .split('\0')
     .filter(Boolean);
   for (const f of added) await unlink(join(worktree, f)).catch(() => undefined);
   const dir = await mkdtemp(join(tmpdir(), 'ade-index-'));
   try {
-    const env = { GIT_INDEX_FILE: join(dir, 'index') };
+    const env = { GIT_INDEX_FILE: join(dir, 'index'), ...(raw ? await rawEnv(worktree) : {}) };
     await git(['read-tree', commit], { cwd: worktree, env });
-    await git(['checkout-index', '-a', '-f'], { cwd: worktree, env });
+    await git([...(raw ? RAW_CONFIG : []), 'checkout-index', '-a', '-f'], { cwd: worktree, env });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -231,9 +273,6 @@ export async function discardWorktree(opts: {
     // worktree already gone; nothing to keep
   }
   await removeWorktree(opts.repo, opts.worktree, opts.branch);
-  const refs = (await git(['for-each-ref', '--format=%(refname)', `refs/ade/checkpoints/${opts.sessionId}/`], { cwd: opts.repo }))
-    .split('\n')
-    .filter(Boolean);
-  for (const r of refs) await git(['update-ref', '-d', r], { cwd: opts.repo });
+  await deleteRefs(opts.repo, `refs/ade/checkpoints/${opts.sessionId}/`);
   return saved;
 }

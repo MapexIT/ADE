@@ -16,6 +16,8 @@ import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
 import { SkillService } from './skills.ts';
+import { ContainmentService, type Exec } from './containment.ts';
+import { rulesKey } from './workspace-rules.ts';
 import { homedir } from 'node:os';
 
 export interface HostConfig {
@@ -30,6 +32,8 @@ export interface HostConfig {
   databasePath?: string;
   /** Home folder for the agents' user skills folders (SK-05); tests point it at a temporary folder. */
   homeDir?: string;
+  /** CN-07: overrides the platform and process runner the sandbox probe uses (tests only). */
+  sandbox?: { platform?: NodeJS.Platform; exec?: Exec };
 }
 
 const defaultAdapterEntry: AdapterLocator['adapterEntry'] = (pkg) => {
@@ -66,6 +70,15 @@ export function createHost(config: HostConfig) {
     config.fakeAgentEntry ? { fakeAgentEntry: config.fakeAgentEntry } : {},
   );
   const sessions = new SessionService(repos, bus, runtimes, paths);
+  // The probe writes (or fails to write) in the real home folder, so it always uses it, even in tests.
+  const containment = new ContainmentService(
+    repos.settings,
+    { probe: join(config.userData, 'sandbox-probe'), tmp: join(config.userData, 'sandbox-tmp') },
+    () => [...runtimes.keys()],
+    config.sandbox?.platform ?? process.platform,
+    config.sandbox?.exec,
+  );
+  sessions.sandbox = containment;
   const review = new ReviewService(repos, sessions, paths);
   const workspaces = new WorkspaceService(repos);
   const agents = new AgentService(runtimes);
@@ -112,10 +125,23 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
+      if (key.startsWith('rules.')) throw new RpcError('invalid', 'Use rules.save for workspace rules.');
       repos.settings.set(key, value);
+      if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
     },
     'agents.status': ({ refresh }) => agents.status(refresh),
+    'containment.status': ({ refresh }) => containment.status(refresh),
+    'rules.list': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return sessions.rules(workspaceId);
+    },
+    'rules.save': ({ workspaceId, rules }) => {
+      workspaceRoot(workspaceId);
+      repos.settings.set(rulesKey(workspaceId), rules);
+      repos.audit.append({ workspaceId, sessionId: null, actor: 'user', action: 'rules.saved', detail: { rules } });
+      return { ok: true };
+    },
     'sessions.list': ({ workspaceId }) => repos.sessions.list(workspaceId),
     'sessions.get': ({ sessionId }) => ({
       session: repos.sessions.require(sessionId),
@@ -258,6 +284,7 @@ export function createHost(config: HostConfig) {
     repos,
     sessions,
     review,
+    containment,
     workItems,
     workflows,
     skills,

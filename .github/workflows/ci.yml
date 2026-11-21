@@ -67,4 +67,12 @@ jobs:
           git config --global user.name "ADE CI"
           git config --global user.email "ci@ade.invalid"
           git config --global init.defaultBranch main
+      # CN-07: the real sandbox test needs bubblewrap. Ubuntu 24.04 blocks unprivileged user namespaces with
+      # AppArmor by default; the runner lifts that so the probe can pass, and the test must then pass too.
+      - name: Bubblewrap for the host sandbox test
+        if: runner.os == 'Linux'
+        run: |
+          command -v bwrap || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends bubblewrap; }
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          echo "ADE_REQUIRE_SANDBOX=1" >> "$GITHUB_ENV"
       - run: pnpm test

@@ -2,7 +2,7 @@ import { AGENT_LABELS, type AgentId, type PermissionProfile, type SandboxState, 
 import { AcpAgentSession } from './acp-session.ts';
 import { buildAgentEnv, type EnvPolicy } from './env.ts';
 import { findOnPath, runForOutput, toSpawnable, type Command } from './process.ts';
-import type { AgentInstallInfo, AgentRuntime, AgentSession, StartOptions } from './types.ts';
+import type { AgentInstallInfo, AgentRuntime, AgentSession, LaunchWrapper, StartOptions } from './types.ts';
 
 /**
  * Where the bundled ACP adapters live. The host supplies this because the location differs between
@@ -27,6 +27,11 @@ interface Descriptor {
   envPolicy: EnvPolicy;
   /** How to start the ACP server for this agent. */
   launch(install: AgentInstallInfo | null, locator: AdapterLocator): { cmd: Command; env: Record<string, string> } | null;
+  /**
+   * CN-07: the command inside a foreign OS (WSL). ADE's bundled adapters ship Windows binaries, so there the
+   * user installs the agent's ACP adapter in the distribution (`npm i -g @agentclientprotocol/claude-agent-acp`).
+   */
+  foreignLaunch?(wrapper: LaunchWrapper): Command;
 }
 
 /** Permission profile -> the agent mode ids that implement it, in preference order (matched by id, not by agent). */
@@ -78,12 +83,26 @@ export class AcpRuntime implements AgentRuntime {
     return { ok: true };
   }
 
+  /** The command to start inside a foreign OS, or null when this agent cannot run there. */
+  foreignCommand(wrapper: LaunchWrapper): Command | null {
+    return this.d.foreignLaunch?.(wrapper) ?? null;
+  }
+
   async start(opts: StartOptions): Promise<AgentSession> {
+    if (opts.wrapper?.foreign) {
+      const cmd = this.foreignCommand(opts.wrapper);
+      if (!cmd) throw new Error(`${this.label} cannot run inside ${opts.wrapper.kind.toUpperCase()}.`);
+      return this.connect(cmd, buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), opts);
+    }
     const install = await this.detect();
     const launch = this.d.launch(install, this.locator);
     if (!launch) throw new Error(`${this.label} cannot be started: it is not installed or its adapter is missing.`);
     const env = { ...buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), ...launch.env };
-    const session = await AcpAgentSession.start(launch.cmd, env, opts);
+    return this.connect(launch.cmd, env, opts);
+  }
+
+  private async connect(cmd: Command, env: Record<string, string>, opts: StartOptions): Promise<AgentSession> {
+    const session = await AcpAgentSession.start(cmd, env, opts);
     const mode = pickModeForProfile(opts.permissionProfile, session.modes);
     if (mode && mode !== session.currentModeId) await session.setMode(mode);
     return session;
@@ -114,6 +133,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
         const cmd = toSpawnable(install.path, locator.nodeCommand().command);
         return cmd ? { cmd: { command: cmd.command, args: [...cmd.args, 'acp'] }, env: locator.nodeEnv() } : null;
       },
+      foreignLaunch: () => ({ command: 'opencode', args: ['acp'] }),
     },
     {
       id: 'claude-code',
@@ -122,6 +142,8 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
       versionArgs: ['--version'],
       envPolicy: { prefixes: ['CLAUDE_CODE_', 'ANTHROPIC_'], names: ['CLAUDE_CONFIG_DIR'] },
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/claude-agent-acp')),
+      // Bin names from the adapters' package.json (claude-agent-acp 0.109, codex-acp 2.8).
+      foreignLaunch: () => ({ command: 'claude-agent-acp', args: [] }),
     },
     {
       id: 'codex',
@@ -130,6 +152,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
       versionArgs: ['--version'],
       envPolicy: { prefixes: ['CODEX_'], names: ['OPENAI_API_KEY', 'OPENAI_BASE_URL'] },
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/codex-acp')),
+      foreignLaunch: () => ({ command: 'codex-acp', args: [] }),
     },
   ];
   if (opts.fakeAgentEntry) {
@@ -141,6 +164,8 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
       versionArgs: [],
       envPolicy: { prefixes: ['ADE_FAKE_'] },
       launch: () => nodeLaunch(locator, entry),
+      // The fake agent is plain JavaScript, so a `node` inside the distribution can run ADE's copy.
+      foreignLaunch: (wrapper) => ({ command: 'node', args: [wrapper.toAgentPath(entry)] }),
     });
   }
   return new Map(descriptors.map((d) => [d.id, new AcpRuntime(d, locator)]));

@@ -117,7 +117,8 @@ export class AcpAgentSession implements AgentSession {
 
   /** Spawns the agent, runs `initialize`, then `session/new` (or `session/load` when resuming). */
   static async start(cmd: Command, env: Record<string, string>, opts: StartOptions): Promise<AcpAgentSession> {
-    const child = spawnCommand(cmd, { cwd: opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const spec = opts.wrapper ? opts.wrapper.wrap(cmd, { cwd: opts.cwd, env }) : { cmd, cwd: opts.cwd, env };
+    const child = spawnCommand(spec.cmd, { cwd: spec.cwd, env: spec.env, stdio: ['pipe', 'pipe', 'pipe'] });
     const session = new AcpAgentSession(child, opts.cwd, env, opts);
     try {
       await session.connect();
@@ -136,7 +137,13 @@ export class AcpAgentSession implements AgentSession {
     return `m${++this.messageCounter}`;
   }
 
-  private inside(path: string): string {
+  /** The worktree as the agent sees it (a Linux path for WSL sessions). */
+  private get agentCwd(): string {
+    return this.opts.wrapper?.toAgentPath(this.cwd) ?? this.cwd;
+  }
+
+  private inside(agentPath: string): string {
+    const path = this.opts.wrapper ? this.opts.wrapper.toHostPath(agentPath) : agentPath;
     const full = isAbsolute(path) ? resolve(path) : resolve(this.cwd, path);
     const rel = relative(this.cwd, full);
     if (rel.startsWith('..') || isAbsolute(rel)) throw new RequestError(-32602, `Refused: ${path} is outside the session worktree`);
@@ -206,7 +213,10 @@ export class AcpAgentSession implements AgentSession {
       .onRequest('terminal/create', async ({ params }) => {
         const cwd = params.cwd ? this.inside(params.cwd) : this.cwd;
         const env = { ...this.env, ...Object.fromEntries((params.env ?? []).map((e) => [e.name, e.value])) };
-        const child = spawnCommand({ command: params.command, args: params.args ?? [] }, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+        // Commands the agent asks ADE to run go through the same wrapper as the agent itself (CN-07).
+        const raw = { command: params.command, args: params.args ?? [] };
+        const spec = this.opts.wrapper ? this.opts.wrapper.wrap(raw, { cwd, env }) : { cmd: raw, cwd, env };
+        const child = spawnCommand(spec.cmd, { cwd: spec.cwd, env: spec.env, stdio: ['ignore', 'pipe', 'pipe'] });
         const id = randomUUID();
         const limit = (params as { outputByteLimit?: number | null }).outputByteLimit ?? 1_000_000;
         const term: LocalTerminal = {
@@ -278,17 +288,20 @@ export class AcpAgentSession implements AgentSession {
     };
 
     // HTTP servers are passed only to agents that advertise HTTP MCP support (ACP session setup).
-    const mcpServers = (this.opts.mcpServers ?? []).filter((s) => !('url' in s) || this.capabilities.mcpHttp).map(toMcp);
+    // A foreign agent (WSL) cannot start host commands, so it only gets HTTP servers.
+    const mcpServers = (this.opts.mcpServers ?? [])
+      .filter((s) => ('url' in s ? this.capabilities.mcpHttp : !this.opts.wrapper?.foreign))
+      .map(toMcp);
     let modes: SessionModeState | null | undefined;
     let configOptions: SessionConfigOption[] | null | undefined;
     try {
       if (this.opts.resumeSessionId && this.capabilities.loadSession) {
-        const res = await agent.request('session/load', { sessionId: this.opts.resumeSessionId, cwd: this.cwd, mcpServers });
+        const res = await agent.request('session/load', { sessionId: this.opts.resumeSessionId, cwd: this.agentCwd, mcpServers });
         this.agentSessionId = this.opts.resumeSessionId;
         modes = res?.modes;
         configOptions = res?.configOptions;
       } else {
-        const res = await agent.request('session/new', { cwd: this.cwd, mcpServers });
+        const res = await agent.request('session/new', { cwd: this.agentCwd, mcpServers });
         this.agentSessionId = res.sessionId;
         modes = res.modes;
         configOptions = res.configOptions;

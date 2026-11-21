@@ -40,9 +40,22 @@ export function SessionHeader({ session }: { session: Session }) {
         {agent?.version ? ` ${agent.version.replace(/^[^\d]*/, '').split(' ')[0]}` : ''}
       </Badge>
       {session.branch ? <Badge className="font-mono text-[12px]">{session.branch}</Badge> : null}
-      <Badge tone={session.sandboxState === 'sandboxed' ? 'ok' : session.sandboxState === 'commands-sandboxed' ? 'accent' : 'attention'} title="Derived from the agent and this platform, never assumed">
+      <Badge
+        tone={session.sandboxState === 'sandboxed' ? 'ok' : session.sandboxState === 'commands-sandboxed' ? 'accent' : 'attention'}
+        title={
+          session.containment === 'none'
+            ? 'Derived from the agent and this platform, never assumed'
+            : `${session.containment === 'wsl' ? 'Inside WSL2 and bubblewrap' : 'Inside bubblewrap'}: writes are limited to the worktree, its Git data and the agent's own folders. Reads and the network are not limited.`
+        }
+      >
         {SANDBOX_LABELS[session.sandboxState]}
+        {session.containment === 'wsl' ? ' in WSL' : ''}
       </Badge>
+      {session.inPlace ? (
+        <Badge tone="attention" title="Works in your checkout; Discard restores the snapshot taken when it started">
+          In your checkout
+        </Badge>
+      ) : null}
       <Badge>{PROFILE_LABELS[session.permissionProfile]}</Badge>
       {session.workItemRef ? <Badge tone="accent">{session.workItemRef}</Badge> : null}
       <span className="ml-auto text-ink-muted">
