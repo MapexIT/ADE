@@ -1,5 +1,6 @@
 import { isLive } from '@ade/session-core';
 import { host, main } from './bridge.ts';
+import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
 import { attempt, useStore, type Tab } from './store.ts';
 
 /** One action the user can take (Command pattern). Every action is reachable from the palette (UI rule). */
@@ -40,6 +41,24 @@ export function buildCommands(): Command[] {
     { id: 'session.new', title: 'New session', group: 'Session', shortcut: 'Ctrl N', run: () => s.set({ newSession: {} }) },
     { id: 'inbox.open', title: 'Open the Needs-you inbox', group: 'Navigate', shortcut: 'Ctrl I', run: () => s.set({ inboxOpen: true }) },
     ...TABS.map((t, i) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: `Ctrl ${i + 1}`, run: () => s.setTab(t.tab) })),
+    ...PANELS.map((p) => ({
+      id: `panel.${p.id}`,
+      title: `Show the ${p.title.toLowerCase()} panel`,
+      group: 'Navigate' as const,
+      run: () => {
+        s.setTab('sessions');
+        if (workspaceLayout.api) showPanel(workspaceLayout.api, p.id);
+      },
+    })),
+    {
+      id: 'panel.reset',
+      title: 'Reset the panel layout',
+      group: 'Navigate',
+      run: () => {
+        s.setTab('sessions');
+        if (workspaceLayout.api) defaultLayout(workspaceLayout.api);
+      },
+    },
     { id: 'app.settings', title: 'Settings', group: 'App', shortcut: 'Ctrl ,', run: () => s.set({ settingsOpen: true }) },
     { id: 'sessions.search', title: 'Search sessions', group: 'Session', run: () => s.set({ sessionSearchOpen: true }) },
     { id: 'app.setup', title: 'First-run setup', group: 'App', run: () => s.set({ firstRunOpen: true }) },

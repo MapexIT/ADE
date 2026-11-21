@@ -2,6 +2,7 @@ import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, Kbd } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
 import { currentWorkspace, useStore, type Tab } from '../lib/store.ts';
+import { PanelsMenu } from './PanelsMenu.tsx';
 
 const TABS: { tab: Tab; label: string }[] = [
   { tab: 'sessions', label: 'Sessions' },
@@ -75,6 +76,7 @@ export function TopBar() {
       </nav>
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
+        {tab === 'sessions' ? <PanelsMenu /> : null}
         <Button size="dense" variant={inboxCount ? 'attention' : 'secondary'} onClick={() => set({ inboxOpen: true })} aria-label={`Needs you: ${inboxCount}`}>
           Needs you: {inboxCount}
         </Button>
