@@ -17,6 +17,7 @@
  *   usage                           report token usage and cost
  *   mode <id>                       switch to a mode
  *   whichmodel                      say which model the session uses
+ *   run <command> [args...]         run a command through the client's terminal (`terminal/create`) and report it
  */
 export type Step =
   | { op: 'say'; text: string }
@@ -37,7 +38,9 @@ export type Step =
   | { op: 'mcp' }
   | { op: 'usage' }
   | { op: 'mode'; id: string }
-  | { op: 'whichmodel' };
+  | { op: 'whichmodel' }
+  /** TM-04: asks the client to run a command and waits for it to exit. */
+  | { op: 'run'; command: string; args: string[] };
 
 export const SCENARIOS: Record<string, string> = {
   message: 'say Hello from the fake agent.',
@@ -122,6 +125,12 @@ export function parseScript(text: string): Step[] {
       case 'mode':
         steps.push({ op: 'mode', id: arg });
         break;
+      case 'run': {
+        // Double quotes group an argument that contains spaces (a path such as C:\Program Files\...).
+        const [command = '', ...args] = [...arg.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? '');
+        if (command) steps.push({ op: 'run', command, args });
+        break;
+      }
       default:
         break;
     }

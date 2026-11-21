@@ -157,6 +157,26 @@ describe('host with the fake agent', () => {
     expect(decided?.type === 'permission.decided' && decided.decision.outcome).toBe('cancelled');
   }, 45_000);
 
+  it('stores agent commands in the timeline and stops one on request (TM-04)', async () => {
+    const script = join(root, 'forever.mjs');
+    writeFileSync(script, "console.log('serving on 5173');\nsetInterval(() => {}, 1000);\n");
+    const live: SessionEvent[] = [];
+    host.bus.on('session.event', (e) => live.push(e));
+    const { session } = await openAndStart(`run "${process.execPath}" "${script}"\nsay after`);
+    const started = await waitFor(() => host.repos.events.list(session.id).find((e) => e.type === 'command.started'));
+    await waitFor(() => live.some((e) => e.type === 'command.output' && e.chunk.includes('serving')));
+    const terminalId = started.type === 'command.started' ? started.terminalId : '';
+    await expect(host.handlers['sessions.killCommand']({ sessionId: session.id, terminalId })).resolves.toEqual({ killed: true });
+    const exited = await waitFor(() => host.repos.events.list(session.id).find((e) => e.type === 'command.exited'));
+    expect(exited).toMatchObject({ killed: true, output: expect.stringContaining('serving on 5173') });
+    await waitFor(() => state(session.id) === 'ready');
+    // Live chunks are not stored; the exit event carries the output.
+    expect(host.repos.events.list(session.id).some((e) => e.type === 'command.output')).toBe(false);
+    const item = projectSession(host.repos.events.list(session.id)).items.find((i) => i.kind === 'command');
+    expect(item).toMatchObject({ running: false, killed: true });
+    expect(host.repos.audit.forSession(session.id, 'command.killed')).toHaveLength(1);
+  }, 30_000);
+
   it('read-only profile rejects edits automatically and logs who decided (AP-01)', async () => {
     const { session } = await openAndStart('ask make deploy', 'read-only');
     await waitFor(() => state(session.id) === 'ready');

@@ -1,3 +1,4 @@
+import { TRANSIENT_EVENTS } from '@ade/contracts';
 import type {
   AvailableCommand,
   PermissionDecision,
@@ -40,7 +41,24 @@ export type TimelineItem =
     }
   | { kind: 'turn'; key: string; turnId: string; index: number; stopReason: string | null }
   | { kind: 'notice'; key: string; level: 'info' | 'warning' | 'error'; text: string }
-  | { kind: 'screenshot'; key: string; url: string; file: string };
+  | { kind: 'screenshot'; key: string; url: string; file: string }
+  /** TM-04: a command the agent runs through ADE; `output` grows live until it exits. */
+  | {
+      kind: 'command';
+      key: string;
+      terminalId: string;
+      command: string;
+      cwd: string;
+      output: string;
+      truncated: boolean;
+      running: boolean;
+      exitCode: number | null;
+      signal: string | null;
+      killed: boolean;
+    };
+
+/** Live output kept per command in the view; the stored tail replaces it when the command exits. */
+export const COMMAND_OUTPUT_LIMIT = 200_000;
 
 export interface SessionView {
   items: TimelineItem[];
@@ -107,7 +125,7 @@ function upsertText(
  * live event, and on start-up folds the stored events through it to rebuild the timeline (WA-01).
  */
 export function applyEvent(view: SessionView, event: SessionEvent): SessionView {
-  const transient = event.type === 'agent.message.chunk' || event.type === 'agent.thought.chunk';
+  const transient = TRANSIENT_EVENTS.has(event.type);
   if (!transient && event.seq <= view.lastSeq) return view; // already applied
   const v: SessionView = { ...view, lastSeq: transient ? view.lastSeq : event.seq };
   switch (event.type) {
@@ -179,6 +197,55 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
     case 'plan.updated':
       v.plan = event.entries;
       return v;
+    case 'command.started': {
+      const item: TimelineItem = {
+        kind: 'command',
+        key: `cmd:${event.terminalId}`,
+        terminalId: event.terminalId,
+        command: event.command,
+        cwd: event.cwd,
+        output: '',
+        truncated: false,
+        running: true,
+        exitCode: null,
+        signal: null,
+        killed: false,
+      };
+      v.items = replaceWhere(v.items, (i) => i.kind === 'command' && i.terminalId === event.terminalId, () => item) ?? [...v.items, item];
+      return v;
+    }
+    case 'command.output': {
+      const updated = replaceWhere(
+        v.items,
+        (i) => i.kind === 'command' && i.terminalId === event.terminalId,
+        (i) => {
+          const c = i as Extract<TimelineItem, { kind: 'command' }>;
+          if (!c.running) return c;
+          const output = c.output + event.chunk;
+          const over = output.length > COMMAND_OUTPUT_LIMIT;
+          return { ...c, output: over ? output.slice(output.length - COMMAND_OUTPUT_LIMIT) : output, truncated: c.truncated || over };
+        },
+      );
+      if (updated) v.items = updated;
+      return v;
+    }
+    case 'command.exited': {
+      const updated = replaceWhere(
+        v.items,
+        (i) => i.kind === 'command' && i.terminalId === event.terminalId,
+        (i) => ({
+          ...(i as Extract<TimelineItem, { kind: 'command' }>),
+          output: event.output,
+          truncated: event.truncated,
+          running: false,
+          exitCode: event.exitCode,
+          signal: event.signal,
+          killed: event.killed,
+        }),
+      );
+      if (updated) v.items = updated;
+      return v;
+    }
     case 'permission.requested':
       v.pendingPermissions = [...v.pendingPermissions, event.requestId];
       v.items = [

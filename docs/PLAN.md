@@ -97,8 +97,9 @@ land one file into the checkout; discard the session; the final patch exists in 
 - [x] **M4-T02** Shell-integration scripts and parser, unit-tested on recorded byte streams (SM-02).
 - [x] **M4-T03** Smart terminal: blocks, sticky header, jump, clickable output (SM-01, SM-06, SM-07).
 - [x] **M4-T04** Status bar (SM-03).
-- [ ] **M4-T05** Agent terminal UI, agent awareness, attention ring, agent command terminals (TM-03, SM-04,
-      SM-05, TM-04). Agent terminal UI, awareness and the ring are done; TM-04 live terminals are open.
+- [x] **M4-T05** Agent terminal UI, agent awareness, attention ring, agent command terminals (TM-03, SM-04,
+      SM-05, TM-04). Agent commands appear as live cards in the timeline that can be opened and stopped; tested
+      with the fake agent, which uses `terminal/create`.
 - [x] **M4-T06** Send to agent and Fix with agent (TM-05, SM-08).
 - [x] **M4-T07** Code runner: detection, run bar, run output, send run to agent (CR-01 to CR-04).
 

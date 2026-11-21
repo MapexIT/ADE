@@ -6,6 +6,7 @@ import { host } from '../../lib/bridge.ts';
 import { agentLabel, promptPreview, TOOL_STATUS_LABELS } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { ScreenshotItem } from '../HistoryTools.tsx';
+import { CommandItem } from './CommandItem.tsx';
 
 const TOOL_KIND_LABELS: Record<string, string> = {
   read: 'Read',
@@ -56,7 +57,7 @@ export function InlineDiff({ oldText, newText }: { oldText: string | null; newTe
 
 function ToolContentView({ content }: { content: ToolContent }) {
   if (content.type === 'diff') return <InlineDiff oldText={content.oldText} newText={content.newText} />;
-  if (content.type === 'terminal') return <div className="font-mono text-[12px] text-ink-muted">Command output · terminal {content.terminalId.slice(0, 8)}</div>;
+  if (content.type === 'terminal') return <div className="text-[12px] text-ink-muted">Output shows live in the command below.</div>;
   return <pre className="m-0 max-h-60 overflow-auto rounded-[var(--radius-small)] bg-surface-sunken p-2 font-mono text-[12px] whitespace-pre-wrap text-ink">{content.text}</pre>;
 }
 
@@ -196,6 +197,8 @@ export const TimelineRow = memo(function TimelineRow({ item, sessionId }: { item
       );
     case 'screenshot':
       return <ScreenshotItem url={item.url} file={item.file} />;
+    case 'command':
+      return <CommandItem item={item} sessionId={sessionId} />;
     case 'notice':
       return (
         <div className={cx('rounded-[var(--radius)] border px-3 py-2 whitespace-pre-wrap', item.level === 'error' ? 'border-danger-line bg-danger-tint text-danger' : item.level === 'warning' ? 'border-attention-line text-attention' : 'border-line text-ink-muted')}>

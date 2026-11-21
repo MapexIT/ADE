@@ -217,6 +217,27 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
         case 'usage':
           await send(client, s, { sessionUpdate: 'usage_update', used: 1200, size: 200000, cost: { amount: 0.01, currency: 'USD' } });
           break;
+        case 'run': {
+          const toolCallId = randomUUID();
+          const line = [step.command, ...step.args].join(' ');
+          await send(client, s, { sessionUpdate: 'tool_call', toolCallId, title: `Run ${line}`, kind: 'execute', status: 'in_progress', rawInput: { command: line } });
+          const { terminalId } = await client.request('terminal/create', { sessionId: s.id, command: step.command, args: step.args, cwd: s.cwd });
+          await send(client, s, { sessionUpdate: 'tool_call_update', toolCallId, content: [{ type: 'terminal', terminalId }] });
+          const exit = await new Promise<{ exitCode?: number | null; signal?: string | null } | null>((done) => {
+            s.cancel = () => {
+              void client.request('terminal/kill', { sessionId: s.id, terminalId }).catch(() => undefined);
+              done(null);
+            };
+            client.request('terminal/wait_for_exit', { sessionId: s.id, terminalId }).then(done, () => done(null));
+          });
+          const out = await client.request('terminal/output', { sessionId: s.id, terminalId }).catch(() => null);
+          await client.request('terminal/release', { sessionId: s.id, terminalId }).catch(() => undefined);
+          const ok = exit?.exitCode === 0;
+          await send(client, s, { sessionUpdate: 'tool_call_update', toolCallId, status: ok ? 'completed' : 'failed' });
+          if (s.cancelled) return 'cancelled';
+          await stream(client, s, 'agent_message_chunk', `Command exited with ${exit?.exitCode ?? exit?.signal ?? 'unknown'}; ${out ? out.output.length : 0} characters of output.`);
+          break;
+        }
         case 'mode':
           s.modeId = step.id;
           await send(client, s, { sessionUpdate: 'current_mode_update', currentModeId: step.id });

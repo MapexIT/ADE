@@ -256,6 +256,7 @@ export function createHost(config: HostConfig) {
       sessions.editQueued(sessionId, id, content);
       return { ok: true };
     },
+    'sessions.killCommand': async ({ sessionId, terminalId }) => ({ killed: await sessions.killCommand(sessionId, terminalId) }),
     'sessions.cancel': async ({ sessionId }) => {
       await sessions.cancel(sessionId);
       return { ok: true };
