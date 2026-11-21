@@ -60,9 +60,44 @@ parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
       stop();
       publishers.delete(publish);
     });
+  } else if (msg?.type === 'smoke') {
+    // M5-T07: the native terminal module loads and a real shell starts and prints something.
+    void smokeShell().then((check) => parent.postMessage({ type: 'smoke-result', checks: [check] }));
   } else if (msg?.type === 'shutdown') {
     void manager.dispose().finally(() => process.exit(0));
   }
 });
+
+async function smokeShell(): Promise<{ name: string; ok: boolean; detail: string }> {
+  try {
+    const shells = await handlers['pty.shells']({});
+    const shell = shells[0];
+    if (!shell) return { name: 'terminal', ok: false, detail: 'No shell was found.' };
+    const marker = 'ade-smoke-ok';
+    const output = await new Promise<string>((resolve) => {
+      const proc = spawn(shell.path, [], { cols: 80, rows: 24, cwd: process.cwd(), env: process.env as Record<string, string> });
+      let seen = '';
+      const finish = () => {
+        clearTimeout(timer);
+        try {
+          proc.kill();
+        } catch {
+          // already gone
+        }
+        resolve(seen);
+      };
+      const timer = setTimeout(finish, 15_000);
+      proc.onData((d) => {
+        seen += d;
+        if (seen.includes(marker)) finish();
+      });
+      proc.write(`echo ${marker}\r`);
+    });
+    const ok = output.includes('ade-smoke-ok');
+    return { name: 'terminal', ok, detail: ok ? `${shell.label} started through node-pty and echoed.` : `${shell.label} printed: ${output.slice(-300)}` };
+  } catch (err) {
+    return { name: 'terminal', ok: false, detail: (err as Error).message };
+  }
+}
 
 parent.postMessage({ type: 'ready', pid: process.pid });

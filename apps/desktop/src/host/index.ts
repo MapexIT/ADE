@@ -5,7 +5,8 @@
 import type { MessagePortMain } from 'electron';
 import { createPublisher, emitterPort, hostApi, hostTopics, serveApi } from '@ade/contracts';
 import { join } from 'node:path';
-import { createHost } from './app.ts';
+import { createHost, defaultAdapterEntry } from './app.ts';
+import { runSmokeChecks } from './smoke.ts';
 import { KEEP_RUNNING_SETTING } from '../main/background.ts';
 
 const parent = process.parentPort;
@@ -98,6 +99,11 @@ parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
     reportBackground();
   } else if (msg?.type === 'credentials') {
     host.setCredentials((msg as { values?: Partial<Record<'shortcut' | 'github', string>> }).values ?? {});
+  } else if (msg?.type === 'smoke') {
+    // M5-T07: main asks for the install checks when ADE runs as a smoke test.
+    void runSmokeChecks(host, { adapterEntry: defaultAdapterEntry, scratch: join(userData, 'smoke') })
+      .catch((err: Error) => [{ name: 'host', ok: false, detail: err.message }])
+      .then((checks) => parent.postMessage({ type: 'smoke-result', checks }));
   } else if (msg?.type === 'shutdown') {
     void host.dispose().finally(() => process.exit(0));
   }

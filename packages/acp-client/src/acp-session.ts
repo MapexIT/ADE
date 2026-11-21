@@ -234,7 +234,8 @@ export class AcpAgentSession implements AgentSession {
           killed: false,
           exit: new Promise((done) => {
             child.once('error', () => done({ exitCode: null, signal: null }));
-            child.once('exit', (code, sig) => done({ exitCode: code, signal: sig }));
+            // 'close' rather than 'exit': it fires after stdout and stderr are drained, so no output is lost.
+            child.once('close', (code, sig) => done({ exitCode: code, signal: sig }));
           }),
         };
         // TM-04: the command shows live in the timeline; the stored copy is a redacted tail.

@@ -64,7 +64,7 @@ export interface HostConfig {
   sandbox?: { platform?: NodeJS.Platform; exec?: Exec };
 }
 
-const defaultAdapterEntry: AdapterLocator['adapterEntry'] = (pkg) => {
+export const defaultAdapterEntry: AdapterLocator['adapterEntry'] = (pkg) => {
   try {
     const require = createRequire(typeof __filename === 'string' ? __filename : import.meta.url);
     const pkgJson = require.resolve(`${pkg}/package.json`);

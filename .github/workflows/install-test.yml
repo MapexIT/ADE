@@ -1,0 +1,114 @@
+name: Install test
+
+# M5-T07: builds the installers, installs them on a fresh runner and starts the installed app as a smoke test
+# (ADE_SMOKE_TEST_RESULT): the database opens, the bundled adapters are on disk, a fake-agent session runs end to
+# end, a real shell starts through node-pty and the window renders. On demand only, so ordinary CI stays cheap.
+# A hosted runner is a fresh VM but not a bare OS (Git, build tools and browsers are preinstalled), so this
+# proves the installer and the packaged app, not every dependency of a bare machine.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HUSKY: '0'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      # Install scripts run here: electron-builder needs the Electron binary. node-pty ships win32 prebuilds.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ade/desktop dist
+      - name: Install silently
+        shell: pwsh
+        # /D must be a full path: with an 8.3 short path (C:\Users\ABCDEF~1) a reinstall hangs (seen locally).
+        run: |
+          $setup = Get-ChildItem apps/desktop/release -Recurse -Filter 'ADE-Setup-*.exe' | Select-Object -First 1
+          $target = Join-Path $env:RUNNER_TEMP 'ADE'
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S', '/currentuser', "/D=$target" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw 'The installer did not finish in 5 minutes.' }
+          if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
+          if (-not (Test-Path (Join-Path $target 'ADE.exe'))) { throw 'ADE.exe is missing after the install.' }
+          "ADE_EXE=$(Join-Path $target 'ADE.exe')" >> $env:GITHUB_ENV
+      - name: Smoke test the installed app
+        shell: pwsh
+        env:
+          ADE_ENABLE_FAKE_AGENT: '1'
+        run: |
+          $env:ADE_SMOKE_TEST_RESULT = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $env:ADE_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'ade-data'
+          $p = Start-Process -FilePath $env:ADE_EXE -PassThru
+          if (-not $p.WaitForExit(240000)) { Stop-Process -Id $p.Id -Force; throw 'The app did not finish its smoke test in 4 minutes.' }
+          Get-Content $env:ADE_SMOKE_TEST_RESULT
+          if ($p.ExitCode -ne 0) { throw "The smoke test failed (exit $($p.ExitCode))." }
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $un = Join-Path $env:RUNNER_TEMP 'ADE\Uninstall ADE.exe'
+          $p = Start-Process -FilePath $un -ArgumentList '/S', '/currentuser' -PassThru
+          if (-not $p.WaitForExit(120000)) { throw 'The uninstaller did not finish.' }
+
+  linux:
+    name: Linux .deb and AppImage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      # node-pty has no Linux prebuild; its install script compiles it (Node-API, so it loads in Electron too).
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ade/desktop dist
+      - name: Install the .deb
+        run: |
+          deb=$(find apps/desktop/release -name '*.deb' | head -n 1)
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "./$deb" xvfb
+          pkg=$(dpkg-deb -f "$deb" Package)
+          bin=$(dpkg -L "$pkg" | grep -E '^/opt/[^/]+/[^/.]+$' | while read -r f; do [ -x "$f" ] && [ ! -d "$f" ] && echo "$f"; done | grep -v chrome | head -n 1)
+          echo "Installed $pkg, executable $bin"
+          test -x "$bin"
+          echo "ADE_BIN=$bin" >> "$GITHUB_ENV"
+      - name: Smoke test the installed .deb
+        env:
+          ADE_ENABLE_FAKE_AGENT: '1'
+        run: |
+          export ADE_SMOKE_TEST_RESULT="$RUNNER_TEMP/smoke-deb.json" ADE_USER_DATA_DIR="$RUNNER_TEMP/ade-data-deb"
+          status=0
+          timeout 240 xvfb-run -a "$ADE_BIN" || status=$?
+          cat "$ADE_SMOKE_TEST_RESULT" || true
+          exit $status
+      - name: Smoke test the AppImage
+        env:
+          ADE_ENABLE_FAKE_AGENT: '1'
+        # Hosted runners have no FUSE, so the AppImage is extracted and run.
+        run: |
+          image=$(find apps/desktop/release -name '*.AppImage' | head -n 1)
+          chmod +x "$image"
+          export ADE_SMOKE_TEST_RESULT="$RUNNER_TEMP/smoke-appimage.json" ADE_USER_DATA_DIR="$RUNNER_TEMP/ade-data-appimage"
+          status=0
+          timeout 240 xvfb-run -a "$image" --appimage-extract-and-run || status=$?
+          cat "$ADE_SMOKE_TEST_RESULT" || true
+          exit $status
