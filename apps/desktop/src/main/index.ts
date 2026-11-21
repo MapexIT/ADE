@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, Tray } from 'electron';
 import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
 import { isLocalPreviewUrl } from './preview.ts';
+import { SmokeRun, type SmokeCheck, type SmokeReport } from './smoke.ts';
 import { mainApi, RpcError, type Handlers, type MainApi } from '@ade/contracts';
 import { CredentialStore } from './credentials.ts';
 import { ProcessSupervisor, type ProcessName } from './supervisor.ts';
@@ -18,6 +19,14 @@ let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let background: BackgroundState = { live: 0, keepRunning: true };
 const credentials = new CredentialStore(userData);
+
+// M5-T07: `ADE_SMOKE_TEST_RESULT=<file>` makes ADE check its own installation, write the result and exit.
+const smokeFile = process.env.ADE_SMOKE_TEST_RESULT;
+let smoke: SmokeRun | null = null;
+const smokeChecks = (m: unknown): SmokeCheck[] | null => {
+  const msg = m as { type?: string; checks?: SmokeCheck[] } | null;
+  return msg?.type === 'smoke-result' && Array.isArray(msg.checks) ? msg.checks : null;
+};
 
 const publish = (topic: 'process.status' | 'focus.session', payload: unknown) => {
   window?.webContents.send('ade:main-event', { topic, payload });
@@ -34,8 +43,11 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     onReady: () => {
       sendCredentials();
       supervisors.host.post({ type: 'background-query' });
+      smoke?.markReady('host');
     },
     onMessage: (msg) => {
+      const checks = smokeChecks(msg);
+      if (checks) return smoke?.add('host', checks);
       const m = msg as { type?: string; sessionId?: string; title?: string; body?: string; live?: number; keepRunning?: boolean; id?: number; action?: string; args?: Record<string, string> };
       if (m.type === 'preview-request' && m.id !== undefined) {
         void drivePreview(m.action ?? '', m.args ?? {}).then(
@@ -55,6 +67,11 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     entry: join(__dirname, 'pty.js'),
     env: { ADE_SHELL_SCRIPTS: shellScripts },
     onStatus: (status) => publish('process.status', { which: 'pty', status }),
+    onReady: () => smoke?.markReady('pty'),
+    onMessage: (msg) => {
+      const checks = smokeChecks(msg);
+      if (checks) smoke?.add('pty', checks);
+    },
   }),
 };
 
@@ -310,6 +327,7 @@ function createWindow() {
   wc.on('did-finish-load', () => {
     supervisors.host.attach(wc);
     supervisors.pty.attach(wc);
+    if (smoke) void checkWindow(wc).then((check) => smoke?.add('window', [check]));
   });
   if (devUrl) void window.loadURL(devUrl);
   else void window.loadFile(join(__dirname, '../renderer/index.html'));
@@ -329,8 +347,41 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', (e) => e.preventDefault());
 });
 
+/** M5-T07: the renderer loaded under the CSP and drew the app (buttons exist once React has rendered). */
+async function checkWindow(wc: Electron.WebContents): Promise<SmokeCheck> {
+  for (let i = 0; i < 100; i++) {
+    const buttons = Number(await wc.executeJavaScript('document.querySelectorAll("button").length').catch(() => 0));
+    if (buttons > 0) return { name: 'window', ok: true, detail: `The window rendered ${buttons} buttons.` };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return { name: 'window', ok: false, detail: 'The window loaded but rendered nothing.' };
+}
+
+function finishSmoke(report: SmokeReport) {
+  void writeFile(smokeFile!, JSON.stringify(report, null, 2))
+    .catch((err: Error) => console.error(`[main] could not write the smoke test result: ${err.message}`))
+    .finally(() => {
+      console.log(`[main] smoke test ${report.ok ? 'passed' : 'failed'}`);
+      for (const c of report.checks) console.log(`[main]   ${c.ok ? 'ok  ' : 'FAIL'} ${c.name}: ${c.detail}`);
+      void Promise.all([supervisors.host.stop(), supervisors.pty.stop()]).finally(() => app.exit(report.ok ? 0 : 1));
+    });
+}
+
 void app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  if (smokeFile) {
+    smoke = new SmokeRun({
+      version: app.getVersion(),
+      platform: `${process.platform}-${process.arch}`,
+      timeoutMs: 120_000,
+      request: () => {
+        supervisors.host.post({ type: 'smoke' });
+        supervisors.pty.post({ type: 'smoke' });
+      },
+      finish: finishSmoke,
+    });
+    smoke.markReady('window');
+  }
   supervisors.host.start();
   supervisors.pty.start();
   createWindow();

@@ -22,7 +22,8 @@ beforeEach(() => {
 afterEach(async () => {
   await session?.close();
   session = null;
-  rmSync(dir, { recursive: true, force: true });
+  // Windows can hold the folder for a moment after the agent process exits.
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 const text = (t: string) => [{ type: 'text' as const, text: t }];
