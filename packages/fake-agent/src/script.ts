@@ -31,6 +31,8 @@ export type Step =
   | { op: 'hang' }
   | { op: 'sleep'; ms: number }
   | { op: 'env'; name: string }
+  /** Writes straight to an absolute path, bypassing the worktree check, to test the host sandbox (CN-07). */
+  | { op: 'escape'; path: string }
   | { op: 'usage' }
   | { op: 'mode'; id: string }
   | { op: 'whichmodel' };
@@ -104,6 +106,9 @@ export function parseScript(text: string): Step[] {
         break;
       case 'env':
         steps.push({ op: 'env', name: arg });
+        break;
+      case 'escape':
+        steps.push({ op: 'escape', path: arg });
         break;
       case 'usage':
         steps.push({ op: 'usage' });

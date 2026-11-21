@@ -1,9 +1,10 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { RpcError, type DiffText, type FileChange, type Session } from '@ade/contracts';
-import { applyToCheckout, changedFiles, commitFiles, discardWorktree, fileAt, git, looksBinary, restoreSnapshot, snapshot } from '@ade/git';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { applyToCheckout, changedFiles, commitFiles, deleteRefs, diffPatch, discardWorktree, fileAt, git, looksBinary, restoreFiles, restoreSnapshot, snapshot } from '@ade/git';
 import type { Repositories } from './repositories.ts';
-import type { HostPaths, SessionService } from './session-service.ts';
+import { snapshotRefName, type HostPaths, type SessionService } from './session-service.ts';
 
 const PATCH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -25,10 +26,10 @@ export class ReviewService {
   /** Commit range for "all turns" (base to now) or for one turn (its start to its end checkpoint). */
   private async range(sessionId: string, turnIndex: number | null): Promise<{ from: string; to: string; worktree: string }> {
     const s = this.requireWorktree(sessionId);
-    if (turnIndex === null) return { from: s.baseCommit, to: await snapshot(s.worktreePath, null, 'ADE review'), worktree: s.worktreePath };
+    if (turnIndex === null) return { from: s.baseCommit, to: await snapshot(s.worktreePath, null, 'ADE review', s.inPlace), worktree: s.worktreePath };
     const turn = this.repos.turns.byIndex(sessionId, turnIndex);
     if (!turn?.startCheckpoint) throw new RpcError('no_checkpoint', 'That turn has no checkpoint.');
-    const to = turn.endCheckpoint ?? (await snapshot(s.worktreePath, null, 'ADE review'));
+    const to = turn.endCheckpoint ?? (await snapshot(s.worktreePath, null, 'ADE review', s.inPlace));
     return { from: turn.startCheckpoint, to, worktree: s.worktreePath };
   }
 
@@ -53,7 +54,7 @@ export class ReviewService {
     if (this.sessions.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish or cancel it first.');
     const turn = this.repos.turns.byIndex(sessionId, turnIndex);
     if (!turn?.startCheckpoint) throw new RpcError('no_checkpoint', 'That turn has no checkpoint.');
-    await restoreSnapshot(s.worktreePath, turn.startCheckpoint);
+    await restoreSnapshot(s.worktreePath, turn.startCheckpoint, s.inPlace);
     this.sessions.record(sessionId, { type: 'notice', level: 'info', text: `Undid turn ${turnIndex + 1} and every change after it.` });
     this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: 'turn.undone', detail: { turnIndex, checkpoint: turn.startCheckpoint } });
   }
@@ -65,6 +66,7 @@ export class ReviewService {
   async land(sessionId: string, mode: 'apply' | 'commit', files: string[], message?: string, base?: string): Promise<void> {
     const s = this.requireWorktree(sessionId);
     if (this.sessions.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish before landing.');
+    if (s.inPlace) return this.keepInPlace(s, mode, files);
     const workspace = this.repos.workspaces.get(s.workspaceId)!;
     const from = base ?? s.baseCommit;
     let detail: Record<string, unknown>;
@@ -84,12 +86,46 @@ export class ReviewService {
     await this.sessions.finish(sessionId, 'land');
   }
 
+  /**
+   * CN-08: the changes are already in the checkout. Landing keeps the selected files and puts every other
+   * changed file back to the snapshot. Committing is left to the user, because the checkout may hold their
+   * own uncommitted work too.
+   */
+  private async keepInPlace(s: Session & { worktreePath: string; baseCommit: string }, mode: 'apply' | 'commit', files: string[]): Promise<void> {
+    if (mode === 'commit') {
+      throw new RpcError('in_place', 'A session in your checkout keeps its changes where they are. Choose "Keep changes" and commit them yourself.');
+    }
+    const now = await snapshot(s.worktreePath, null, 'ADE land in place', true);
+    const changed = (await changedFiles(s.worktreePath, s.baseCommit, now)).flatMap((c) => (c.oldPath ? [c.path, c.oldPath] : [c.path]));
+    const keep = new Set(files);
+    const reverted = changed.filter((f) => !keep.has(f));
+    await restoreFiles(s.worktreePath, s.baseCommit, reverted);
+    await this.dropSessionRefs(s);
+    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, agent: s.agentId } });
+    this.sessions.record(s.id, { type: 'session.landed', mode: 'apply', files });
+    await this.sessions.finish(s.id, 'land');
+  }
+
+  private async dropSessionRefs(s: Session) {
+    const root = this.repos.workspaces.get(s.workspaceId)!.rootPath;
+    await deleteRefs(root, `refs/ade/checkpoints/${s.id}/`);
+    await git(['update-ref', '-d', snapshotRefName(s.id)], { cwd: root }).catch(() => undefined);
+  }
+
   /** RV-08: remove worktree and branch; the final patch is kept for 30 days. */
   async discard(sessionId: string): Promise<string | null> {
     const s = this.repos.sessions.require(sessionId);
     await this.sessions.stopAgent(sessionId);
     let patchPath: string | null = null;
-    if (s.worktreePath && s.baseCommit) {
+    if (s.inPlace && s.worktreePath && s.baseCommit) {
+      // CN-08: never remove the checkout. Keep the patch, then put every file back to the snapshot.
+      const final = await snapshot(s.worktreePath, null, 'ADE final', true);
+      patchPath = join(this.paths.patches, `${sessionId}.patch`);
+      await mkdir(this.paths.patches, { recursive: true });
+      await writeFile(patchPath, await diffPatch(s.worktreePath, s.baseCommit, final));
+      await restoreSnapshot(s.worktreePath, s.baseCommit, true);
+      await this.dropSessionRefs(s);
+    } else if (s.worktreePath && s.baseCommit) {
       const workspace = this.repos.workspaces.get(s.workspaceId)!;
       patchPath = await discardWorktree({
         repo: workspace.rootPath,

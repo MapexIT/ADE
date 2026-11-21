@@ -81,7 +81,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
         <span className="font-semibold">{isQuestion ? 'Question' : 'Approval'}</span>
         <span className="min-w-0 truncate">{item.title}</span>
         <span className="ml-auto text-ink-muted">
-          {chosen ? chosen.name : 'Cancelled'} · {item.decidedBy === 'user' ? 'by you' : item.decidedBy?.startsWith('profile:') ? `by the ${item.decidedBy.slice(8)} profile` : 'automatically'}
+          {chosen ? chosen.name : 'Cancelled'} · {item.decidedBy === 'user' ? 'by you' : item.decidedBy?.startsWith('profile:') ? `by the ${item.decidedBy.slice(8)} profile` : item.decidedBy?.startsWith('rule:') ? 'by a workspace rule' : 'automatically'}
         </span>
         {item.note ? <span className="w-full text-ink-muted">Note: {item.note}</span> : null}
       </div>
@@ -97,7 +97,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
       {item.detail ? <div className="rounded-[var(--radius-small)] bg-surface-sunken px-2.5 py-2 font-mono text-[12px] text-ink">{item.detail}</div> : null}
       {!isQuestion && session?.worktreePath ? (
         <div className="text-ink-muted">
-          Runs in the session worktree. This session is {session.sandboxState === 'not-sandboxed' ? 'not sandboxed' : session.sandboxState === 'sandboxed' ? 'sandboxed' : 'commands sandboxed'}.
+          Runs in {session.inPlace ? 'your checkout' : 'the session worktree'}. This session is {session.sandboxState === 'not-sandboxed' ? 'not sandboxed' : session.sandboxState === 'sandboxed' ? 'sandboxed' : 'commands sandboxed'}.
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2">

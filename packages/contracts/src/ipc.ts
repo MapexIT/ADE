@@ -12,7 +12,7 @@ import {
   WorkItem,
   Workspace,
 } from './entities.ts';
-import { PromptBlock, SessionEvent } from './events.ts';
+import { PromptBlock, SessionEvent, ToolKind } from './events.ts';
 import { defineApi, defineTopics, method } from './rpc.ts';
 
 const Id = z.string().min(1).max(200);
@@ -56,8 +56,41 @@ export const CreateSessionInput = z.object({
   modelId: z.string().max(200).optional(),
   /** SK-01: skills (by name) copied into the agent's skills folder in the worktree for this session only. */
   skills: z.array(SkillName).max(20).optional(),
+  /**
+   * CN-07: run inside the host sandbox. Left out, Linux uses it whenever it works and Windows does not (WSL
+   * sessions are opt-in because the agent must be installed inside the distribution).
+   */
+  hostSandbox: z.boolean().optional(),
+  /** CN-08: work in the real checkout after a snapshot. Needs the "run in place" setting; one session at a time. */
+  inPlace: z.boolean().optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
+
+/** CN-07: whether this machine can run sessions inside an OS-enforced sandbox, and why not. */
+export const ContainmentStatus = z.object({
+  kind: z.enum(['bubblewrap', 'wsl', 'none']),
+  available: z.boolean(),
+  /** Why it is unavailable, in words for the user. */
+  reason: z.string().nullable(),
+  /** The WSL distribution sessions run in. */
+  distro: z.string().nullable(),
+  /** Whether new sessions use it unless the user says otherwise. */
+  defaultOn: z.boolean(),
+  /** Agents that can be started inside it (WSL needs each agent installed in the distribution). */
+  agents: z.array(AgentId),
+});
+export type ContainmentStatus = z.infer<typeof ContainmentStatus>;
+
+/** AP-06: a workspace rule that answers matching permission requests without asking. */
+export const PermissionRule = z.object({
+  id: Id,
+  decision: z.enum(['allow', 'deny']),
+  /** The request's tool kind, or any. */
+  kind: z.union([ToolKind, z.literal('any')]),
+  /** Matched against the request title and command, ignoring case. `*` matches anything. */
+  pattern: z.string().trim().min(1).max(500),
+});
+export type PermissionRule = z.infer<typeof PermissionRule>;
 
 export const SessionDetail = z.object({
   session: Session,
@@ -173,6 +206,9 @@ export const hostApi = defineApi({
   'settings.set': method(z.object({ key: z.string().min(1).max(100), value: z.unknown() }), Ok),
 
   'agents.status': method(z.object({ refresh: z.boolean().default(false) }), z.array(AgentStatus)),
+  'containment.status': method(z.object({ refresh: z.boolean().default(false) }), ContainmentStatus),
+  'rules.list': method(z.object({ workspaceId: Id }), z.array(PermissionRule)),
+  'rules.save': method(z.object({ workspaceId: Id, rules: z.array(PermissionRule).max(200) }), Ok),
 
   'sessions.list': method(z.object({ workspaceId: Id }), z.array(Session)),
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),

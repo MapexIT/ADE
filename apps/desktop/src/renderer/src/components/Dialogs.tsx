@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, SectionLabel } from '@ade/ui';
-import type { ProtocolMessage } from '@ade/contracts';
+import type { ContainmentStatus, ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
 import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -8,6 +8,15 @@ import { host, main, pty } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { useTerminals } from '../lib/terminals.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
+import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
+import { WorkspaceRules } from './WorkspaceRules.tsx';
+
+/** CN-07: one line describing the host sandbox on this machine. */
+export function sandboxSummary(s: ContainmentStatus | null): string {
+  if (!s) return 'Checking…';
+  if (!s.available) return s.reason ?? 'Not available on this machine.';
+  return `${s.kind === 'wsl' ? `WSL2 (${s.distro}) with bubblewrap` : 'bubblewrap'}. ${SANDBOX_SCOPE}`;
+}
 
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen);
@@ -129,9 +138,15 @@ export function SettingsDialog() {
   const [token, setToken] = useState({ shortcut: '', github: '' });
   const [share, setShare] = useState(false);
   const [autoTriggers, setAutoTriggers] = useState(false);
+  const [containment, setContainment] = useState<ContainmentStatus | null>(null);
+  const [sandboxByDefault, setSandboxByDefault] = useState(true);
+  const [runInPlace, setRunInPlace] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    void attempt(() => host.call('containment.status', { refresh: true })).then((s) => setContainment(s ?? null));
+    void host.call('settings.get', { key: 'sandbox.byDefault' }).then((v) => setSandboxByDefault(v.value !== false));
+    void host.call('settings.get', { key: 'sessions.runInPlace' }).then((v) => setRunInPlace(v.value === true));
     void host.call('settings.get', { key: 'concurrencyCap' }).then((v) => setCap(typeof v.value === 'number' ? v.value : 3));
     void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
     void main('main.credentials.status', {}).then(setCreds);
@@ -145,6 +160,8 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
+    await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
+    await attempt(() => host.call('settings.set', { key: 'sessions.runInPlace', value: runInPlace }));
     toast('Settings saved.');
     set({ settingsOpen: false });
   };
@@ -223,6 +240,36 @@ export function SettingsDialog() {
             </span>
           </label>
         </section>
+        <section className="flex flex-col gap-2" aria-label="Containment">
+          <SectionLabel>Containment</SectionLabel>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Host sandbox</span>
+            <Badge tone={containment?.available ? 'ok' : 'attention'}>{containment?.available ? 'Available' : 'Not available'}</Badge>
+          </div>
+          <p className="m-0 text-[12px] text-ink-muted">{sandboxSummary(containment)}</p>
+          {containment?.kind === 'bubblewrap' ? (
+            <label className="flex min-h-11 items-start gap-2">
+              <input type="checkbox" checked={sandboxByDefault} onChange={(e) => setSandboxByDefault(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+              <span>
+                Run new sessions in the sandbox
+                <span className="block text-[12px] text-ink-muted">You can still turn it off for one session when you start it.</span>
+              </span>
+            </label>
+          ) : null}
+          {containment?.kind === 'wsl' ? (
+            <p className="m-0 text-[12px] text-ink-muted">Choose "Run inside WSL" when you start a session. Each agent's ACP adapter must be installed inside the distribution.</p>
+          ) : null}
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={runInPlace} onChange={(e) => setRunInPlace(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Let one session at a time work in my checkout
+              <span className="block text-[12px] text-ink-muted">
+                The agent then edits your real files instead of a worktree. ADE takes a snapshot first; Discard puts every file back. Off by default.
+              </span>
+            </span>
+          </label>
+        </section>
+        {workspaceId ? <WorkspaceRules workspaceId={workspaceId} /> : null}
       </div>
     </Modal>
   );
@@ -238,8 +285,10 @@ export function FirstRunDialog() {
   const shells = useTerminals((t) => t.shells);
   const [info, setInfo] = useState<{ platform: string } | null>(null);
   const [creds, setCreds] = useState<{ available: boolean; backend: string } | null>(null);
+  const [containment, setContainment] = useState<ContainmentStatus | null>(null);
   useEffect(() => {
     if (!open) return;
+    void attempt(() => host.call('containment.status', {})).then((s) => setContainment(s ?? null));
     void main('main.info', {}).then(setInfo);
     void main('main.credentials.status', {}).then(setCreds);
     void pty.call('pty.shells', {}).then((s) => useTerminals.setState({ shells: s }));
@@ -279,6 +328,7 @@ export function FirstRunDialog() {
       <div className="flex flex-col gap-2">
         <SectionLabel>This machine</SectionLabel>
         {row('Shells', shells.length > 0, shells.map((s) => s.label).join(', ') || 'No supported shell found')}
+        {row('Host sandbox', !!containment?.available, sandboxSummary(containment))}
         {row('Credential store', !!creds?.available, creds ? `${creds.backend}${creds.available ? '' : ' · install a keyring to connect Shortcut or GitHub'}` : 'Checking…')}
         <SectionLabel className="mt-3">Agents</SectionLabel>
         {agents
@@ -287,9 +337,15 @@ export function FirstRunDialog() {
             <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-line px-3 py-2">
               <span className="w-40 font-semibold">{a.label}</span>
               <span className="flex-1 text-ink-muted">{a.health === 'not-installed' ? a.reason : `${a.version ?? 'version unknown'}${a.path ? ` · ${a.path}` : ' · runs through the bundled adapter'}`}</span>
-              <Badge tone="attention" title="Shown honestly: ADE does not switch on an agent sandbox it has not verified">
-                Not sandboxed{info?.platform === 'win32' ? ' on Windows' : ''}
-              </Badge>
+              {containment?.available && containment.agents.includes(a.id) ? (
+                <Badge tone="ok" title={SANDBOX_SCOPE}>
+                  {containment.kind === 'wsl' ? 'Can run sandboxed in WSL' : 'Runs sandboxed'}
+                </Badge>
+              ) : (
+                <Badge tone="attention" title="Shown honestly: nothing is labelled sandboxed unless the operating system enforces it">
+                  Not sandboxed{info?.platform === 'win32' ? ' on Windows' : ''}
+                </Badge>
+              )}
               <Badge tone={a.health === 'ready' ? 'ok' : 'attention'}>{a.health === 'ready' ? 'Ready' : a.health === 'needs-sign-in' ? 'Needs sign-in' : 'Not installed'}</Badge>
               {a.health === 'not-installed' ? (
                 <Button size="dense" onClick={() => void main('main.openExternal', { url: a.id === 'opencode' ? 'https://opencode.ai/docs/' : a.id === 'codex' ? 'https://developers.openai.com/codex/cli' : 'https://code.claude.com/docs/en/setup' })}>

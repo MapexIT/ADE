@@ -31,6 +31,10 @@ export type PermissionProfile = z.infer<typeof PermissionProfile>;
 export const SandboxState = z.enum(['sandboxed', 'commands-sandboxed', 'not-sandboxed']);
 export type SandboxState = z.infer<typeof SandboxState>;
 
+/** CN-07: what wraps the agent process. `bubblewrap` on Linux; `wsl` (WSL2 plus bubblewrap inside it) on Windows. */
+export const Containment = z.enum(['none', 'bubblewrap', 'wsl']);
+export type Containment = z.infer<typeof Containment>;
+
 export const AgentHealth = z.enum(['ready', 'needs-sign-in', 'not-installed']);
 export type AgentHealth = z.infer<typeof AgentHealth>;
 
@@ -96,6 +100,9 @@ export const Session = z.object({
   worktreePath: z.string().nullable(),
   permissionProfile: PermissionProfile,
   sandboxState: SandboxState,
+  containment: Containment,
+  /** CN-08: works in the user's checkout instead of a worktree; `baseCommit` is the snapshot taken before it started. */
+  inPlace: z.boolean(),
   agentSessionId: z.string().nullable(),
   workItemRef: z.string().nullable(),
   createdAt: z.string(),

@@ -57,7 +57,15 @@ export function ReviewScreen() {
   };
 
   const land = (mode: 'apply' | 'commit') =>
-    ask({
+    session.inPlace
+      ? ask({
+          title: `Keep ${files.length} file(s) in your checkout?`,
+          body: 'The selected changes stay where they are, uncommitted. Every other file the session changed goes back to the snapshot taken when it started. The session then ends.',
+          confirmLabel: 'Keep changes',
+          onConfirm: () =>
+            void attempt(() => host.call('sessions.land', { sessionId: session.id, mode: 'apply', files })).then((ok) => ok && useStore.getState().toast('Kept.')),
+        })
+      : ask({
       title: mode === 'apply' ? `Apply ${files.length} file(s) to your checkout?` : `Commit ${files.length} file(s) on ${session.branch}?`,
       body:
         mode === 'apply'
@@ -181,23 +189,37 @@ export function ReviewScreen() {
                 Land {files.length} of {changes.length} files
               </span>
               <span className="text-ink-muted">{busy ? 'Wait for the turn to finish before landing.' : 'Nothing lands without one of these actions.'}</span>
-              <label htmlFor="commit-msg" className="sr-only">
-                Commit message
-              </label>
-              <input id="commit-msg" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 text-ink focus:border-accent focus:outline-none" />
+              {session.inPlace ? null : (
+                <>
+                  <label htmlFor="commit-msg" className="sr-only">
+                    Commit message
+                  </label>
+                  <input id="commit-msg" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 text-ink focus:border-accent focus:outline-none" />
+                </>
+              )}
               <div className="ml-auto flex flex-wrap gap-2">
-                <Button disabled={busy || !files.length} onClick={() => land('apply')}>
-                  Apply to my checkout
-                </Button>
-                <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
-                  Commit to branch
-                </Button>
+                {session.inPlace ? (
+                  <Button variant="primary" disabled={busy || !files.length} onClick={() => land('apply')}>
+                    Keep changes
+                  </Button>
+                ) : (
+                  <>
+                    <Button disabled={busy || !files.length} onClick={() => land('apply')}>
+                      Apply to my checkout
+                    </Button>
+                    <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
+                      Commit to branch
+                    </Button>
+                  </>
+                )}
                 <Button
                   variant="danger"
                   onClick={() =>
                     ask({
                       title: 'Discard this session?',
-                      body: 'The worktree and the branch are deleted and the agent is stopped. The final patch is kept for 30 days in the app data folder.',
+                      body: session.inPlace
+                        ? 'Every file in your checkout goes back to the snapshot taken when the session started, and the agent is stopped. The final patch is kept for 30 days in the app data folder.'
+                        : 'The worktree and the branch are deleted and the agent is stopped. The final patch is kept for 30 days in the app data folder.',
                       confirmLabel: 'Discard session',
                       danger: true,
                       onConfirm: () => void attempt(() => host.call('sessions.discard', { sessionId: session.id })),

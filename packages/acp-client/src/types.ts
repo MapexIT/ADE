@@ -22,6 +22,25 @@ export interface AgentInstallInfo {
   version: string | null;
 }
 
+/**
+ * CN-07: Decorator around how a process is started, so the agent and every command it asks ADE to run end up
+ * inside an OS sandbox (bubblewrap) or inside another OS (WSL). Implemented by the host.
+ */
+export interface LaunchWrapper {
+  readonly kind: 'bubblewrap' | 'wsl';
+  /** True when the agent must be the one installed inside the wrapper's OS rather than ADE's bundled adapter. */
+  readonly foreign: boolean;
+  /** The path the agent sees for a host path, and back. */
+  toAgentPath(hostPath: string): string;
+  toHostPath(agentPath: string): string;
+  /** `cwd` is a host path. Returns what to spawn on the host. */
+  wrap(cmd: { command: string; args: string[] }, opts: { cwd: string; env: Record<string, string> }): {
+    cmd: { command: string; args: string[] };
+    cwd: string;
+    env: Record<string, string>;
+  };
+}
+
 export type McpServerSpec =
   | { name: string; command: string; args: string[]; env: Record<string, string> }
   | { name: string; url: string; headers: Record<string, string> };
@@ -39,6 +58,8 @@ export interface StartOptions {
   onProtocolMessage?: (direction: 'in' | 'out', body: string) => void;
   /** Commands the agent runs through the client (`terminal/*`), for TM-04. */
   onTerminalOutput?: (terminalId: string, chunk: string) => void;
+  /** CN-07: runs the agent, and the commands it asks ADE to run, inside a sandbox or WSL. */
+  wrapper?: LaunchWrapper;
 }
 
 export interface PermissionRequestInfo {

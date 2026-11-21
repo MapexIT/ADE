@@ -177,6 +177,11 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX workflow_runs_workspace ON workflow_runs(workspace_id, created_at);
   `,
+  // M7-T01: host sandbox (CN-07) and run in place (CN-08).
+  `
+  ALTER TABLE sessions ADD COLUMN containment TEXT NOT NULL DEFAULT 'none';
+  ALTER TABLE sessions ADD COLUMN in_place INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function migrate(db: Database): number {

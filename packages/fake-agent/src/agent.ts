@@ -195,6 +195,17 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
         case 'sleep':
           await sleep(s, step.ms);
           break;
+        case 'escape': {
+          let result: string;
+          try {
+            writeFileSync(step.path, 'escaped');
+            result = 'written';
+          } catch (err) {
+            result = `refused (${(err as NodeJS.ErrnoException).code ?? 'error'})`;
+          }
+          await stream(client, s, 'agent_message_chunk', `Escape: ${result}.`);
+          break;
+        }
         case 'env':
           await stream(client, s, 'agent_message_chunk', `${step.name} is ${process.env[step.name] === undefined ? 'absent' : 'present'}.`);
           break;

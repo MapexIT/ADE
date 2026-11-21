@@ -126,6 +126,9 @@ Agent process environment: an allow-list of variables (PATH, HOME or USERPROFILE
 the variables each agent documents), not the user's full environment.
 
 Sandbox badge per session, derived at start: `sandboxed`, `commands-sandboxed` or `not-sandboxed`.
+The host sandbox (CN-07, `apps/desktop/src/host/containment.ts`) makes a session `sandboxed` on Linux
+(bubblewrap) and, when chosen, on Windows (WSL2 plus bubblewrap), after a probe proves it; see
+`docs/DECISIONS.md` for exactly what it enforces.
 Known today: Claude Code's sandbox covers shell commands on Linux, macOS and WSL2 and does not exist on
 native Windows; OpenCode has no sandbox. `VERIFY` Codex's sandbox on Windows and Linux and how each adapter
 accepts sandbox and permission-mode settings at launch.

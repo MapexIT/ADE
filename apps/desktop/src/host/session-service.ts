@@ -1,11 +1,15 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentEvent, AgentRuntime, AgentSession, PermissionRequestInfo, McpServerSpec } from '@ade/acp-client';
+import type { AgentEvent, AgentRuntime, AgentSession, LaunchWrapper, PermissionRequestInfo, McpServerSpec } from '@ade/acp-client';
 import { AgentAuthRequiredError } from '@ade/acp-client';
 import {
+  AGENT_LABELS,
   RpcError,
   type AgentId,
+  type Containment,
+  type ContainmentStatus,
+  type PermissionRule,
   type CreateSessionInput,
   type DistributiveOmit,
   type NeedsYouItem,
@@ -17,12 +21,26 @@ import {
   type SessionState,
   type Turn,
 } from '@ade/contracts';
-import { bringChanges, copyFiles, createWorktree, revParse, slugify, snapshot } from '@ade/git';
+import { bringChanges, copyFiles, createWorktree, currentBranch, revParse, slugify, snapshot } from '@ade/git';
 import { ChunkCoalescer, isLive, isTerminal, nextState, type SessionTrigger } from '@ade/session-core';
 import type { EventBus } from './bus.ts';
 import { profilePolicy, type PermissionPolicy } from './permission-policy.ts';
 import type { Repositories } from './repositories.ts';
 import { readWorkspaceConfig, toArgv } from './workspace-config.ts';
+import { ruleAnswer, rulesKey } from './workspace-rules.ts';
+
+/** CN-07: the host sandbox as the session service needs it (implemented by `ContainmentService`). */
+export interface SandboxProvider {
+  /** False when new sessions never use the sandbox unless asked (Windows), so no probe is needed. */
+  readonly mayDefaultOn: boolean;
+  status(): Promise<ContainmentStatus>;
+  wrapperFor(session: Session, repoRoot: string, extraWritable?: string[]): Promise<LaunchWrapper | null>;
+  release(sessionId: string): Promise<void>;
+}
+
+/** CN-08: the setting that allows one session at a time to work in the user's checkout. Off by default. */
+export const RUN_IN_PLACE_SETTING = 'sessions.runInPlace';
+export const snapshotRefName = (sessionId: string) => `refs/ade/snapshots/${sessionId}`;
 
 export interface HostPaths {
   userData: string;
@@ -72,6 +90,8 @@ export class SessionService {
   private disposed = false;
   /** Extra MCP servers to hand agents (connectors, M5). */
   mcpServersFor: (workspaceId: string) => McpServerSpec[] = () => [];
+  /** CN-07: set by the composition root when the host sandbox is wired. */
+  sandbox: SandboxProvider | null = null;
 
   constructor(
     private readonly repos: Repositories,
@@ -124,6 +144,11 @@ export class SessionService {
 
   private audit(session: Session, action: string, detail: Record<string, unknown>, actor = 'user') {
     this.repos.audit.append({ workspaceId: session.workspaceId, sessionId: session.id, actor, action, detail });
+  }
+
+  /** AP-06: the workspace's allow and deny rules. */
+  rules(workspaceId: string): PermissionRule[] {
+    return this.repos.settings.get<PermissionRule[]>(rulesKey(workspaceId), []);
   }
 
   limits(): Limits {
@@ -210,17 +235,29 @@ export class SessionService {
     const launchable = 'launchable' in runtime ? await (runtime as { launchable(): Promise<{ ok: boolean; reason?: string }> }).launchable() : { ok: true };
     if (!launchable.ok) throw new RpcError('agent_unavailable', launchable.reason ?? 'The agent cannot be started');
 
-    const sandboxState = runtime.sandboxFor(input.permissionProfile, this.platform);
+    const containment = await this.containmentFor(input.agentId, input.hostSandbox);
+    const sandboxState = containment !== 'none' ? 'sandboxed' : runtime.sandboxFor(input.permissionProfile, this.platform);
     if (input.permissionProfile === 'autonomous' && sandboxState !== 'sandboxed') {
       throw new RpcError('autonomous_requires_sandbox', 'Autonomous is only available when the session is sandboxed.');
     }
-    const baseCommit = await revParse(workspace.rootPath, input.baseRef ?? 'HEAD').catch(() => {
+    const inPlace = input.inPlace ?? false;
+    if (inPlace) this.checkInPlace(workspace.id, input);
+    let baseCommit = await revParse(workspace.rootPath, input.baseRef ?? 'HEAD').catch(() => {
       throw new RpcError('no_commit', 'The repository needs at least one commit before a session can start.');
     });
 
     const id = randomUUID();
     const title = input.title?.trim() || titleFrom(input.prompt);
     const slug = input.workItemRef ? `${slugify(input.workItemRef, 20)}-${slugify(title, 30)}` : `${slugify(title, 30)}-${id.slice(0, 6)}`;
+    let branch: string | null = `agent/${slug}`;
+    let worktreePath = join(this.paths.worktrees, `${slugify(workspace.name, 20)}-${workspace.id.slice(0, 6)}`, slug);
+    if (inPlace) {
+      // CN-08: the snapshot (tracked and untracked files, without touching the user's index) is the base that
+      // review diffs against and that "Discard" restores.
+      baseCommit = await snapshot(workspace.rootPath, snapshotRefName(id), 'ADE snapshot before a session worked in place', true);
+      branch = await currentBranch(workspace.rootPath);
+      worktreePath = workspace.rootPath;
+    }
     const liveCount = this.repos.sessions.inStates(['starting', 'working', 'waiting-on-user']).length;
     const state: SessionState = liveCount >= this.concurrencyCap() ? 'queued' : 'starting';
     const session: Session = {
@@ -230,10 +267,12 @@ export class SessionService {
       title,
       state,
       baseCommit,
-      branch: `agent/${slug}`,
-      worktreePath: join(this.paths.worktrees, `${slugify(workspace.name, 20)}-${workspace.id.slice(0, 6)}`, slug),
+      branch,
+      worktreePath,
       permissionProfile: input.permissionProfile,
       sandboxState,
+      containment,
+      inPlace,
       agentSessionId: null,
       workItemRef: input.workItemRef ?? null,
       createdAt: new Date().toISOString(),
@@ -243,10 +282,42 @@ export class SessionService {
     this.append(id, { type: 'session.state_changed', from: null, to: state, reason: state === 'queued' ? 'Waiting for a free slot' : null });
     this.repos.queue.push(id, input.prompt);
     this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}), ...(input.modelId ? { modelId: input.modelId } : {}), ...(input.skills?.length ? { skills: input.skills } : {}) });
-    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch });
+    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
     return session;
+  }
+
+  /** CN-07: which sandbox the new session runs in. Left out, the platform default applies. */
+  private async containmentFor(agentId: AgentId, requested: boolean | undefined): Promise<Containment> {
+    if (requested === false || (requested === undefined && !this.sandbox?.mayDefaultOn)) return 'none';
+    const status = this.sandbox ? await this.sandbox.status() : null;
+    const wanted = requested ?? status?.defaultOn ?? false;
+    if (!wanted) return 'none';
+    if (!status?.available || status.kind === 'none') {
+      throw new RpcError('sandbox_unavailable', status?.reason ?? 'The host sandbox is not available on this machine.');
+    }
+    if (!status.agents.includes(agentId)) {
+      throw new RpcError(
+        'sandbox_unavailable',
+        status.kind === 'wsl'
+          ? `${AGENT_LABELS[agentId]} is not installed inside ${status.distro}. Install its ACP adapter there first.`
+          : `${AGENT_LABELS[agentId]} cannot run inside the sandbox.`,
+      );
+    }
+    return status.kind;
+  }
+
+  /** CN-08: opt-in, one session at a time per checkout, and nothing that needs a separate worktree. */
+  private checkInPlace(workspaceId: string, input: CreateSessionInput) {
+    if (!this.repos.settings.get<boolean>(RUN_IN_PLACE_SETTING, false)) {
+      throw new RpcError('in_place_off', 'Working in your checkout is off. Turn it on in Settings first.');
+    }
+    if (input.bringChanges || input.skills?.length || input.baseRef) {
+      throw new RpcError('in_place_conflict', 'A session in your checkout cannot bring changes, load skills or start from another commit.');
+    }
+    const busy = this.repos.sessions.list(workspaceId).find((s) => s.inPlace && !isTerminal(s.state));
+    if (busy) throw new RpcError('in_place_busy', `"${busy.title}" is already working in your checkout. Land or discard it first.`);
   }
 
   private maybeDequeue() {
@@ -271,7 +342,19 @@ export class SessionService {
     try {
       const session = this.repos.sessions.require(sessionId);
       const workspace = this.repos.workspaces.get(session.workspaceId)!;
-      await createWorktree({ repo: workspace.rootPath, baseCommit: session.baseCommit!, branch: session.branch!, path: session.worktreePath! });
+      if (session.inPlace) {
+        this.append(sessionId, { type: 'notice', level: 'warning', text: 'This session works in your checkout. Discard puts every file back to the snapshot taken when it started.' });
+        await this.startAgent(sessionId);
+        await this.sendNext(sessionId);
+        return;
+      }
+      await createWorktree({
+        repo: workspace.rootPath,
+        baseCommit: session.baseCommit!,
+        branch: session.branch!,
+        path: session.worktreePath!,
+        relativePaths: session.containment === 'wsl',
+      });
       const setup = await this.runSetup(session, workspace.rootPath);
       if (!setup.ok) {
         this.fire(sessionId, 'crashed', `Setup failed: ${setup.message}`);
@@ -341,8 +424,15 @@ export class SessionService {
     const runtime = this.runtimes.get(session.agentId);
     if (!runtime) throw new Error(`Agent ${session.agentId} is not available`);
     const protocol: ProtocolMessage[] = [];
+    const workspace = this.repos.workspaces.get(session.workspaceId)!;
+    let wrapper: LaunchWrapper | null = null;
+    if (session.containment !== 'none') {
+      if (!this.sandbox) throw new Error('The host sandbox is not available; the session will not start without it.');
+      wrapper = await this.sandbox.wrapperFor(session, workspace.rootPath, [this.paths.fakeAgentState]);
+    }
     const launch = (resumeSessionId: string | null) =>
       runtime.start({
+        ...(wrapper ? { wrapper } : {}),
         cwd: session.worktreePath!,
         permissionProfile: session.permissionProfile,
         mcpServers: this.mcpServersFor(session.workspaceId),
@@ -405,10 +495,17 @@ export class SessionService {
     this.repos.permissions.insert({ id: info.requestId, sessionId, turnId: live.turn?.id ?? null, toolCallId: info.toolCallId, title: info.title, options: info.options });
     this.append(sessionId, { type: 'permission.requested', requestId: info.requestId, toolCallId: info.toolCallId, title: info.title, kind: info.kind, detail: info.detail, options: info.options }, live.turn?.id ?? null);
 
-    const auto = this.policy.autoAnswer(session.permissionProfile, info);
+    // AP-06: workspace rules answer first; then the permission profile. Every automatic answer is logged.
+    const byRule = ruleAnswer(this.rules(session.workspaceId), info);
+    const auto = byRule ?? this.policy.autoAnswer(session.permissionProfile, info);
     if (auto) {
-      this.recordDecision(sessionId, info.requestId, auto.decision, auto.decidedBy, null);
-      this.audit(session, 'permission.decided', { requestId: info.requestId, title: info.title, decision: auto.decision }, auto.decidedBy);
+      this.recordDecision(sessionId, info.requestId, auto.decision, auto.decidedBy, byRule ? `Workspace rule: ${byRule.rule.decision} "${byRule.rule.pattern}"` : null);
+      this.audit(
+        session,
+        'permission.decided',
+        { requestId: info.requestId, title: info.title, decision: auto.decision, ...(byRule ? { rule: byRule.rule } : {}) },
+        auto.decidedBy,
+      );
       return Promise.resolve(auto.decision);
     }
 
@@ -488,7 +585,8 @@ export class SessionService {
     session = this.repos.sessions.require(sessionId);
 
     const index = this.repos.turns.list(sessionId).length;
-    const startCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'start'), `ADE turn ${index} start`).catch(() => null);
+    // In-place sessions take raw snapshots so the user's line endings survive undo and discard (CN-08).
+    const startCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'start'), `ADE turn ${index} start`, session.inPlace).catch(() => null);
     const turn = this.repos.turns.start(sessionId, startCommit);
     live.turn = turn;
     onStarted?.();
@@ -517,7 +615,7 @@ export class SessionService {
 
     this.flush(sessionId, live);
     for (const [requestId] of live.pending) this.decide(sessionId, requestId, { outcome: 'cancelled' }, 'system', null);
-    const endCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'end'), `ADE turn ${index} end`).catch(() => null);
+    const endCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'end'), `ADE turn ${index} end`, session.inPlace).catch(() => null);
     this.repos.turns.end(turn.id, stopReason, endCommit);
     if (endCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: endCommit, at: 'end' }, turn.id);
     this.append(sessionId, { type: 'turn.ended', turnId: turn.id, stopReason, usage: live.agent.usage }, turn.id);
@@ -606,6 +704,7 @@ export class SessionService {
   /** Moves a session to a terminal state after a land or discard. */
   async finish(sessionId: string, trigger: 'land' | 'discard'): Promise<void> {
     await this.stopAgent(sessionId);
+    await this.sandbox?.release(sessionId).catch(() => undefined);
     const session = this.repos.sessions.require(sessionId);
     if (session.state === 'interrupted') this.fire(sessionId, 'reopen', 'Reopened at the last checkpoint');
     if (!this.fire(sessionId, trigger)) throw new RpcError('invalid_state', `A ${session.state} session cannot be ${trigger === 'land' ? 'landed' : 'discarded'}.`);
