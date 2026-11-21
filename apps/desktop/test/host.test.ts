@@ -158,11 +158,10 @@ describe('host with the fake agent', () => {
   }, 45_000);
 
   it('stores agent commands in the timeline and stops one on request (TM-04)', async () => {
-    const script = join(root, 'forever.mjs');
-    writeFileSync(script, "console.log('serving on 5173');\nsetInterval(() => {}, 1000);\n");
+    // The script lives in the worktree: on Linux the session is sandboxed and has its own /tmp.
     const live: SessionEvent[] = [];
     host.bus.on('session.event', (e) => live.push(e));
-    const { session } = await openAndStart(`run "${process.execPath}" "${script}"\nsay after`);
+    const { session } = await openAndStart(`edit forever.mjs console.log('serving on 5173'); setInterval(() => {}, 1000);\nrun "${process.execPath}" forever.mjs\nsay after`, 'auto-edit');
     const started = await waitFor(() => host.repos.events.list(session.id).find((e) => e.type === 'command.started'));
     await waitFor(() => live.some((e) => e.type === 'command.output' && e.chunk.includes('serving')));
     const terminalId = started.type === 'command.started' ? started.terminalId : '';
