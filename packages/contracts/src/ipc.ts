@@ -81,6 +81,14 @@ export const ContainmentStatus = z.object({
 });
 export type ContainmentStatus = z.infer<typeof ContainmentStatus>;
 
+/** TM-07: a named command for this workspace's terminals. */
+export const SavedCommand = z.object({
+  id: Id,
+  name: z.string().trim().min(1).max(100),
+  command: z.string().trim().min(1).max(2000),
+});
+export type SavedCommand = z.infer<typeof SavedCommand>;
+
 /** AP-06: a workspace rule that answers matching permission requests without asking. */
 export const PermissionRule = z.object({
   id: Id,
@@ -207,6 +215,8 @@ export const hostApi = defineApi({
 
   'agents.status': method(z.object({ refresh: z.boolean().default(false) }), z.array(AgentStatus)),
   'containment.status': method(z.object({ refresh: z.boolean().default(false) }), ContainmentStatus),
+  'commands.list': method(z.object({ workspaceId: Id }), z.array(SavedCommand)),
+  'commands.save': method(z.object({ workspaceId: Id, commands: z.array(SavedCommand).max(100) }), Ok),
   'rules.list': method(z.object({ workspaceId: Id }), z.array(PermissionRule)),
   'rules.save': method(z.object({ workspaceId: Id, rules: z.array(PermissionRule).max(200) }), Ok),
 
@@ -236,6 +246,20 @@ export const hostApi = defineApi({
   ),
   'sessions.discard': method(z.object({ sessionId: Id }), z.object({ patchPath: z.string().nullable() })),
   'sessions.protocol': method(z.object({ sessionId: Id }), z.array(ProtocolMessage)),
+  /** PL-03: one prompt to two or three agents, each in its own worktree. */
+  'sessions.compare': method(
+    CreateSessionInput.omit({ agentId: true, inPlace: true, modelId: true, modeId: true }).extend({ agentIds: z.array(AgentId).min(2).max(3) }),
+    z.array(Session),
+  ),
+  /** SR-07: the same worktree continues with another agent, given the last message and the diff. */
+  'sessions.handOff': method(z.object({ sessionId: Id, agentId: AgentId, note: z.string().max(10_000).optional() }), Session),
+  /** SR-08: stops ADE's agent process so the agent's own UI can resume the conversation. */
+  /** PL-04: live sessions in a workspace that changed the same files. */
+  'sessions.overlaps': method(
+    z.object({ workspaceId: Id }),
+    z.array(z.object({ sessionId: z.string(), otherSessionId: z.string(), files: z.array(z.string()) })),
+  ),
+  'sessions.detach': method(z.object({ sessionId: Id }), z.object({ agentSessionId: z.string().nullable() })),
 
   'inbox.list': method(z.object({}), z.array(NeedsYouItem)),
 

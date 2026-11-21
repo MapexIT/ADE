@@ -9,7 +9,8 @@ import { Repositories } from './repositories.ts';
 import { ReviewService } from './review-service.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
-import { readWorkspaceConfig } from './workspace-config.ts';
+import { readWorkspaceConfig, resolveMcpServers } from './workspace-config.ts';
+import type { McpServerSpec } from '@ade/acp-client';
 import { listWorkflows } from './workflows.ts';
 import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './connectors.ts';
 import { WorkItemService } from './work-items.ts';
@@ -125,7 +126,7 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
-      if (key.startsWith('rules.')) throw new RpcError('invalid', 'Use rules.save for workspace rules.');
+      if (key.startsWith('rules.') || key.startsWith('commands.')) throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
       repos.settings.set(key, value);
       if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
@@ -193,6 +194,19 @@ export function createHost(config: HostConfig) {
     },
     'sessions.discard': async ({ sessionId }) => ({ patchPath: await review.discard(sessionId) }),
     'sessions.protocol': ({ sessionId }) => sessions.protocol(sessionId),
+    'sessions.compare': (input) => sessions.compare(input),
+    'sessions.handOff': ({ sessionId, agentId, note }) => sessions.handOff(sessionId, agentId, note),
+    'sessions.detach': ({ sessionId }) => sessions.detach(sessionId),
+    'sessions.overlaps': ({ workspaceId }) => sessions.overlaps(workspaceId),
+    'commands.list': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return repos.settings.get(`commands.${workspaceId}`, []);
+    },
+    'commands.save': ({ workspaceId, commands }) => {
+      workspaceRoot(workspaceId);
+      repos.settings.set(`commands.${workspaceId}`, commands);
+      return { ok: true };
+    },
     'inbox.list': () => sessions.inbox(),
     'files.list': ({ root }) => files.list(root),
     'files.read': ({ path }) => files.read(path),
@@ -266,12 +280,26 @@ export function createHost(config: HostConfig) {
 
   // CO-04: connectors are passed to agents as MCP servers only when the user opted in, because the agent then
   // holds the connector token. Off by default.
-  sessions.mcpServersFor = () => {
-    if (!repos.settings.get<boolean>('connectors.shareWithAgents', false)) return [];
-    const token = credentials.get('shortcut');
-    return token
-      ? [{ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } }]
-      : [];
+  sessions.mcpServersFor = async (workspaceId, sessionId) => {
+    const servers: McpServerSpec[] = [];
+    // ST-05: the workspace's shared servers from .ade/workspace.yaml.
+    const ws = repos.workspaces.get(workspaceId);
+    if (ws) {
+      const { config } = await readWorkspaceConfig(ws.rootPath);
+      const resolved = resolveMcpServers(config.mcpServers, process.env);
+      servers.push(...resolved.servers);
+      for (const s of resolved.skipped) {
+        sessions.record(sessionId, { type: 'notice', level: 'warning', text: `MCP server "${s.name}" was not passed to the agent: ${s.missing.join(', ')} is not set.` });
+      }
+      if (resolved.servers.length) {
+        sessions.record(sessionId, { type: 'notice', level: 'info', text: `Shared MCP servers: ${resolved.servers.map((s) => s.name).join(', ')}.` });
+      }
+    }
+    if (repos.settings.get<boolean>('connectors.shareWithAgents', false)) {
+      const token = credentials.get('shortcut');
+      if (token) servers.push({ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } });
+    }
+    return servers;
   };
 
   sessions.recover();

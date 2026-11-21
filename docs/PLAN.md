@@ -143,9 +143,10 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M7-T01** Host sandbox on Linux and WSL2 sessions on Windows; run in place; workspace rules
       (CN-07, CN-08, AP-06). The Linux sandbox is tested for real on the Ubuntu CI runner; WSL sessions are
       verified up to the probe against a real distribution, not yet with a real agent inside WSL.
-- [ ] **M7-T02** Compare run, overlap warning, background sessions; fork, hand-off, open in the agent's
+- [x] **M7-T02** Compare run, overlap warning, background sessions; fork, hand-off, open in the agent's
       terminal UI; follow mode; shared MCP servers; saved commands (PL-03 to PL-05, SR-06 to SR-08, WA-06,
-      ST-05, TM-07).
+      ST-05, TM-07). Compare and hand-off are tested with the fake agent standing in; the background tray and
+      "open in the agent's UI" are not covered by an automated test against a real window or agent.
 - [ ] **M7-T03** Checks, batch review, review assistant, rebase and conflicts, pull requests (RV-09 to
       RV-14).
 - [ ] **M7-T04** Connector state sync, review comments, failed checks, progress notes, board view (CO-05

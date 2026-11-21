@@ -19,21 +19,37 @@ export function EditorPanel() {
   const [saved, setSaved] = useState('');
   const [mtime, setMtime] = useState<number | null>(null);
   const [goTo, setGoTo] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const follow = useStore((s) => s.follow);
+  const set = useStore((s) => s.set);
+  const followButton = (
+    <Button size="dense" variant={follow ? 'primary' : 'secondary'} aria-pressed={follow} onClick={() => set({ follow: !follow })} title="WA-06: open the file the agent is working on">
+      Follow agent
+    </Button>
+  );
 
   const load = useCallback(async () => {
     if (!editor) return;
-    const file = await attempt(() => host.call('files.read', { path: editor.path }));
+    // Follow mode can open a file the agent has not written yet; that is not an error.
+    const file = await host.call('files.read', { path: editor.path }).catch(() => null);
+    setMissing(!file);
     if (file) {
       setContent(file.content);
       setSaved(file.content);
       setMtime(file.mtimeMs);
     }
-  }, [editor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor?.path, editor?.rev]);
 
   useEffect(() => {
     setContent(null);
     void load();
   }, [load]);
+
+  const dirtyNow = content !== null && content !== saved;
+  useEffect(() => {
+    set({ editorDirty: dirtyNow });
+  }, [dirtyNow, set]);
 
   const save = useCallback(
     async (force = false) => {
@@ -90,7 +106,16 @@ export function EditorPanel() {
   if (!editor) {
     return (
       <>
-        <EmptyState title="Editor" body="Open a file from the Files tab in the inspector, or go to a file by name." action={root ? <Button onClick={() => setGoTo(true)}>Go to file (Ctrl P)</Button> : undefined} />
+        <EmptyState
+          title="Editor"
+          body="Open a file from the Files tab in the inspector, go to a file by name, or follow the agent."
+          action={
+            <div className="flex gap-2">
+              {root ? <Button onClick={() => setGoTo(true)}>Go to file (Ctrl P)</Button> : null}
+              {followButton}
+            </div>
+          }
+        />
         {picker}
       </>
     );
@@ -104,6 +129,7 @@ export function EditorPanel() {
         </span>
         {editor.sessionId ? <Badge tone="accent">Session worktree</Badge> : <Badge>Your checkout</Badge>}
         {dirty ? <Badge tone="attention">Unsaved</Badge> : null}
+        {followButton}
         <Button size="dense" onClick={() => setGoTo(true)}>
           Go to file
         </Button>
@@ -112,6 +138,7 @@ export function EditorPanel() {
         </Button>
       </div>
       <div className="min-h-0 flex-1">
+        {missing ? <p className="m-3 text-ink-muted">This file does not exist yet.</p> : null}
         {content === null ? null : (
           <Editor theme="ade-dark" path={editor.path} value={content} language={languageOf(editor.path)} onChange={(v) => setContent(v ?? '')} options={EDITOR_OPTIONS} />
         )}

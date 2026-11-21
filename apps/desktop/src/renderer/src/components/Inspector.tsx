@@ -85,6 +85,7 @@ export function Inspector() {
   const turns = useStore((s) => (session ? (s.turns[session.id] ?? EMPTY) : EMPTY));
   const setTab = useStore((s) => s.setTab);
   const ask = useStore((s) => s.ask);
+  const set = useStore((s) => s.set);
   const [tab, setInspectorTab] = useState<'changes' | 'files'>('changes');
   const [turnIndex, setTurnIndex] = useState<number | null>(null);
   const changes = useChanges(session?.id ?? null, turnIndex);
@@ -138,6 +139,16 @@ export function Inspector() {
                     <span className="flex-1">
                       Turn {t.index + 1} · {t.endedAt ? 'snapshot saved' : 'in progress'}
                     </span>
+                    {t.endCheckpoint ? (
+                      <Button
+                        size="dense"
+                        variant="ghost"
+                        title={`SR-06: a new session and worktree starting from the end of turn ${t.index + 1}`}
+                        onClick={() => set({ newSession: { title: `Fork of ${session.title}`, baseRef: t.endCheckpoint! } })}
+                      >
+                        Fork
+                      </Button>
+                    ) : null}
                     {t.startCheckpoint && !isLive(session.state) ? (
                       <Button
                         size="dense"

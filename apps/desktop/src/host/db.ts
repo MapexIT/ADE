@@ -182,6 +182,10 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE sessions ADD COLUMN containment TEXT NOT NULL DEFAULT 'none';
   ALTER TABLE sessions ADD COLUMN in_place INTEGER NOT NULL DEFAULT 0;
   `,
+  // M7-T02: compare runs (PL-03).
+  `
+  ALTER TABLE sessions ADD COLUMN compare_group TEXT;
+  `,
 ];
 
 export function migrate(db: Database): number {

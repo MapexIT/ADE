@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, Tray } from 'electron';
+import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
 import { mainApi, RpcError, type Handlers, type MainApi } from '@ade/contracts';
 import { CredentialStore } from './credentials.ts';
 import { ProcessSupervisor, type ProcessName } from './supervisor.ts';
@@ -12,6 +13,8 @@ const resources = app.isPackaged ? process.resourcesPath : join(__dirname, '../.
 const devFakeAgent = !app.isPackaged || process.env.ADE_ENABLE_FAKE_AGENT === '1';
 
 let window: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let background: BackgroundState = { live: 0, keepRunning: true };
 const credentials = new CredentialStore(userData);
 
 const publish = (topic: 'process.status' | 'focus.session', payload: unknown) => {
@@ -26,10 +29,17 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     entry: join(__dirname, 'host.js'),
     env: { ADE_USER_DATA: userData, ...(devFakeAgent ? { ADE_FAKE_AGENT_ENTRY: join(__dirname, 'fake-agent.js') } : {}) },
     onStatus: (status) => publish('process.status', { which: 'host', status }),
-    onReady: () => sendCredentials(),
+    onReady: () => {
+      sendCredentials();
+      supervisors.host.post({ type: 'background-query' });
+    },
     onMessage: (msg) => {
-      const m = msg as { type?: string; sessionId?: string; title?: string; body?: string };
+      const m = msg as { type?: string; sessionId?: string; title?: string; body?: string; live?: number; keepRunning?: boolean };
       if (m.type === 'notify' && m.sessionId) notify(m.title ?? 'ADE', m.body ?? '', m.sessionId);
+      if (m.type === 'background') {
+        background = { live: m.live ?? 0, keepRunning: m.keepRunning !== false };
+        updateTray();
+      }
     },
   }),
   pty: new ProcessSupervisor({
@@ -54,15 +64,43 @@ function sendCredentials() {
   supervisors.host.post({ type: 'credentials', values });
 }
 
+function showWindow() {
+  if (!window) createWindow();
+  else {
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  }
+}
+
+/** PL-05: a tray entry while the window is hidden, so the running sessions can be reopened or ADE quit. */
+function updateTray() {
+  const hidden = !!window && !window.isVisible();
+  if (!hidden) {
+    tray?.destroy();
+    tray = null;
+    return;
+  }
+  if (!tray) {
+    tray = new Tray(join(resources, 'icon.png'));
+    tray.on('click', showWindow);
+  }
+  tray.setToolTip(`ADE · ${background.live} running`);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `${background.live} session(s) running`, enabled: false },
+      { label: 'Open ADE', click: showWindow },
+      { label: 'Quit ADE', click: () => app.quit() },
+    ]),
+  );
+}
+
 /** AP-05: a desktop notification; clicking it focuses that session. Skipped while the window has focus. */
 function notify(title: string, body: string, sessionId?: string) {
   if (!Notification.isSupported() || window?.isFocused()) return;
   const n = new Notification({ title, body, silent: false });
   n.on('click', () => {
-    if (!window) return;
-    if (window.isMinimized()) window.restore();
-    window.show();
-    window.focus();
+    showWindow();
     if (sessionId) publish('focus.session', { sessionId });
   });
   n.show();
@@ -167,6 +205,15 @@ function createWindow() {
   });
   if (devUrl) void window.loadURL(devUrl);
   else void window.loadFile(join(__dirname, '../renderer/index.html'));
+  // PL-05: with sessions running, closing the window hides it; sessions go on and notifications still arrive.
+  window.on('close', (e) => {
+    if (!hideOnClose(background, quitting)) return;
+    e.preventDefault();
+    window?.hide();
+    updateTray();
+    notify('ADE is still running', backgroundMessage(background.live));
+  });
+  window.on('show', updateTray);
   window.on('closed', () => (window = null));
 }
 

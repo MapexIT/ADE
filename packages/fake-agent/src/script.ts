@@ -33,6 +33,8 @@ export type Step =
   | { op: 'env'; name: string }
   /** Writes straight to an absolute path, bypassing the worktree check, to test the host sandbox (CN-07). */
   | { op: 'escape'; path: string }
+  /** Replies with the names of the MCP servers the client passed (ST-05). */
+  | { op: 'mcp' }
   | { op: 'usage' }
   | { op: 'mode'; id: string }
   | { op: 'whichmodel' };
@@ -109,6 +111,9 @@ export function parseScript(text: string): Step[] {
         break;
       case 'escape':
         steps.push({ op: 'escape', path: arg });
+        break;
+      case 'mcp':
+        steps.push({ op: 'mcp' });
         break;
       case 'usage':
         steps.push({ op: 'usage' });

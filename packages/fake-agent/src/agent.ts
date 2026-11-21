@@ -22,6 +22,8 @@ interface FakeSession {
   history: SessionUpdate[];
   cancel: (() => void) | null;
   cancelled: boolean;
+  /** Names of the MCP servers the client passed on session/new or session/load. */
+  mcp: string[];
 }
 
 const MODES = [
@@ -195,6 +197,9 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
         case 'sleep':
           await sleep(s, step.ms);
           break;
+        case 'mcp':
+          await stream(client, s, 'agent_message_chunk', `MCP servers: ${s.mcp.length ? s.mcp.join(', ') : 'none'}.`);
+          break;
         case 'escape': {
           let result: string;
           try {
@@ -234,7 +239,7 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
     }))
     .onRequest('authenticate', () => ({}))
     .onRequest('session/new', async ({ params, client }) => {
-      const s: FakeSession = { id: randomUUID(), cwd: params.cwd, modeId: 'build', modelId: 'fake-small', history: [], cancel: null, cancelled: false };
+      const s: FakeSession = { id: randomUUID(), cwd: params.cwd, modeId: 'build', modelId: 'fake-small', history: [], cancel: null, cancelled: false, mcp: (params.mcpServers ?? []).map((m) => m.name) };
       sessions.set(s.id, s);
       setTimeout(() => {
         void client.notify('session/update', {
@@ -248,7 +253,7 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
       const p = transcriptPath(params.sessionId);
       if (!p || !existsSync(p)) throw new RequestError(-32002, `Unknown session ${params.sessionId}`);
       const saved = JSON.parse(readFileSync(p, 'utf8')) as { cwd: string; modeId: string; history: SessionUpdate[] };
-      const s: FakeSession = { id: params.sessionId, cwd: params.cwd, modeId: saved.modeId, modelId: 'fake-small', history: [], cancel: null, cancelled: false };
+      const s: FakeSession = { id: params.sessionId, cwd: params.cwd, modeId: saved.modeId, modelId: 'fake-small', history: [], cancel: null, cancelled: false, mcp: (params.mcpServers ?? []).map((m) => m.name) };
       sessions.set(s.id, s);
       for (const update of saved.history) await send(client, s, update);
       return { modes: { currentModeId: s.modeId, availableModes: MODES }, configOptions: modelOption(s.modelId) };

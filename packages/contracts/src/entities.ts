@@ -103,6 +103,8 @@ export const Session = z.object({
   containment: Containment,
   /** CN-08: works in the user's checkout instead of a worktree; `baseCommit` is the snapshot taken before it started. */
   inPlace: z.boolean(),
+  /** PL-03: sessions started together from one prompt to compare agents share this id. */
+  compareGroup: z.string().nullable(),
   agentSessionId: z.string().nullable(),
   workItemRef: z.string().nullable(),
   createdAt: z.string(),

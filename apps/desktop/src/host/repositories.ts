@@ -71,6 +71,7 @@ export class SessionRepo {
     sandboxState: String(r.sandbox_state) as Session['sandboxState'],
     containment: String(r.containment ?? 'none') as Session['containment'],
     inPlace: Number(r.in_place ?? 0) === 1,
+    compareGroup: str(r.compare_group),
     agentSessionId: str(r.agent_session_id),
     workItemRef: str(r.work_item_ref),
     createdAt: String(r.created_at),
@@ -80,10 +81,10 @@ export class SessionRepo {
   insert(s: Session): void {
     this.db.run(
       `INSERT INTO sessions (id, workspace_id, agent_id, title, state, base_commit, branch, worktree_path, permission_profile,
-        sandbox_state, containment, in_place, agent_session_id, work_item_ref, created_at, ended_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sandbox_state, containment, in_place, compare_group, agent_session_id, work_item_ref, created_at, ended_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       s.id, s.workspaceId, s.agentId, s.title, s.state, s.baseCommit, s.branch, s.worktreePath, s.permissionProfile,
-      s.sandboxState, s.containment, s.inPlace ? 1 : 0, s.agentSessionId, s.workItemRef, s.createdAt, s.endedAt,
+      s.sandboxState, s.containment, s.inPlace ? 1 : 0, s.compareGroup, s.agentSessionId, s.workItemRef, s.createdAt, s.endedAt,
     );
   }
 
@@ -107,8 +108,9 @@ export class SessionRepo {
     return this.db.all<R>(`SELECT * FROM sessions WHERE state IN (${marks}) ORDER BY created_at ASC`, ...states).map(this.map);
   }
 
-  update(id: string, patch: Partial<Pick<Session, 'state' | 'agentSessionId' | 'endedAt' | 'baseCommit' | 'branch' | 'worktreePath' | 'sandboxState'>>): Session {
+  update(id: string, patch: Partial<Pick<Session, 'state' | 'agentId' | 'agentSessionId' | 'endedAt' | 'baseCommit' | 'branch' | 'worktreePath' | 'sandboxState'>>): Session {
     const cols: Record<string, string> = {
+      agentId: 'agent_id',
       state: 'state',
       agentSessionId: 'agent_session_id',
       endedAt: 'ended_at',
