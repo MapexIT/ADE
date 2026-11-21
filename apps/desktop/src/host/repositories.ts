@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   SessionEvent,
   type AuditEntry,
+  type HistoryEntry,
   type NewSessionEvent,
   type PermissionDecision,
   type PermissionOption,
@@ -456,6 +457,60 @@ export class WorkflowRunRepo {
   }
 }
 
+/** SM-11: commands typed in terminals, searched together with runs and the commands agents ran. */
+export class CommandHistoryRepo {
+  constructor(private readonly db: Database) {}
+
+  record(e: { workspaceId: string | null; sessionId: string | null; command: string; cwd: string | null; exitCode: number | null }): void {
+    this.db.run(
+      'INSERT INTO command_history (id, workspace_id, session_id, command, cwd, exit_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      randomUUID(), e.workspaceId, e.sessionId, e.command, e.cwd, e.exitCode, now(),
+    );
+  }
+
+  search(query: string, workspaceId?: string): HistoryEntry[] {
+    const like = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const ws = workspaceId ? ' AND workspace_id = ?' : '';
+    const args = workspaceId ? [like, workspaceId] : [like];
+    const typed = this.db
+      .all<R>(`SELECT * FROM command_history WHERE command LIKE ? ESCAPE '\\'${ws} ORDER BY created_at DESC LIMIT 200`, ...args)
+      .map((r): HistoryEntry => ({ command: String(r.command), cwd: str(r.cwd), source: 'terminal', sessionId: str(r.session_id), exitCode: r.exit_code === null ? null : Number(r.exit_code), at: String(r.created_at) }));
+    // Runs store an argument array and tool calls JSON, so those two are filtered after reading the latest rows.
+    const runs = this.db
+      .all<R>(`SELECT * FROM runs${workspaceId ? ' WHERE workspace_id = ?' : ''} ORDER BY started_at DESC LIMIT 500`, ...(workspaceId ? [workspaceId] : []))
+      .map((r): HistoryEntry => ({
+        command: (JSON.parse(String(r.command_json)) as string[]).join(' '),
+        cwd: str(r.worktree_path),
+        source: 'run',
+        sessionId: str(r.session_id),
+        exitCode: r.exit_code === null ? null : Number(r.exit_code),
+        at: String(r.started_at),
+      }));
+    // Commands agents ran show up as execute tool calls in the session events.
+    const agentRows = this.db.all<R>(
+      `SELECT e.session_id, e.ts, e.payload_json FROM events e JOIN sessions s ON s.id = e.session_id
+       WHERE e.type = 'tool.call' AND e.payload_json LIKE '%"kind":"execute"%'${workspaceId ? ' AND s.workspace_id = ?' : ''}
+       ORDER BY e.ts DESC LIMIT 500`,
+      ...(workspaceId ? [workspaceId] : []),
+    );
+    const agent = agentRows.map((r): HistoryEntry => {
+      const p = JSON.parse(String(r.payload_json)) as { title?: string };
+      return { command: String(p.title ?? '').replace(/^Run /, ''), cwd: null, source: 'agent', sessionId: str(r.session_id), exitCode: null, at: String(r.ts) };
+    });
+    const seen = new Set<string>();
+    return [...typed, ...runs, ...agent]
+      .filter((e) => e.command.toLowerCase().includes(query.toLowerCase()))
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .filter((e) => {
+        const key = `${e.source}:${e.command}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 200);
+  }
+}
+
 export class Repositories {
   readonly workspaces: WorkspaceRepo;
   readonly sessions: SessionRepo;
@@ -467,6 +522,7 @@ export class Repositories {
   readonly audit: AuditRepo;
   readonly runs: RunRepo;
   readonly workflowRuns: WorkflowRunRepo;
+  readonly history: CommandHistoryRepo;
 
   constructor(readonly db: Database) {
     this.workspaces = new WorkspaceRepo(db);
@@ -477,6 +533,7 @@ export class Repositories {
     this.queue = new QueueRepo(db);
     this.settings = new SettingsRepo(db);
     this.audit = new AuditRepo(db);
+    this.history = new CommandHistoryRepo(db);
     this.runs = new RunRepo(db);
     this.workflowRuns = new WorkflowRunRepo(db);
   }

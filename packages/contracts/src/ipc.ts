@@ -165,6 +165,36 @@ export const Board = z.object({
 });
 export type Board = z.infer<typeof Board>;
 
+/** SM-11: one command from a terminal, a run or an agent. */
+export const HistoryEntry = z.object({
+  command: z.string(),
+  cwd: z.string().nullable(),
+  source: z.enum(['terminal', 'run', 'agent']),
+  sessionId: z.string().nullable(),
+  exitCode: z.number().int().nullable(),
+  at: z.string(),
+});
+export type HistoryEntry = z.infer<typeof HistoryEntry>;
+
+/** SM-13: the terminals of a workspace with their scrollback, restored on request. */
+export const TerminalLayout = z.object({
+  terminals: z
+    .array(
+      z.object({
+        kind: z.enum(['smart', 'plain']),
+        shell: z.string().max(40).nullable(),
+        cwd: AbsPath,
+        sessionId: z.string().nullable(),
+        title: z.string().max(200),
+        scrollback: z.string().max(200_000),
+      }),
+    )
+    .max(12),
+  activeIndex: z.number().int().min(-1),
+  savedAt: z.string(),
+});
+export type TerminalLayout = z.infer<typeof TerminalLayout>;
+
 /** TM-07: a named command for this workspace's terminals. */
 export const SavedCommand = z.object({
   id: Id,
@@ -374,6 +404,19 @@ export const hostApi = defineApi({
   /** CO-10: personal MCP servers (YAML, the same shape as `mcpServers` in .ade/workspace.yaml) for every session. */
   'mcp.personal': method(z.object({}), z.object({ yaml: z.string() })),
   'mcp.savePersonal': method(z.object({ yaml: z.string().max(20_000) }), Ok),
+  'history.record': method(
+    z.object({ workspaceId: Id.nullable(), sessionId: Id.nullable(), command: z.string().min(1).max(10_000), cwd: z.string().max(4096).nullable(), exitCode: z.number().int().nullable() }),
+    Ok,
+  ),
+  'history.search': method(z.object({ workspaceId: Id.optional(), query: z.string().max(500) }), z.array(HistoryEntry)),
+  /** SM-10: an agent drafts one command for a question, read-only; it is never run without the user. */
+  'terminal.draftCommand': method(
+    z.object({ agentId: AgentId, question: z.string().trim().min(1).max(2000), cwd: AbsPath, shell: z.string().max(40) }),
+    z.object({ command: z.string().nullable(), reply: z.string() }),
+  ),
+  'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
+  'layout.get': method(z.object({ workspaceId: Id }), TerminalLayout.nullable()),
+  'layout.save': method(z.object({ workspaceId: Id, layout: TerminalLayout }), Ok),
   'checks.settings': method(z.object({ workspaceId: Id }), CheckSettings),
   'checks.saveSettings': method(z.object({ workspaceId: Id, settings: CheckSettings }), Ok),
   'checks.run': method(z.object({ sessionId: Id }), z.array(CheckResult)),

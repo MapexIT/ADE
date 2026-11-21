@@ -56,12 +56,24 @@ export function subscribeData(id: string, listener: (data: string) => void): () 
 
 export const scrollback = (id: string) => buffers.get(id) ?? '';
 
+/** SM-13: puts restored scrollback in front of whatever the new terminal printed so far. */
+export function seedScrollback(id: string, text: string) {
+  if (text) buffers.set(id, `${text}${buffers.get(id) ?? ''}`.slice(-MAX_BUFFER));
+}
+
 export function onRunFinished(listener: (r: { runId: string; exitCode: number | null; output: string }) => void) {
   runListeners.add(listener);
   return () => {
     runListeners.delete(listener);
   };
 }
+
+/** SM-11: told about every finished command block (set by the app, which records it in the history). */
+let blockFinished: ((terminal: TerminalInfo, block: CommandBlock) => void) | null = null;
+export function onBlockFinished(listener: (terminal: TerminalInfo, block: CommandBlock) => void) {
+  blockFinished = listener;
+}
+const finished = new Set<string>();
 
 let wired = false;
 /** Subscribes to the pty process streams once. Safe across reconnects (the bridge re-subscribes). */
@@ -74,6 +86,11 @@ export function wireTerminals() {
     for (const l of dataListeners.get(id) ?? []) l(data);
   });
   pty.on('pty.block', ({ id, block }) => {
+    const term = useTerminals.getState().terminals[id];
+    if (block.endedAt !== null && block.command.trim() && !finished.has(block.id) && term) {
+      finished.add(block.id);
+      blockFinished?.(term, block);
+    }
     useTerminals.setState((s) => {
       const list = s.blocks[id] ?? [];
       const idx = list.findIndex((b) => b.id === block.id);

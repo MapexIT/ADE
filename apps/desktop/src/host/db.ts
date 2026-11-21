@@ -186,6 +186,19 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE sessions ADD COLUMN compare_group TEXT;
   `,
+  // M7-T05: terminal command history (SM-11).
+  `
+  CREATE TABLE command_history (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT,
+    session_id TEXT,
+    command TEXT NOT NULL,
+    cwd TEXT,
+    exit_code INTEGER,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX command_history_created ON command_history(created_at);
+  `,
 ];
 
 export function migrate(db: Database): number {

@@ -5,6 +5,8 @@ import { host, main, pty } from '../../lib/bridge.ts';
 import { attachmentText, clock, duration, joinPath } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
+import { runInTerminal, sendChecked } from '../../lib/guards.ts';
+import { InlineViewer } from './InlineViewer.tsx';
 
 const LINK = /(https?:\/\/[^\s'"<>]+)|((?:[A-Za-z]:)?[\w./\\-]+\.[A-Za-z0-9]{1,8}):(\d+)(?::(\d+))?/g;
 
@@ -60,13 +62,15 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
 
   const fixWithAgent = async (b: CommandBlock) => {
     if (!sessionId) return toast('Open this terminal in a session worktree to send it to an agent.', 'danger');
-    const ok = await attempt(() =>
-      host.call('sessions.prompt', {
-        sessionId,
-        content: [{ type: 'text', text: `This command failed with exit code ${b.exitCode}. Find the cause and fix it.` }, attachmentText(`Command: ${b.command}`, blockAsText(b))],
-      }),
-    );
-    if (ok) toast('Sent to the agent.');
+    sendChecked(blockAsText(b), async () => {
+      const ok = await attempt(() =>
+        host.call('sessions.prompt', {
+          sessionId,
+          content: [{ type: 'text', text: `This command failed with exit code ${b.exitCode}. Find the cause and fix it.` }, attachmentText(`Command: ${b.command}`, blockAsText(b))],
+        }),
+      );
+      if (ok) toast('Sent to the agent.');
+    });
   };
 
   return (
@@ -121,6 +125,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   <Linkified text={b.output.trimEnd()} cwd={b.cwd ?? terminal?.cwd ?? null} sessionId={sessionId} />
                 </pre>
               ) : null}
+              {!isCollapsed && done ? <InlineViewer block={b} cwd={b.cwd ?? terminal?.cwd ?? null} /> : null}
               {done ? (
                 <div className="flex flex-wrap gap-2 font-sans text-[13px]">
                   {failed ? (
@@ -145,10 +150,10 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                       Run a workflow
                     </Button>
                   ) : null}
-                  <Button size="dense" onClick={() => (sessionId ? (attach(sessionId, attachmentText(`Command: ${b.command}`, blockAsText(b))), toast('Attached to the next prompt.')) : toast('This terminal is not linked to a session.', 'danger'))}>
+                  <Button size="dense" onClick={() => (sessionId ? sendChecked(blockAsText(b), () => (attach(sessionId, attachmentText(`Command: ${b.command}`, blockAsText(b))), toast('Attached to the next prompt.'))) : toast('This terminal is not linked to a session.', 'danger'))}>
                     Send to agent
                   </Button>
-                  <Button size="dense" onClick={() => void pty.call('pty.write', { id: terminalId, data: `${b.command}\r` })}>
+                  <Button size="dense" onClick={() => runInTerminal(terminalId, b.command)}>
                     Re-run
                   </Button>
                   <Button size="dense" onClick={() => void navigator.clipboard.writeText(blockAsText(b)).then(() => toast('Copied.'))}>

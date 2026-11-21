@@ -8,6 +8,7 @@ import { agentLabel, attachmentText, elapsed, joinPath, PROFILE_LABELS, SANDBOX_
 import { attempt, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { agentUiCommand } from '../../lib/agent-ui.ts';
 import { useTerminals } from '../../lib/terminals.ts';
+import { sendChecked } from '../../lib/guards.ts';
 import { FilePicker } from '../FilePicker.tsx';
 import { QueuedMessages, TimelineRow } from './TimelineItems.tsx';
 
@@ -196,13 +197,16 @@ export function Composer({ session }: { session: Session }) {
   const send = async (mode: 'send' | 'interrupt') => {
     const content: PromptBlock[] = textPrompt(text, attachments);
     if (!content.length) return;
-    const ok = await attempt(() =>
-      mode === 'interrupt' ? host.call('sessions.interrupt', { sessionId: session.id, content }) : host.call('sessions.prompt', { sessionId: session.id, content }),
-    );
-    if (ok) {
-      setText('');
-      takeAttachments(session.id);
-    }
+    const all = content.map((b) => ('text' in b ? b.text : '')).join('\n');
+    sendChecked(all, async () => {
+      const ok = await attempt(() =>
+        mode === 'interrupt' ? host.call('sessions.interrupt', { sessionId: session.id, content }) : host.call('sessions.prompt', { sessionId: session.id, content }),
+      );
+      if (ok) {
+        setText('');
+        takeAttachments(session.id);
+      }
+    });
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {

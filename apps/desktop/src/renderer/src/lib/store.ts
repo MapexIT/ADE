@@ -2,8 +2,20 @@ import type { AgentStatus, NeedsYouItem, PromptBlock, Session, SessionEvent, Tur
 import { applyEvent, emptyView, projectSession, type SessionView } from '@ade/session-core';
 import { create } from 'zustand';
 import { host } from './bridge.ts';
+import { extractShellCommands } from './terminal-intel.ts';
+import { AGENT_LABELS } from '@ade/contracts';
 
 export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review';
+
+/** SM-09, SM-10: a command proposed by an agent, waiting for the user to run or dismiss it. */
+export interface Suggestion {
+  id: string;
+  /** Shown on this terminal (a drafted command) or on every terminal of this session (an agent's reply). */
+  terminalId: string | null;
+  sessionId: string | null;
+  command: string;
+  from: string;
+}
 
 export interface ConfirmSpec {
   title: string;
@@ -54,6 +66,7 @@ interface State {
   attachments: Record<string, PromptBlock[]>;
   /** `rev` changes when the open file should be reloaded (follow mode after the agent edited it). */
   editor: { path: string; sessionId: string | null; rev?: number } | null;
+  suggestions: Suggestion[];
   /** PL-03: the compare run shown side by side, by its group id. */
   compareGroup: string | null;
   /** SR-07: the session being handed to another agent. */
@@ -92,6 +105,18 @@ interface Actions {
 }
 
 let toastId = 1;
+
+/** SM-09: shell blocks in an agent's reply become pending suggestions on that session's terminals. */
+function suggestFrom(sessionId: string, text: string) {
+  const commands = extractShellCommands(text);
+  if (!commands.length) return;
+  const s = useStore.getState();
+  const from = AGENT_LABELS[s.sessions[sessionId]?.agentId ?? 'fake'];
+  const fresh = commands
+    .filter((c) => !s.suggestions.some((x) => x.sessionId === sessionId && x.command === c))
+    .map((command) => ({ id: crypto.randomUUID(), terminalId: null, sessionId, command, from }));
+  if (fresh.length) useStore.setState({ suggestions: [...s.suggestions, ...fresh].slice(-20) });
+}
 
 /** WA-06: tool calls being followed, by id, so their completion reloads the file. */
 const followed = new Map<string, string>();
@@ -132,6 +157,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   editorDirty: false,
   compareGroup: null,
   handOffSessionId: null,
+  suggestions: [],
   newSession: null,
   paletteOpen: false,
   inboxOpen: false,
@@ -196,6 +222,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     if (!view && !get().sessions[e.sessionId]) return;
     set((s) => ({ views: { ...s.views, [e.sessionId]: applyEvent(s.views[e.sessionId] ?? emptyView(), e) } }));
     followAgent(e);
+    if (e.type === 'agent.message') suggestFrom(e.sessionId, e.text);
     // Turn boundaries change the turn list and the queue; refresh them from the host.
     if (e.type === 'turn.started' || e.type === 'turn.ended' || e.type === 'user.message') {
       void host.call('sessions.get', { sessionId: e.sessionId }).then((d) =>
