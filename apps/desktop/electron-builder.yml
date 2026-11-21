@@ -36,6 +36,8 @@ nsis:
   artifactName: ADE-Setup-${version}.${ext}
 linux:
   target: [AppImage, deb]
+  # The default comes from the package name (@ade/desktop), which electron-builder rejects as a file name.
+  executableName: ade
   category: Development
   icon: resources/icon.png
   maintainer: MapexIT
