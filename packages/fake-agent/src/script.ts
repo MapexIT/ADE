@@ -18,6 +18,7 @@
  *   mode <id>                       switch to a mode
  *   whichmodel                      say which model the session uses
  *   run <command> [args...]         run a command through the client's terminal (`terminal/create`) and report it
+ *   meta                            say the `_meta` the client sent on session/new or session/load
  */
 export type Step =
   | { op: 'say'; text: string }
@@ -40,7 +41,9 @@ export type Step =
   | { op: 'mode'; id: string }
   | { op: 'whichmodel' }
   /** TM-04: asks the client to run a command and waits for it to exit. */
-  | { op: 'run'; command: string; args: string[] };
+  | { op: 'run'; command: string; args: string[] }
+  /** CN-04: replies with the session `_meta` as JSON. */
+  | { op: 'meta' };
 
 export const SCENARIOS: Record<string, string> = {
   message: 'say Hello from the fake agent.',
@@ -118,6 +121,9 @@ export function parseScript(text: string): Step[] {
         break;
       case 'mcp':
         steps.push({ op: 'mcp' });
+        break;
+      case 'meta':
+        steps.push({ op: 'meta' });
         break;
       case 'usage':
         steps.push({ op: 'usage' });

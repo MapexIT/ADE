@@ -58,6 +58,8 @@ export interface StartOptions {
   onProtocolMessage?: (direction: 'in' | 'out', body: string) => void;
   /** CN-07: runs the agent, and the commands it asks ADE to run, inside a sandbox or WSL. */
   wrapper?: LaunchWrapper;
+  /** CN-04: `_meta` for `session/new` and `session/load`, set by the runtime (the agent's own sandbox settings). */
+  sessionMeta?: Record<string, unknown>;
 }
 
 export interface PermissionRequestInfo {

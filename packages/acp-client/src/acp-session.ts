@@ -317,16 +317,17 @@ export class AcpAgentSession implements AgentSession {
     const mcpServers = (this.opts.mcpServers ?? [])
       .filter((s) => ('url' in s ? this.capabilities.mcpHttp : !this.opts.wrapper?.foreign))
       .map(toMcp);
+    const meta = this.opts.sessionMeta ? { _meta: this.opts.sessionMeta } : {};
     let modes: SessionModeState | null | undefined;
     let configOptions: SessionConfigOption[] | null | undefined;
     try {
       if (this.opts.resumeSessionId && this.capabilities.loadSession) {
-        const res = await agent.request('session/load', { sessionId: this.opts.resumeSessionId, cwd: this.agentCwd, mcpServers });
+        const res = await agent.request('session/load', { sessionId: this.opts.resumeSessionId, cwd: this.agentCwd, mcpServers, ...meta });
         this.agentSessionId = this.opts.resumeSessionId;
         modes = res?.modes;
         configOptions = res?.configOptions;
       } else {
-        const res = await agent.request('session/new', { cwd: this.agentCwd, mcpServers });
+        const res = await agent.request('session/new', { cwd: this.agentCwd, mcpServers, ...meta });
         this.agentSessionId = res.sessionId;
         modes = res.modes;
         configOptions = res.configOptions;
