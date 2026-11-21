@@ -88,6 +88,20 @@ export const SessionEvent = z.discriminatedUnion('type', [
     content: z.array(ToolContent).nullable(),
   }),
   z.object({ ...base, type: z.literal('plan.updated'), entries: z.array(PlanEntry) }),
+  /** TM-04: a command the agent asked ADE to run (ACP `terminal/create`). Its output streams live. */
+  z.object({ ...base, type: z.literal('command.started'), terminalId: z.string(), command: z.string(), cwd: z.string() }),
+  z.object({ ...base, type: z.literal('command.output'), terminalId: z.string(), chunk: z.string() }),
+  /** The final output tail (secrets redacted); `killed` when someone stopped it before it finished. */
+  z.object({
+    ...base,
+    type: z.literal('command.exited'),
+    terminalId: z.string(),
+    exitCode: z.number().int().nullable(),
+    signal: z.string().nullable(),
+    output: z.string(),
+    truncated: z.boolean(),
+    killed: z.boolean(),
+  }),
   /** HI-08: the agent took a screenshot of the preview; `file` is in ADE's screenshots folder. */
   z.object({ ...base, type: z.literal('preview.screenshot'), url: z.string(), file: z.string() }),
   z.object({
@@ -138,4 +152,4 @@ export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omi
 export type NewSessionEvent = DistributiveOmit<SessionEvent, 'seq' | 'ts'>;
 
 /** Events that are streamed live but not persisted (they are coalesced into a message event). */
-export const TRANSIENT_EVENTS: ReadonlySet<SessionEventType> = new Set(['agent.message.chunk', 'agent.thought.chunk']);
+export const TRANSIENT_EVENTS: ReadonlySet<SessionEventType> = new Set(['agent.message.chunk', 'agent.thought.chunk', 'command.output']);

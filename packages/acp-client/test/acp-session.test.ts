@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentEnv, createRuntimes, redactSecrets, type AdapterLocator, type AgentEvent, type AgentSession } from '../src/index.ts';
 
 const locator: AdapterLocator = {
@@ -116,6 +116,44 @@ describe('AcpAgentSession with the fake agent', () => {
     await session.prompt(text('env ADE_TEST_SECRET_VAR'));
     const said = events.map((e) => (e.type === 'agent.message.chunk' ? e.text : '')).join('');
     expect(said).toBe('ADE_TEST_SECRET_VAR is absent.');
+  });
+
+  it('reports commands the agent runs through terminal/create as live command events (TM-04)', async () => {
+    const script = join(dir, 'count.mjs');
+    writeFileSync(script, "for (const n of [1, 2, 3]) console.log('line ' + n);\nconsole.log('ghp_' + 'a'.repeat(36));\nprocess.exit(3);\n");
+    const { session, events } = await start();
+    await expect(session.prompt(text(`run "${process.execPath}" "${script}"`))).resolves.toBe('end_turn');
+    const started = events.find((e) => e.type === 'command.started');
+    expect(started?.type === 'command.started' && started.command).toContain('count.mjs');
+    const live = events.map((e) => (e.type === 'command.output' ? e.chunk : '')).join('');
+    expect(live).toContain('line 3');
+    const exited = events.find((e) => e.type === 'command.exited');
+    expect(exited).toMatchObject({ type: 'command.exited', exitCode: 3, killed: false });
+    expect(exited?.type === 'command.exited' && exited.output).toContain('line 1');
+    // Secrets never reach the timeline.
+    expect(exited?.type === 'command.exited' && exited.output).not.toContain('ghp_aaaa');
+    const tool = events.find((e) => e.type === 'tool.update' && e.content?.some((c) => c.type === 'terminal'));
+    expect(tool).toBeTruthy();
+  });
+
+  it('stops a running agent command with its process tree (TM-04)', async () => {
+    const script = join(dir, 'forever.mjs');
+    writeFileSync(script, "console.log('started');\nsetInterval(() => {}, 1000);\n");
+    const { session, events } = await start();
+    const turn = session.prompt(text(`run "${process.execPath}" "${script}"`));
+    const started = await vi.waitFor(
+      () => {
+        const s = events.find((e) => e.type === 'command.started');
+        if (!s || s.type !== 'command.started') throw new Error('not started');
+        return s;
+      },
+      { timeout: 10_000 },
+    );
+    await expect(session.killCommand(started.terminalId)).resolves.toBe(true);
+    await turn;
+    const exited = events.find((e) => e.type === 'command.exited');
+    expect(exited).toMatchObject({ type: 'command.exited', killed: true });
+    await expect(session.killCommand(started.terminalId)).resolves.toBe(false);
   });
 });
 

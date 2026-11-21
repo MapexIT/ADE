@@ -487,6 +487,10 @@ export class SessionService {
       this.emitTransient(sessionId, e);
       return;
     }
+    if (e.type === 'command.output') {
+      this.emitTransient(sessionId, e);
+      return;
+    }
     // Keep stored order equal to what the user saw: finish buffered text before the next item.
     this.flush(sessionId, live);
     this.append(sessionId, e, live.turn?.id ?? null);
@@ -669,6 +673,15 @@ export class SessionService {
   }
 
   /** Cancels the running turn. The agent answers with `cancelled`, pending requests are cancelled, a checkpoint is taken. */
+  /** TM-04: stops one command the agent runs through ADE, with its process tree. Logged in the audit trail. */
+  async killCommand(sessionId: string, terminalId: string): Promise<boolean> {
+    const live = this.live.get(sessionId);
+    if (!live) return false;
+    const killed = await live.agent.killCommand(terminalId);
+    if (killed) this.audit(this.repos.sessions.require(sessionId), 'command.killed', { terminalId });
+    return killed;
+  }
+
   async cancel(sessionId: string): Promise<void> {
     const live = this.live.get(sessionId);
     if (!live?.turn) return;

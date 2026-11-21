@@ -6,6 +6,22 @@ let seq = 0;
 const ev = (e: DistributiveOmit<NewSessionEvent, 'sessionId'>): SessionEvent =>
   ({ sessionId: 's1', seq: seq++, ts: '2026-01-01T00:00:00Z', ...e }) as SessionEvent;
 
+describe('agent commands (TM-04)', () => {
+  it('grows output live and takes the stored tail when the command exits', () => {
+    seq = 0;
+    let v = applyEvent(emptyView(), ev({ type: 'command.started', terminalId: 'x', command: 'npm test', cwd: '/w' }));
+    // Transient chunks reuse the last stored seq and must still apply.
+    v = applyEvent(v, { sessionId: 's1', seq: 0, ts: '', type: 'command.output', terminalId: 'x', chunk: 'one\n' });
+    v = applyEvent(v, { sessionId: 's1', seq: 0, ts: '', type: 'command.output', terminalId: 'x', chunk: 'two\n' });
+    expect(v.items[0]).toMatchObject({ kind: 'command', running: true, output: 'one\ntwo\n' });
+    v = applyEvent(v, ev({ type: 'command.exited', terminalId: 'x', exitCode: 1, signal: null, output: 'one\ntwo\nfailed\n', truncated: false, killed: false }));
+    expect(v.items[0]).toMatchObject({ running: false, exitCode: 1, output: 'one\ntwo\nfailed\n' });
+    // A late chunk after the exit changes nothing.
+    v = applyEvent(v, { sessionId: 's1', seq: 1, ts: '', type: 'command.output', terminalId: 'x', chunk: 'late' });
+    expect(v.items[0]).toMatchObject({ output: 'one\ntwo\nfailed\n' });
+  });
+});
+
 describe('projectSession', () => {
   it('rebuilds a timeline from stored events', () => {
     seq = 0;

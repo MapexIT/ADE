@@ -56,8 +56,6 @@ export interface StartOptions {
   baseEnv?: NodeJS.ProcessEnv;
   /** Raw protocol messages, for the protocol inspector (WA-05). Credentials are redacted before this is called. */
   onProtocolMessage?: (direction: 'in' | 'out', body: string) => void;
-  /** Commands the agent runs through the client (`terminal/*`), for TM-04. */
-  onTerminalOutput?: (terminalId: string, chunk: string) => void;
   /** CN-07: runs the agent, and the commands it asks ADE to run, inside a sandbox or WSL. */
   wrapper?: LaunchWrapper;
 }
@@ -94,6 +92,8 @@ export interface AgentSession {
   setModel(modelId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
   onPermissionRequest(handler: PermissionHandler): void;
+  /** TM-04: stops a command the agent started through `terminal/create` (its whole process tree). */
+  killCommand(terminalId: string): Promise<boolean>;
   /** Resolves when the agent process exits, with an error when it crashed. */
   readonly exited: Promise<{ code: number | null; error: string | null }>;
   close(): Promise<void>;

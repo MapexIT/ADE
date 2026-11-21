@@ -17,6 +17,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { redactSecrets } from './env.ts';
+import { redactSecrets as redactText } from '@ade/contracts';
 import { mapSessionUpdate, readUsage, toAcpContent, toToolKind, type UsageSnapshot } from './mapping.ts';
 import { killTree, spawnCommand, type Command } from './process.ts';
 import type { AgentEvent, AgentSession, McpServerSpec, PermissionHandler, StartOptions, StopReason } from './types.ts';
@@ -56,7 +57,12 @@ interface LocalTerminal {
   limit: number;
   exit: Promise<{ exitCode: number | null; signal: string | null }>;
   exitStatus: { exitCode: number | null; signal: string | null } | null;
+  killed: boolean;
 }
+
+/** Output kept per command for `terminal/output` when the agent sets no limit, and stored in the timeline. */
+const DEFAULT_OUTPUT_LIMIT = 1_000_000;
+const STORED_OUTPUT_LIMIT = 64_000;
 
 const toMcp = (s: McpServerSpec): McpServer =>
   'url' in s
@@ -218,19 +224,34 @@ export class AcpAgentSession implements AgentSession {
         const spec = this.opts.wrapper ? this.opts.wrapper.wrap(raw, { cwd, env }) : { cmd: raw, cwd, env };
         const child = spawnCommand(spec.cmd, { cwd: spec.cwd, env: spec.env, stdio: ['ignore', 'pipe', 'pipe'] });
         const id = randomUUID();
-        const limit = (params as { outputByteLimit?: number | null }).outputByteLimit ?? 1_000_000;
+        const limit = (params as { outputByteLimit?: number | null }).outputByteLimit ?? DEFAULT_OUTPUT_LIMIT;
         const term: LocalTerminal = {
           child,
           output: '',
           truncated: false,
           limit,
           exitStatus: null,
+          killed: false,
           exit: new Promise((done) => {
             child.once('error', () => done({ exitCode: null, signal: null }));
             child.once('exit', (code, sig) => done({ exitCode: code, signal: sig }));
           }),
         };
-        void term.exit.then((s) => (term.exitStatus = s));
+        // TM-04: the command shows live in the timeline; the stored copy is a redacted tail.
+        this.emit({ type: 'command.started', terminalId: id, command: [params.command, ...(params.args ?? [])].join(' '), cwd });
+        void term.exit.then((s) => {
+          term.exitStatus = s;
+          const tail = term.output.length > STORED_OUTPUT_LIMIT ? term.output.slice(term.output.length - STORED_OUTPUT_LIMIT) : term.output;
+          this.emit({
+            type: 'command.exited',
+            terminalId: id,
+            exitCode: s.exitCode,
+            signal: s.signal,
+            output: redactText(tail),
+            truncated: term.truncated || tail.length < term.output.length,
+            killed: term.killed,
+          });
+        });
         const onData = (d: Buffer) => {
           const chunk = d.toString();
           term.output += chunk;
@@ -238,7 +259,7 @@ export class AcpAgentSession implements AgentSession {
             term.output = term.output.slice(term.output.length - term.limit);
             term.truncated = true;
           }
-          this.opts.onTerminalOutput?.(id, chunk);
+          this.emit({ type: 'command.output', terminalId: id, chunk: redactText(chunk) });
         };
         child.stdout?.on('data', onData);
         child.stderr?.on('data', onData);
@@ -257,7 +278,10 @@ export class AcpAgentSession implements AgentSession {
       })
       .onRequest('terminal/kill', async ({ params }) => {
         const t = this.terminals.get(params.terminalId);
-        if (t?.child.pid) await killTree(t.child.pid);
+        if (t?.child.pid && t.exitStatus === null) {
+          t.killed = true;
+          await killTree(t.child.pid);
+        }
         return {};
       })
       .onRequest('terminal/release', async ({ params }) => {
@@ -326,6 +350,14 @@ export class AcpAgentSession implements AgentSession {
 
   onPermissionRequest(handler: PermissionHandler): void {
     this.permissionHandler = handler;
+  }
+
+  async killCommand(terminalId: string): Promise<boolean> {
+    const t = this.terminals.get(terminalId);
+    if (!t || t.exitStatus !== null || !t.child.pid) return false;
+    t.killed = true;
+    await killTree(t.child.pid);
+    return true;
   }
 
   async prompt(content: PromptBlock[]): Promise<StopReason> {

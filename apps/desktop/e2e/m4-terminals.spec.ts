@@ -43,3 +43,32 @@ test('M4 gate: failed block, Fix with agent starts a turn with the block, a run 
   await expect(page.getByRole('complementary', { name: 'Run history' }).getByText(/Failed · exit 1/)).toBeVisible({ timeout: 30_000 });
   await app.close();
 });
+
+test('TM-04: a command the agent runs shows live in the timeline and can be opened and stopped', async () => {
+  const repo = makeRepo();
+  const { app, page } = await launch(userDataDir());
+  await page.getByRole('button', { name: 'Done' }).click();
+  await stubDirectoryPicker(app, repo);
+  await page.keyboard.press('Control+o');
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
+
+  await page.keyboard.press('Control+n');
+  const script = ["edit serve.mjs console.log('serving on 5173'); setInterval(() => {}, 1000);", `run "${process.execPath}" serve.mjs`, 'say Stopped.'].join('\n');
+  await page.getByLabel('What should the agent do?').fill(script);
+  await page.getByRole('radio', { name: /Fake agent/ }).check();
+  await page.getByRole('button', { name: 'Start session' }).click();
+
+  const card = page.getByRole('region', { name: /^Agent command / });
+  await expect(card).toContainText('serving on 5173', { timeout: 20_000 });
+  await expect(card.getByText('Running', { exact: true })).toBeVisible();
+
+  await card.getByRole('button', { name: 'Open' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('serving on 5173');
+  await dialog.getByRole('button', { name: 'Stop the command' }).click();
+  await expect(dialog).toContainText('Stopped', { timeout: 15_000 });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(card.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.getByText('Turn 1 · finished')).toBeVisible({ timeout: 15_000 });
+  await app.close();
+});
