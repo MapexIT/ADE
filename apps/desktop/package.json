@@ -13,7 +13,8 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "e2e": "playwright test",
-    "dist": "electron-vite build && electron-builder --publish never"
+    "dist": "electron-vite build && electron-builder --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.109.0",

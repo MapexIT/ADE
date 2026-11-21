@@ -1,4 +1,4 @@
-# Installers (PK-01): per-user NSIS on Windows, AppImage and .deb on Linux. macOS (.dmg) follows in v1.
+# Installers (PK-01): per-user NSIS on Windows, AppImage and .deb on Linux. PK-04: a notarised .dmg on macOS.
 appId: dev.mapexit.ade
 productName: ADE
 copyright: Copyright © 2026 MapexIT
@@ -42,6 +42,25 @@ linux:
   artifactName: ADE-${version}-${arch}.${ext}
 deb:
   depends: [git]
+# PK-04: a .dmg for each architecture, and a .zip that electron-updater uses to update in place.
+# Signing uses CSC_LINK and CSC_KEY_PASSWORD (a Developer ID Application certificate). Notarisation runs when
+# APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER are set (electron-builder 26 with @electron/notarize).
+# Never commit any of them.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  icon: resources/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  artifactName: ADE-${version}-${arch}.${ext}
+dmg:
+  artifactName: ADE-${version}-${arch}.${ext}
 # Self-update (PK-03): electron-updater reads this feed. AppImage and NSIS update in place; .deb installs get
 # a "new version available" notice. Point `url` at the release host before the first public build.
 publish:
