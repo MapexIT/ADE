@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentRuntime, AgentSession } from '@ade/acp-client';
+import type { AgentRuntime } from '@ade/acp-client';
 import { AGENT_LABELS, RpcError, type AgentId, type ReviewAssessment } from '@ade/contracts';
 import { changedFiles, diffPatch, git, snapshot } from '@ade/git';
 import { z } from 'zod';
 import type { Repositories } from './repositories.ts';
 import type { SandboxProvider } from './session-service.ts';
+import { askOnce } from './one-shot.ts';
 
 const MAX_DIFF = 60_000;
 const TIMEOUT_MS = 10 * 60_000;
@@ -59,19 +60,8 @@ export class ReviewAssistant {
     const diff = (await diffPatch(s.worktreePath, s.baseCommit, snap)).toString('utf8');
     const tmp = join(this.tmpRoot, `${s.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`);
     await git(['worktree', 'add', '--detach', tmp, snap], { cwd: root });
-    let agent: AgentSession | null = null;
     try {
       const wrapper = s.containment !== 'none' ? ((await this.sandbox()?.wrapperFor({ ...s, worktreePath: tmp }, root)) ?? null) : null;
-      agent = await runtime.start({ cwd: tmp, permissionProfile: 'read-only', baseEnv: this.baseEnv(), ...(wrapper ? { wrapper } : {}) });
-      let reply = '';
-      agent.onEvent((e) => {
-        if (e.type === 'agent.message.chunk') reply += e.text;
-      });
-      // Read-only: refuse everything it asks for.
-      agent.onPermissionRequest(async (request) => {
-        const reject = request.options.find((o) => o.kind === 'reject_once') ?? request.options.find((o) => o.kind === 'reject_always');
-        return reject ? { outcome: 'selected', optionId: reject.optionId } : { outcome: 'cancelled' };
-      });
       const prompt = [
         `You are reviewing a change another coding agent made in this repository. Do not modify any file and do not run commands that change anything.`,
         `Rank every changed file by how risky the change is (bugs, security, data loss, breaking behaviour). Reply with only a JSON array, highest risk first, like:`,
@@ -83,11 +73,7 @@ export class ReviewAssistant {
       ]
         .filter(Boolean)
         .join('\n\n');
-      const live = agent;
-      await Promise.race([
-        live.prompt([{ type: 'text', text: prompt }]),
-        new Promise((_, reject) => setTimeout(() => reject(new RpcError('timeout', 'The review assistant did not finish in time.')), TIMEOUT_MS).unref()),
-      ]);
+      const reply = await askOnce(runtime, { cwd: tmp, prompt, baseEnv: this.baseEnv(), wrapper, timeoutMs: TIMEOUT_MS, timeoutMessage: 'The review assistant did not finish in time.' });
       const assessment: ReviewAssessment = { agentId, ranking: parseRanking(reply) ?? [], raw: reply.trim(), createdAt: new Date().toISOString() };
       this.latest.set(sessionId, assessment);
       this.repos.audit.append({
@@ -99,7 +85,6 @@ export class ReviewAssistant {
       });
       return assessment;
     } finally {
-      await agent?.close().catch(() => undefined);
       await git(['worktree', 'remove', '--force', tmp], { cwd: root }).catch(() => undefined);
     }
   }

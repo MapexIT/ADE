@@ -153,6 +153,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       to CO-10). Tested with Shortcut and `gh` stubbed; not yet run against a real Shortcut workspace or a
       real pull request.
 - [ ] **M7-T05** Smart terminal v1 features (SM-09 to SM-14) and code runner v1 features (CR-05 to CR-11).
+      Smart terminal part done (SM-09 to SM-14); splits are not part of the saved layout.
 - [ ] **M7-T06** Language servers, instruction files, history search, audit export, preview pane (ED-03,
       ED-04, HI-06 to HI-08).
 - [ ] **M7-T07** macOS installer (PK-04).

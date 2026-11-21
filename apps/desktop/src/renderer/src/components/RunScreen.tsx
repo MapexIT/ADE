@@ -7,6 +7,7 @@ import { attempt, currentWorkspace, selectedSession, useStore } from '../lib/sto
 import { onRunFinished, useTerminals } from '../lib/terminals.ts';
 import { Field, inputClass } from './Modal.tsx';
 import { TerminalView } from './terminal/TerminalView.tsx';
+import { sendChecked } from '../lib/guards.ts';
 
 const runAsText = (r: Run) => `$ ${r.command.join(' ')}\n${r.output.trimEnd().slice(-20_000)}\n[exit ${r.exitCode ?? 'unknown'}]`;
 
@@ -131,10 +132,12 @@ export function RunScreen() {
               {r.sessionId ? (
                 <Button
                   size="dense"
-                  onClick={() => {
-                    attach(r.sessionId!, attachmentText(`Run: ${r.command.join(' ')}`, runAsText(r)));
-                    toast('Attached to the next prompt.');
-                  }}
+                  onClick={() =>
+                    sendChecked(runAsText(r), () => {
+                      attach(r.sessionId!, attachmentText(`Run: ${r.command.join(' ')}`, runAsText(r)));
+                      toast('Attached to the next prompt.');
+                    })
+                  }
                 >
                   Send run to agent
                 </Button>

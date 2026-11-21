@@ -2,11 +2,12 @@ import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, ShellKind, TerminalInfo } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { agentLabel, basename } from '../../lib/format.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
 import { SavedCommands } from './SavedCommands.tsx';
+import { AskBar, HistoryDialog, SuggestionsBar, useTerminalLayout } from './TerminalExtras.tsx';
 import { SmartBlocks } from './SmartBlocks.tsx';
 import { TerminalView } from './TerminalView.tsx';
 
@@ -114,6 +115,8 @@ export function TerminalsScreen() {
   const session = useStore(selectedSession);
   const workspace = useStore(currentWorkspace);
   const cwd = session?.worktreePath ?? workspace?.rootPath ?? null;
+  const [history, setHistory] = useState(false);
+  const layout = useTerminalLayout();
 
   const groups = useMemo(() => {
     const map = new Map<string, (TerminalInfo & { exited: boolean })[]>();
@@ -150,6 +153,24 @@ export function TerminalsScreen() {
           </section>
         ))}
         <div className="mt-auto flex flex-col gap-2">
+          {layout.offer ? (
+            <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-dashed border-accent p-2" role="status">
+              <span className="text-[12px]">
+                {layout.offer.terminals.length} terminal(s) from your last session, with their scrollback.
+              </span>
+              <div className="flex gap-2">
+                <Button size="dense" variant="primary" onClick={() => void layout.restore()}>
+                  Restore terminals
+                </Button>
+                <Button size="dense" variant="ghost" onClick={layout.dismiss}>
+                  Not now
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <Button size="dense" variant="ghost" onClick={() => setHistory(true)}>
+            Command history
+          </Button>
           <NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />
         </div>
       </aside>
@@ -166,6 +187,8 @@ export function TerminalsScreen() {
                 Close terminal
               </Button>
             </div>
+            <SuggestionsBar terminal={current} />
+            <AskBar terminal={current} />
             <div className="min-h-0 flex-1">
               <TerminalBody key={current.id} terminal={current} />
             </div>
@@ -174,6 +197,7 @@ export function TerminalsScreen() {
           <EmptyState title="No terminal open" body="Smart terminals turn every command into a block with its exit code. Plain terminals are just a shell." action={<NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />} />
         )}
       </main>
+      <HistoryDialog open={history} onClose={() => setHistory(false)} terminalId={current && !current.exited ? current.id : null} />
     </div>
   );
 }

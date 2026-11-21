@@ -15,7 +15,13 @@ import { WorkItemsScreen } from './components/WorkItemsScreen.tsx';
 import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
 import { useStore, type Tab } from './lib/store.ts';
-import { wireTerminals } from './lib/terminals.ts';
+import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
+
+// SM-11: every finished terminal command goes into the searchable history.
+onBlockFinished((terminal, block) => {
+  const workspaceId = useStore.getState().workspaceId;
+  void host.call('history.record', { workspaceId, sessionId: terminal.sessionId, command: block.command.slice(0, 10_000), cwd: block.cwd ?? terminal.cwd, exitCode: block.exitCode }).catch(() => undefined);
+});
 
 const TAB_ORDER: Tab[] = ['sessions', 'work-items', 'workflows', 'terminals', 'run', 'review'];
 

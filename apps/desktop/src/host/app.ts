@@ -22,6 +22,9 @@ import { findOnPath } from '@ade/acp-client';
 import { parse as parseYaml } from 'yaml';
 import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
+import { askOnce } from './one-shot.ts';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { TerminalLayout } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -309,6 +312,49 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'checks.run': ({ sessionId }) => checks.run(sessionId),
+    'history.record': ({ workspaceId, sessionId, command, cwd, exitCode }) => {
+      repos.history.record({ workspaceId, sessionId, command, cwd, exitCode });
+      return { ok: true };
+    },
+    'history.search': ({ workspaceId, query }) => repos.history.search(query, workspaceId),
+    'terminal.draftCommand': async ({ agentId, question, cwd, shell }) => {
+      const where = files.assertAllowed(cwd);
+      const runtime = runtimes.get(agentId);
+      if (!runtime) throw new RpcError('agent_unavailable', `Agent ${agentId} is not available`);
+      // A session worktree keeps its sandbox; the drafting agent runs read-only either way.
+      const session = repos.workspaces.list().flatMap((w) => repos.sessions.list(w.id)).find((s) => s.worktreePath === cwd && s.containment !== 'none');
+      const ws = session ? repos.workspaces.get(session.workspaceId) : null;
+      const wrapper = session && ws ? await sessions.sandbox?.wrapperFor(session, ws.rootPath) : null;
+      const lang = /pwsh|powershell/i.test(shell) ? 'powershell' : 'bash';
+      const reply = await askOnce(runtime, {
+        cwd: where,
+        prompt: [
+          `Reply with exactly one ${shell} command for ${process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'} that does what the request below asks, in a \`\`\`${lang} code block, then one sentence on what it does. Do not run it and do not change any file.`,
+          question,
+        ].join('\n\n'),
+        baseEnv: { ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState },
+        wrapper: wrapper ?? null,
+        timeoutMs: 3 * 60_000,
+        timeoutMessage: 'The agent did not draft a command in time.',
+      });
+      return { command: draftedCommand(reply), reply: reply.trim() };
+    },
+    'files.readImage': ({ path }) => files.readImage(path),
+    'layout.get': async ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      try {
+        const parsed = TerminalLayout.safeParse(JSON.parse(await readFile(join(config.userData, 'layouts', `${workspaceId}.json`), 'utf8')));
+        return parsed.success ? parsed.data : null;
+      } catch {
+        return null;
+      }
+    },
+    'layout.save': async ({ workspaceId, layout }) => {
+      workspaceRoot(workspaceId);
+      await mkdir(join(config.userData, 'layouts'), { recursive: true });
+      await writeFile(join(config.userData, 'layouts', `${workspaceId}.json`), JSON.stringify(layout));
+      return { ok: true };
+    },
     'checks.results': ({ sessionId }) => checks.last(sessionId),
     'commands.list': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
@@ -452,6 +498,13 @@ export function createHost(config: HostConfig) {
 }
 
 export type Host = ReturnType<typeof createHost>;
+
+/** SM-10: the command in a drafted reply: the first fenced block, else the first non-empty line. Pure. */
+export function draftedCommand(reply: string): string | null {
+  const block = /```[\w-]*[^\n]*\n([\s\S]*?)```/.exec(reply)?.[1]?.trim();
+  if (block) return block.replace(/^\s*(?:PS [^>]*>|PS>|\$)\s?/gm, '').trim();
+  return reply.split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, '')).find(Boolean) ?? null;
+}
 
 /** RV-13: strips code fences and quotes an agent may wrap the message in. Pure. */
 export function cleanCommitMessage(reply: string): string {

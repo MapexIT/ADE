@@ -2,8 +2,9 @@ import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Button, cx } from '@ade/ui';
 import type { SavedCommand } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
-import { host, pty } from '../../lib/bridge.ts';
+import { host } from '../../lib/bridge.ts';
 import { attempt, useStore } from '../../lib/store.ts';
+import { runInTerminal } from '../../lib/guards.ts';
 import { inputClass, Modal } from '../Modal.tsx';
 
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 36);
@@ -21,7 +22,7 @@ export function SavedCommands({ terminalId, disabled }: { terminalId: string; di
   useEffect(load, [load]);
 
   if (!workspaceId) return null;
-  const run = (c: SavedCommand) => void attempt(() => pty.call('pty.write', { id: terminalId, data: `${c.command}\r` }));
+  const run = (c: SavedCommand) => runInTerminal(terminalId, c.command);
   const save = async () => {
     if (!editing) return;
     const valid = editing.filter((c) => c.name.trim() && c.command.trim());

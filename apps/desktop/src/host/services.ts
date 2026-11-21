@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { AcpRuntime } from '@ade/acp-client';
 import { AGENT_LABELS, RpcError, type AgentId, type AgentStatus, type FileContent, type FileEntry, type RunConfig, type Workspace } from '@ade/contracts';
 import { git, isGitRepo, repoRoot } from '@ade/git';
@@ -68,7 +68,7 @@ export class FileService {
   ) {}
 
   /** Allowed roots: workspace checkouts and session worktrees. Nothing outside them is readable or writable. */
-  private assertAllowed(path: string) {
+  assertAllowed(path: string) {
     const full = resolve(path);
     // Compare real paths so Windows short (8.3) names and symlinks cannot slip past the check.
     const real = (p: string): string => {
@@ -119,6 +119,17 @@ export class FileService {
       ...[...dirs].sort().map((d) => ({ path: d, name: d.split('/').pop()!, isDir: true })),
       ...files.sort().map((f) => ({ path: f, name: f.split('/').pop()!, isDir: false })),
     ];
+  }
+
+  /** SM-12: an image inside a workspace or worktree, as a data URL (the renderer's CSP allows data: images). */
+  async readImage(path: string): Promise<{ dataUrl: string }> {
+    const full = this.assertAllowed(path);
+    const ext = extname(full).slice(1).toLowerCase();
+    const mime = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' } as Record<string, string>)[ext];
+    if (!mime) throw new RpcError('not_image', 'That file is not an image ADE shows.');
+    const info = await stat(full);
+    if (info.size > 5 * 1024 * 1024) throw new RpcError('too_large', 'The image is larger than 5 MB.');
+    return { dataUrl: `data:${mime};base64,${(await readFile(full)).toString('base64')}` };
   }
 
   async read(path: string): Promise<FileContent> {

@@ -68,7 +68,8 @@ export function parseScript(text: string): Step[] {
         break;
       }
       case 'say':
-        steps.push({ op: 'say', text: arg });
+        // A literal backslash-n in the text becomes a line break, so scripts can send multi-line replies.
+        steps.push({ op: 'say', text: arg.replace(/\\n/g, '\n') });
         break;
       case 'think':
         steps.push({ op: 'think', text: arg });

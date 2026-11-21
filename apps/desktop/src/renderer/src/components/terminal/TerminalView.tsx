@@ -5,6 +5,8 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useEffect, useRef, useState } from 'react';
 import { pty } from '../../lib/bridge.ts';
+import { useStore } from '../../lib/store.ts';
+import { destructiveReason, isMultiLinePaste } from '../../lib/terminal-intel.ts';
 import { scrollback, subscribeData } from '../../lib/terminals.ts';
 
 const THEME = {
@@ -63,13 +65,52 @@ export function TerminalView({ id, autoFocus }: { id: string; autoFocus?: boolea
     if (replay) term.write(replay);
     const off = subscribeData(id, (d) => term.write(d));
     const input = term.onData((data) => void pty.call('pty.write', { id, data }));
+    let confirmed = false;
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         setSearch('');
         return false;
       }
+      // SM-14: Enter on a destructive command line asks first. The line is read from the terminal buffer.
+      if (e.type === 'keydown' && e.key === 'Enter' && !e.shiftKey && !confirmed) {
+        const buf = term.buffer.active;
+        const line = buf.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? '';
+        const why = destructiveReason(line);
+        if (why) {
+          useStore.getState().ask({
+            title: 'Run a destructive command?',
+            body: `This command ${why}:\n${line.trim().slice(0, 300)}`,
+            confirmLabel: 'Run it',
+            danger: true,
+            onConfirm: () => {
+              confirmed = true;
+              void pty.call('pty.write', { id, data: '\r' });
+              setTimeout(() => (confirmed = false), 0);
+              term.focus();
+            },
+          });
+          return false;
+        }
+      }
       return true;
     });
+    // SM-14: a multi-line paste asks before it runs several commands at once.
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text') ?? '';
+      if (!isMultiLinePaste(text)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      useStore.getState().ask({
+        title: 'Paste several lines?',
+        body: `Pasting ${text.trim().split(/\r?\n/).length} lines may run each one as a command:\n${text.slice(0, 400)}`,
+        confirmLabel: 'Paste',
+        onConfirm: () => {
+          term.paste(text);
+          term.focus();
+        },
+      });
+    };
+    el.addEventListener('paste', onPaste, true);
     const resize = () => {
       try {
         fit.fit();
@@ -83,6 +124,7 @@ export function TerminalView({ id, autoFocus }: { id: string; autoFocus?: boolea
     resize();
     if (autoFocus) term.focus();
     return () => {
+      el.removeEventListener('paste', onPaste, true);
       ro.disconnect();
       off();
       input.dispose();
