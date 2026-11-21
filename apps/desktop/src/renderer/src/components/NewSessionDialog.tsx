@@ -42,7 +42,8 @@ export function NewSessionDialog() {
   const [inPlaceAllowed, setInPlaceAllowed] = useState(false);
   const [inPlace, setInPlace] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<'agent' | 'workflow'>('agent');
+  const [mode, setMode] = useState<'agent' | 'workflow' | 'compare'>('agent');
+  const [compareIds, setCompareIds] = useState<AgentId[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [workflowId, setWorkflowId] = useState('');
   const workflow = workflows.find((w) => w.id === workflowId) ?? null;
@@ -53,11 +54,12 @@ export function NewSessionDialog() {
     const item = prefill?.workItem;
     setPrompt(prefill?.prompt ?? (item ? `${item.title}\n\n${item.description}`.trim() : ''));
     setTitle(prefill?.title ?? item?.title ?? '');
-    setBaseRef('HEAD');
+    setBaseRef(prefill?.baseRef ?? 'HEAD');
+    setCompareIds([]);
     setProfile('ask');
     setBringChanges(false);
     setInPlace(false);
-    setMode(prefill?.mode ?? 'agent');
+    setMode(prefill?.compare ? 'compare' : (prefill?.mode ?? 'agent'));
     void attempt(() => host.call('containment.status', {})).then((s) => {
       setContainment(s ?? null);
       setSandboxed(!!s?.defaultOn);
@@ -95,7 +97,8 @@ export function NewSessionDialog() {
 
   const agent = agents.find((a) => a.id === agentId);
   const sandboxLabel = containment?.kind === 'wsl' ? `Run inside WSL${containment.distro ? ` (${containment.distro})` : ''}` : 'Run in the sandbox';
-  const agentMissingInSandbox = !!containment?.available && !!agentId && !containment.agents.includes(agentId);
+  const chosenAgents: AgentId[] = mode === 'compare' ? compareIds : agentId ? [agentId] : [];
+  const agentMissingInSandbox = !!containment?.available && chosenAgents.some((id) => !containment.agents.includes(id));
   const sandboxBlocked = !containment?.available || agentMissingInSandbox;
   const sandboxOn = sandboxed && !sandboxBlocked;
   const sandboxHint = !containment
@@ -103,7 +106,7 @@ export function NewSessionDialog() {
     : !containment.available
       ? (containment.reason ?? 'Not available on this machine.')
       : agentMissingInSandbox
-        ? `${agent?.label ?? 'This agent'} is not installed inside ${containment.distro ?? 'the sandbox'}.`
+        ? `${mode === 'compare' ? 'An agent you chose' : (agent?.label ?? 'This agent')} is not installed inside ${containment.distro ?? 'the sandbox'}.`
         : SANDBOX_SCOPE;
   const startDisabledReason = !workspaceId
     ? 'Open a repository first.'
@@ -116,6 +119,39 @@ export function NewSessionDialog() {
           : profile === 'autonomous' && !sandboxOn
             ? 'Autonomous needs a sandboxed session.'
             : null;
+
+  const compareDisabledReason = !workspaceId
+    ? 'Open a repository first.'
+    : compareIds.length < 2
+      ? 'Choose two or three agents.'
+      : !prompt.trim()
+        ? 'Write what the agents should do.'
+        : profile === 'autonomous' && !sandboxOn
+          ? 'Autonomous needs a sandboxed session.'
+          : null;
+
+  const startCompare = async () => {
+    if (compareDisabledReason || !workspaceId) return;
+    setBusy(true);
+    const created = await attempt(() =>
+      host.call('sessions.compare', {
+        workspaceId,
+        agentIds: compareIds,
+        prompt: content,
+        permissionProfile: profile,
+        bringChanges,
+        hostSandbox: sandboxOn,
+        ...(title.trim() ? { title: title.trim() } : {}),
+        ...(baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
+      }),
+    );
+    setBusy(false);
+    if (created?.length) {
+      for (const s of created) upsert(s);
+      selectSession(created[0]!.id);
+      set({ newSession: null, tab: 'sessions', compareGroup: created[0]!.compareGroup });
+    }
+  };
 
   const runDisabledReason = !workspaceId
     ? 'Open a repository first.'
@@ -183,11 +219,21 @@ export function NewSessionDialog() {
       description={
         mode === 'agent'
           ? 'One conversation with one agent, in its own worktree and branch.'
-          : 'A workflow chains agent sessions with checks and gates. Nothing lands until you approve a gate.'
+          : mode === 'compare'
+            ? 'The same prompt to two or three agents, each in its own worktree, compared side by side.'
+            : 'A workflow chains agent sessions with checks and gates. Nothing lands until you approve a gate.'
       }
       wide
       footer={
-        mode === 'workflow' ? (
+        mode === 'compare' ? (
+          <>
+            {compareDisabledReason ? <span className="mr-auto self-center text-ink-muted">{compareDisabledReason}</span> : null}
+            <Button onClick={() => set({ newSession: null })}>Cancel</Button>
+            <Button variant="primary" disabled={!!compareDisabledReason || busy} onClick={() => void startCompare()}>
+              {busy ? 'Starting…' : `Start ${compareIds.length || ''} sessions`.replace('  ', ' ')}
+            </Button>
+          </>
+        ) : mode === 'workflow' ? (
           <>
             {runDisabledReason ? (
               <span className="mr-auto self-center text-ink-muted">{runDisabledReason}</span>
@@ -217,6 +263,7 @@ export function NewSessionDialog() {
           onChange={setMode}
           items={[
             { value: 'agent', label: 'One agent' },
+            { value: 'compare', label: 'Compare agents' },
             { value: 'workflow', label: 'A workflow' },
           ]}
         />
@@ -227,7 +274,9 @@ export function NewSessionDialog() {
             label={
               mode === 'agent'
                 ? 'What should the agent do?'
-                : 'What is the work? (fills {{workItem.description}})'
+                : mode === 'compare'
+                  ? 'What should the agents do?'
+                  : 'What is the work? (fills {{workItem.description}})'
             }
             htmlFor="ns-prompt"
           >
@@ -241,7 +290,7 @@ export function NewSessionDialog() {
             />
           </Field>
           <Field
-            label={mode === 'agent' ? 'Title (optional)' : 'Title (fills {{workItem.title}})'}
+            label={mode === 'workflow' ? 'Title (fills {{workItem.title}})' : 'Title (optional)'}
             htmlFor="ns-title"
             hint={mode === 'agent' ? 'Also names the branch.' : undefined}
           >
@@ -309,26 +358,37 @@ export function NewSessionDialog() {
         ) : (
           <div className="flex flex-col gap-4">
             <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
-              <legend className="mb-1.5 text-[12px] font-semibold text-ink-muted">Agent</legend>
+              <legend className="mb-1.5 text-[12px] font-semibold text-ink-muted">{mode === 'compare' ? 'Agents (two or three)' : 'Agent'}</legend>
               {agents.length === 0 ? <span className="text-ink-muted">Checking agents…</span> : null}
               {agents.map((a) => (
                 <label
                   key={a.id}
                   className={cx(
                     'flex min-h-11 items-center gap-2 rounded-[var(--radius)] border px-3',
-                    agentId === a.id ? 'border-accent bg-accent-tint' : 'border-line',
+                    (mode === 'compare' ? compareIds.includes(a.id) : agentId === a.id) ? 'border-accent bg-accent-tint' : 'border-line',
                     a.health === 'not-installed' && 'opacity-60',
                   )}
                 >
-                  <input
-                    type="radio"
-                    name="ns-agent"
-                    value={a.id}
-                    checked={agentId === a.id}
-                    disabled={a.health === 'not-installed'}
-                    onChange={() => setAgentId(a.id)}
-                    className="accent-[var(--accent)]"
-                  />
+                  {mode === 'compare' ? (
+                    <input
+                      type="checkbox"
+                      value={a.id}
+                      checked={compareIds.includes(a.id)}
+                      disabled={a.health !== 'ready' || (!compareIds.includes(a.id) && compareIds.length >= 3)}
+                      onChange={(e) => setCompareIds((ids) => (e.target.checked ? [...ids, a.id] : ids.filter((x) => x !== a.id)))}
+                      className="size-4 accent-[var(--accent)]"
+                    />
+                  ) : (
+                    <input
+                      type="radio"
+                      name="ns-agent"
+                      value={a.id}
+                      checked={agentId === a.id}
+                      disabled={a.health === 'not-installed'}
+                      onChange={() => setAgentId(a.id)}
+                      className="accent-[var(--accent)]"
+                    />
+                  )}
                   <span className="flex-1">{a.label}</span>
                   <Badge
                     tone={
@@ -398,7 +458,7 @@ export function NewSessionDialog() {
               />
               Bring my uncommitted changes
             </label>
-            {inPlaceAllowed ? (
+            {inPlaceAllowed && mode === 'agent' ? (
               <div className="flex flex-col gap-1">
                 <label className="flex min-h-11 items-center gap-2">
                   <input

@@ -21,7 +21,7 @@ import {
   type SessionState,
   type Turn,
 } from '@ade/contracts';
-import { bringChanges, copyFiles, createWorktree, currentBranch, revParse, slugify, snapshot } from '@ade/git';
+import { bringChanges, changedFiles, copyFiles, createWorktree, currentBranch, diffPatch, revParse, slugify, snapshot } from '@ade/git';
 import { ChunkCoalescer, isLive, isTerminal, nextState, type SessionTrigger } from '@ade/session-core';
 import type { EventBus } from './bus.ts';
 import { profilePolicy, type PermissionPolicy } from './permission-policy.ts';
@@ -89,7 +89,7 @@ export class SessionService {
   private readonly booting = new Set<string>();
   private disposed = false;
   /** Extra MCP servers to hand agents (connectors, M5). */
-  mcpServersFor: (workspaceId: string) => McpServerSpec[] = () => [];
+  mcpServersFor: (workspaceId: string, sessionId: string) => McpServerSpec[] | Promise<McpServerSpec[]> = () => [];
   /** CN-07: set by the composition root when the host sandbox is wired. */
   sandbox: SandboxProvider | null = null;
 
@@ -227,7 +227,7 @@ export class SessionService {
     setImmediate(() => this.maybeDequeue());
   }
 
-  async create(input: CreateSessionInput): Promise<Session> {
+  async create(input: CreateSessionInput, extra: { compareGroup?: string } = {}): Promise<Session> {
     const workspace = this.repos.workspaces.get(input.workspaceId);
     if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
     const runtime = this.runtimes.get(input.agentId);
@@ -273,6 +273,7 @@ export class SessionService {
       sandboxState,
       containment,
       inPlace,
+      compareGroup: extra.compareGroup ?? null,
       agentSessionId: null,
       workItemRef: input.workItemRef ?? null,
       createdAt: new Date().toISOString(),
@@ -430,12 +431,13 @@ export class SessionService {
       if (!this.sandbox) throw new Error('The host sandbox is not available; the session will not start without it.');
       wrapper = await this.sandbox.wrapperFor(session, workspace.rootPath, [this.paths.fakeAgentState]);
     }
+    const mcpServers = await this.mcpServersFor(session.workspaceId, sessionId);
     const launch = (resumeSessionId: string | null) =>
       runtime.start({
         ...(wrapper ? { wrapper } : {}),
         cwd: session.worktreePath!,
         permissionProfile: session.permissionProfile,
-        mcpServers: this.mcpServersFor(session.workspaceId),
+        mcpServers,
         ...(resumeSessionId ? { resumeSessionId } : {}),
         baseEnv: { ...process.env, ADE_FAKE_STATE_DIR: this.paths.fakeAgentState },
         onProtocolMessage: (direction, body) => {
@@ -617,6 +619,7 @@ export class SessionService {
     for (const [requestId] of live.pending) this.decide(sessionId, requestId, { outcome: 'cancelled' }, 'system', null);
     const endCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'end'), `ADE turn ${index} end`, session.inPlace).catch(() => null);
     this.repos.turns.end(turn.id, stopReason, endCommit);
+    if (endCommit) void this.checkOverlap(sessionId, endCommit).catch(() => undefined);
     if (endCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: endCommit, at: 'end' }, turn.id);
     this.append(sessionId, { type: 'turn.ended', turnId: turn.id, stopReason, usage: live.agent.usage }, turn.id);
     live.turn = null;
@@ -689,6 +692,118 @@ export class SessionService {
     if (!live.agent.modes.some((m) => m.id === modeId)) throw new RpcError('unknown_mode', 'The agent does not offer that mode.');
     await live.agent.setMode(modeId);
     this.append(sessionId, { type: 'mode.changed', modeId, available: null });
+  }
+
+  // ---------------------------------------------------------------- parallel work (M7-T02)
+
+  /** PL-03: one prompt to two or three agents, each in its own worktree, grouped for side-by-side review. */
+  async compare(input: Omit<CreateSessionInput, 'agentId'> & { agentIds: AgentId[] }): Promise<Session[]> {
+    const ids = [...new Set(input.agentIds)];
+    if (ids.length < 2) throw new RpcError('invalid', 'Choose two or three different agents to compare.');
+    const compareGroup = randomUUID();
+    const title = input.title?.trim() || titleFrom(input.prompt);
+    const { agentIds: _ignored, ...rest } = input;
+    const created: Session[] = [];
+    for (const agentId of ids) {
+      created.push(await this.create({ ...rest, agentId, inPlace: false, title: `${title} (${AGENT_LABELS[agentId]})` }, { compareGroup }));
+    }
+    return created;
+  }
+
+  /** PL-04: changed paths per session at its last checkpoint, and the overlaps already reported. */
+  private readonly touched = new Map<string, Set<string>>();
+  private readonly flaggedOverlaps = new Set<string>();
+
+  /** PL-04: after each turn, flag files this session and another live session in the same workspace both changed. */
+  private async checkOverlap(sessionId: string, checkpoint: string): Promise<void> {
+    const session = this.repos.sessions.require(sessionId);
+    if (!session.baseCommit || !session.worktreePath) return;
+    const files = new Set((await changedFiles(session.worktreePath, session.baseCommit, checkpoint)).map((c) => c.path));
+    this.touched.set(sessionId, files);
+    for (const other of this.repos.sessions.list(session.workspaceId)) {
+      if (other.id === sessionId || isTerminal(other.state)) continue;
+      const theirs = this.touched.get(other.id);
+      if (!theirs) continue;
+      const pair = [sessionId, other.id].sort().join(':');
+      const fresh = [...files].filter((f) => theirs.has(f) && !this.flaggedOverlaps.has(`${pair}:${f}`));
+      if (!fresh.length) continue;
+      for (const f of fresh) this.flaggedOverlaps.add(`${pair}:${f}`);
+      const list = fresh.slice(0, 10).join(', ') + (fresh.length > 10 ? ` and ${fresh.length - 10} more` : '');
+      this.append(sessionId, { type: 'notice', level: 'warning', text: `Overlap: "${other.title}" also changed ${list}. Landing both may conflict.` });
+      this.append(other.id, { type: 'notice', level: 'warning', text: `Overlap: "${session.title}" also changed ${list}. Landing both may conflict.` });
+      this.notify(sessionId, 'Two sessions changed the same files', `${session.title} and ${other.title}: ${list}`);
+    }
+  }
+
+  /** PL-04: current overlaps in a workspace, for the sessions list. */
+  overlaps(workspaceId: string): { sessionId: string; otherSessionId: string; files: string[] }[] {
+    const live = this.repos.sessions.list(workspaceId).filter((s) => !isTerminal(s.state) && this.touched.has(s.id));
+    const out: { sessionId: string; otherSessionId: string; files: string[] }[] = [];
+    for (let i = 0; i < live.length; i++)
+      for (let j = i + 1; j < live.length; j++) {
+        const a = this.touched.get(live[i]!.id)!;
+        const files = [...this.touched.get(live[j]!.id)!].filter((f) => a.has(f));
+        if (files.length) out.push({ sessionId: live[i]!.id, otherSessionId: live[j]!.id, files });
+      }
+    return out;
+  }
+
+  /**
+   * SR-07: the same worktree and branch continue with another agent. The new agent gets the previous agent's
+   * last message and the diff so far; the timeline keeps both agents' history.
+   */
+  async handOff(sessionId: string, agentId: AgentId, note?: string): Promise<Session> {
+    const session = this.repos.sessions.require(sessionId);
+    if (isTerminal(session.state)) throw new RpcError('session_ended', 'This session has ended.');
+    if (this.hasActiveTurn(sessionId) || this.booting.has(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish or cancel it first.');
+    if (agentId === session.agentId) throw new RpcError('invalid', 'Choose a different agent.');
+    const runtime = this.runtimes.get(agentId);
+    if (!runtime) throw new RpcError('agent_unavailable', `Agent ${agentId} is not available`);
+    if (session.containment !== 'none') {
+      const status = await this.sandbox?.status();
+      if (!status?.agents.includes(agentId)) throw new RpcError('sandbox_unavailable', `${AGENT_LABELS[agentId]} cannot run in this session's sandbox.`);
+    }
+    const lastMessage = this.repos.events.list(sessionId).flatMap((e) => (e.type === 'agent.message' ? [e.text] : [])).at(-1) ?? '';
+    let diff = '';
+    if (session.worktreePath && session.baseCommit) {
+      const now = await snapshot(session.worktreePath, null, 'ADE hand-off', session.inPlace);
+      diff = (await diffPatch(session.worktreePath, session.baseCommit, now)).toString('utf8');
+    }
+    const from = session.agentId;
+    await this.stopAgent(sessionId);
+    const updated = this.repos.sessions.update(sessionId, { agentId, agentSessionId: null });
+    this.append(sessionId, { type: 'notice', level: 'info', text: `Handed off from ${AGENT_LABELS[from]} to ${AGENT_LABELS[agentId]}.` });
+    this.audit(updated, 'session.handed_off', { from, to: agentId });
+    this.bus.emit('session.changed', { workspaceId: updated.workspaceId, session: updated });
+    const prompt = [
+      `You are continuing work that ${AGENT_LABELS[from]} started in this worktree. Do not redo what is already done.`,
+      note?.trim() ? `The user says: ${note.trim()}` : '',
+      lastMessage ? `${AGENT_LABELS[from]}'s last message:\n${lastMessage.slice(-8000)}` : '',
+      diff ? `Changes so far (diff against the base commit):\n${diff.length > 40_000 ? `${diff.slice(0, 40_000)}\n[diff truncated]` : diff}` : 'No files have changed yet.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    this.repos.queue.push(sessionId, [{ type: 'text', text: prompt }]);
+    try {
+      await this.startAgent(sessionId);
+    } catch (err) {
+      this.append(sessionId, { type: 'notice', level: 'error', text: (err as Error).message });
+      this.fire(sessionId, 'crashed', 'The new agent could not start');
+      return this.repos.sessions.require(sessionId);
+    }
+    void this.sendNext(sessionId);
+    return this.repos.sessions.require(sessionId);
+  }
+
+  /** SR-08: stops ADE's agent process so the agent's own terminal UI can resume the same conversation. */
+  async detach(sessionId: string): Promise<{ agentSessionId: string | null }> {
+    const session = this.repos.sessions.require(sessionId);
+    if (this.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish or cancel it first.');
+    if (this.live.has(sessionId)) {
+      await this.stopAgent(sessionId);
+      this.append(sessionId, { type: 'notice', level: 'info', text: "Stopped ADE's connection so the agent's own terminal UI can continue. Sending a message here reconnects." });
+    }
+    return { agentSessionId: session.agentSessionId };
   }
 
   /** Stops the agent process tree (used before landing or discarding, and on shutdown). */

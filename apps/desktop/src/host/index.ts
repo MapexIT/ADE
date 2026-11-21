@@ -5,6 +5,7 @@
 import type { MessagePortMain } from 'electron';
 import { createPublisher, emitterPort, hostApi, hostTopics, serveApi } from '@ade/contracts';
 import { createHost } from './app.ts';
+import { KEEP_RUNNING_SETTING } from '../main/background.ts';
 
 const parent = process.parentPort;
 const userData = process.env.ADE_USER_DATA;
@@ -30,7 +31,16 @@ const broadcast: Publish = (topic, payload) => {
 };
 
 host.bus.on('session.event', (e) => broadcast('session.event', e));
-host.bus.on('session.changed', (e) => broadcast('session.changed', e));
+host.bus.on('session.changed', (e) => {
+  broadcast('session.changed', e);
+  reportBackground();
+});
+
+/** PL-05: main keeps the app running in the background while sessions are live. */
+function reportBackground() {
+  const live = host.repos.sessions.inStates(['starting', 'working', 'waiting-on-user']).length;
+  parent.postMessage({ type: 'background', live, keepRunning: host.repos.settings.get<boolean>(KEEP_RUNNING_SETTING, true) });
+}
 host.bus.on('inbox.changed', (e) => broadcast('inbox.changed', e));
 host.bus.on('workflow.run', (e) => broadcast('workflow.run', e));
 host.bus.on('notify', (e) => {
@@ -50,6 +60,8 @@ parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
       stop();
       publishers.delete(publish);
     });
+  } else if (msg?.type === 'background-query') {
+    reportBackground();
   } else if (msg?.type === 'credentials') {
     host.setCredentials((msg as { values?: Partial<Record<'shortcut' | 'github', string>> }).values ?? {});
   } else if (msg?.type === 'shutdown') {

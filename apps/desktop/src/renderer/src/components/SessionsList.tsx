@@ -2,7 +2,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { Button, cx, SectionLabel } from '@ade/ui';
 import type { Session } from '@ade/contracts';
 import { groupOf, STATE_LABELS, type SessionGroup } from '@ade/session-core';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { host } from '../lib/bridge.ts';
 import { agentLabel } from '../lib/format.ts';
 import { useStore } from '../lib/store.ts';
 import { useTerminals } from '../lib/terminals.ts';
@@ -23,6 +24,18 @@ export function SessionsList() {
   const set = useStore((s) => s.set);
   const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
   const [showDone, setShowDone] = useState(false);
+  const workspaceId = useStore((s) => s.workspaceId);
+  // PL-04: refreshed whenever a session's state changes (overlaps are computed after each turn).
+  const [overlaps, setOverlaps] = useState<{ sessionId: string; otherSessionId: string; files: string[] }[]>([]);
+  const stateKey = Object.values(sessions).map((s) => `${s.id}:${s.state}`).join('|');
+  useEffect(() => {
+    if (!workspaceId) return;
+    void host.call('sessions.overlaps', { workspaceId }).then(setOverlaps).catch(() => undefined);
+  }, [workspaceId, stateKey]);
+  const overlapOf = (id: string) => {
+    const hits = overlaps.filter((o) => o.sessionId === id || o.otherSessionId === id);
+    return hits.length ? [...new Set(hits.flatMap((o) => o.files))] : null;
+  };
 
   const grouped = useMemo(() => {
     const out: Record<SessionGroup, Session[]> = { 'needs-you': [], working: [], ready: [], done: [] };
@@ -84,6 +97,11 @@ export function SessionsList() {
                     {s.workItemRef ? ` · ${s.workItemRef}` : ''}
                   </span>
                   <span className={d.attention ? 'text-attention' : 'text-ink-muted'}>{d.text}</span>
+                  {overlapOf(s.id) ? (
+                    <span className="text-attention" title={overlapOf(s.id)!.join(', ')}>
+                      Overlaps another session · {overlapOf(s.id)!.length} file(s)
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

@@ -141,12 +141,14 @@ export function SettingsDialog() {
   const [containment, setContainment] = useState<ContainmentStatus | null>(null);
   const [sandboxByDefault, setSandboxByDefault] = useState(true);
   const [runInPlace, setRunInPlace] = useState(false);
+  const [keepRunning, setKeepRunning] = useState(true);
 
   useEffect(() => {
     if (!open) return;
     void attempt(() => host.call('containment.status', { refresh: true })).then((s) => setContainment(s ?? null));
     void host.call('settings.get', { key: 'sandbox.byDefault' }).then((v) => setSandboxByDefault(v.value !== false));
     void host.call('settings.get', { key: 'sessions.runInPlace' }).then((v) => setRunInPlace(v.value === true));
+    void host.call('settings.get', { key: 'app.keepRunningInBackground' }).then((v) => setKeepRunning(v.value !== false));
     void host.call('settings.get', { key: 'concurrencyCap' }).then((v) => setCap(typeof v.value === 'number' ? v.value : 3));
     void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
     void main('main.credentials.status', {}).then(setCreds);
@@ -162,6 +164,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
     await attempt(() => host.call('settings.set', { key: 'sessions.runInPlace', value: runInPlace }));
+    await attempt(() => host.call('settings.set', { key: 'app.keepRunningInBackground', value: keepRunning }));
     toast('Settings saved.');
     set({ settingsOpen: false });
   };
@@ -180,12 +183,19 @@ export function SettingsDialog() {
           <Field label="Maximum minutes per turn" htmlFor="set-mins">
             <input id="set-mins" type="number" min={1} value={limits.maxTurnMinutes} onChange={(e) => setLimits({ ...limits, maxTurnMinutes: Number(e.target.value) })} className={inputClass} />
           </Field>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={keepRunning} onChange={(e) => setKeepRunning(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Keep sessions running when the window is closed
+              <span className="block text-[12px] text-ink-muted">ADE stays in the system tray while a session is working and notifies you when it needs you.</span>
+            </span>
+          </label>
           <p className="m-0 text-ink-muted">Discarded sessions keep their final patch for 30 days. Notifications appear when a session needs you, finishes or fails, while ADE is in the background. The external editor comes from the ADE_EDITOR environment variable, or your system default.</p>
         </section>
         <section className="flex flex-col gap-3">
           <SectionLabel>Workspace setup</SectionLabel>
-          <p className="m-0 text-ink-muted">Setup commands and files to copy live in .ade/workspace.yaml, versioned with your code.</p>
-          <pre className="m-0 max-h-40 overflow-auto rounded-[var(--radius)] border border-line bg-surface-sunken p-2.5 font-mono text-[12px]">{setupFile?.exists ? setupFile.content : 'setup:\n  - ["pnpm", "install"]\ncopy:\n  - .env.local'}</pre>
+          <p className="m-0 text-ink-muted">Setup commands, files to copy and MCP servers every session receives live in .ade/workspace.yaml, versioned with your code. Write secrets as $VARIABLE; ADE reads them from its environment.</p>
+          <pre className="m-0 max-h-40 overflow-auto rounded-[var(--radius)] border border-line bg-surface-sunken p-2.5 font-mono text-[12px]">{setupFile?.exists ? setupFile.content : 'setup:\n  - ["pnpm", "install"]\ncopy:\n  - .env.local\nmcpServers:\n  - name: docs\n    command: ["npx", "-y", "my-docs-mcp"]\n    env:\n      API_KEY: $DOCS_API_KEY'}</pre>
           {!setupFile?.exists ? <span className="text-[12px] text-ink-muted">No file yet; the example above shows the format.</span> : null}
           <SectionLabel className="mt-2">Connectors</SectionLabel>
           {creds && !creds.available ? <p className="m-0 text-danger">No secure credential store is available ({creds.backend}). Install and unlock a keyring to connect.</p> : null}

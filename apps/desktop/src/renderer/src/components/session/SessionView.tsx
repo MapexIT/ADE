@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { host } from '../../lib/bridge.ts';
 import { agentLabel, attachmentText, elapsed, joinPath, PROFILE_LABELS, SANDBOX_LABELS, textPrompt } from '../../lib/format.ts';
 import { attempt, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
+import { agentUiCommand } from '../../lib/agent-ui.ts';
+import { useTerminals } from '../../lib/terminals.ts';
 import { FilePicker } from '../FilePicker.tsx';
 import { QueuedMessages, TimelineRow } from './TimelineItems.tsx';
 
@@ -18,6 +20,7 @@ export function SessionHeader({ session }: { session: Session }) {
   const view = useStore((s) => s.views[session.id]);
   const agent = useStore((s) => s.agents.find((a) => a.id === session.agentId));
   const set = useStore((s) => s.set);
+  const ended = session.state === 'landed' || session.state === 'discarded';
   const [, tick] = useState(0);
   useEffect(() => {
     if (!isLive(session.state)) return;
@@ -61,10 +64,54 @@ export function SessionHeader({ session }: { session: Session }) {
       <span className="ml-auto text-ink-muted">
         Turn {Math.max(1, view?.turnCount ?? 0)} · {elapsed(session.createdAt, session.endedAt)} · {usageText}
       </span>
+      {session.compareGroup ? (
+        <Button size="dense" variant="ghost" onClick={() => set({ compareGroup: session.compareGroup })}>
+          Compare
+        </Button>
+      ) : null}
+      <Button size="dense" variant="ghost" disabled={ended || isLive(session.state)} title={isLive(session.state) ? 'Wait for the turn to finish' : undefined} onClick={() => set({ handOffSessionId: session.id })}>
+        Hand off
+      </Button>
+      <OpenInAgentUi session={session} ended={ended} />
       <Button size="dense" variant="ghost" onClick={() => set({ protocolSessionId: session.id })}>
         Protocol
       </Button>
     </div>
+  );
+}
+
+/** SR-08: continue the conversation in the agent's own terminal UI. ADE's connection stops first. */
+function OpenInAgentUi({ session, ended }: { session: Session; ended: boolean }) {
+  const agent = useStore((s) => s.agents.find((a) => a.id === session.agentId));
+  const ask = useStore((s) => s.ask);
+  const set = useStore((s) => s.set);
+  const createTerminal = useTerminals((t) => t.create);
+  const ui = agentUiCommand(session.agentId, session.agentSessionId);
+  if (!ui || !agent?.path || ended || !session.worktreePath) return null;
+  const wsl = session.containment === 'wsl';
+  return (
+    <Button
+      size="dense"
+      variant="ghost"
+      disabled={wsl || isLive(session.state)}
+      title={wsl ? 'This session runs inside WSL; open the agent from a WSL shell.' : isLive(session.state) ? 'Wait for the turn to finish' : undefined}
+      onClick={() =>
+        ask({
+          title: `Open in ${agent.label}'s own UI?`,
+          body: `${ui.resumes ? `${agent.label} resumes this conversation` : `${agent.label} cannot resume this conversation from ADE, so its UI starts a new one`} in the session worktree. ADE stops its own connection first; sending a message here later reconnects.${session.containment !== 'none' ? " The agent's own UI runs outside ADE's sandbox." : ''}`,
+          confirmLabel: 'Open',
+          onConfirm: () =>
+            void attempt(async () => {
+              await host.call('sessions.detach', { sessionId: session.id });
+              await createTerminal({ kind: 'agent-ui', cwd: session.worktreePath!, sessionId: session.id, command: ui.command, title: `${agent.label} UI` });
+              set({ tab: 'terminals' });
+              return true;
+            }),
+        })
+      }
+    >
+      Open in {agent.label}
+    </Button>
   );
 }
 

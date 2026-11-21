@@ -6,10 +6,11 @@ import { useMemo } from 'react';
 import { agentLabel, basename } from '../../lib/format.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
+import { SavedCommands } from './SavedCommands.tsx';
 import { SmartBlocks } from './SmartBlocks.tsx';
 import { TerminalView } from './TerminalView.tsx';
 
-const AGENT_COMMANDS: Record<Exclude<AgentId, 'fake'>, string> = { codex: 'codex', 'claude-code': 'claude', opencode: 'opencode' };
+import { AGENT_COMMANDS } from '../../lib/agent-ui.ts';
 
 /** SM-03: each segment hides when it has no data. */
 export function StatusBar({ terminal }: { terminal: TerminalInfo }) {
@@ -159,7 +160,9 @@ export function TerminalsScreen() {
               <span className="font-semibold">{current.title}</span>
               <Badge>{current.smart ? 'Smart' : current.kind === 'agent-ui' ? 'Agent UI' : 'Plain · no blocks, no status bar'}</Badge>
               <span className="truncate font-mono text-[12px] text-ink-muted">{current.cwd}</span>
-              <Button size="dense" variant="ghost" className="ml-auto" onClick={() => void close(current.id)}>
+              <span className="ml-auto" />
+              <SavedCommands terminalId={current.id} disabled={current.exited || current.kind === 'agent-ui'} />
+              <Button size="dense" variant="ghost" onClick={() => void close(current.id)}>
                 Close terminal
               </Button>
             </div>

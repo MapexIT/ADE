@@ -30,6 +30,10 @@ export interface NewSessionPrefill {
   mode?: 'agent' | 'workflow';
   /** Seeds the workflow's first hand-off, for example a failed command's output (WF-10). */
   handOff?: { summary?: string; checkOutput?: string };
+  /** SR-06: start from this commit (an earlier turn's checkpoint). */
+  baseRef?: string;
+  /** Open with "Compare agents" selected (PL-03). */
+  compare?: boolean;
 }
 
 interface State {
@@ -48,7 +52,16 @@ interface State {
   connection: { host: boolean; pty: boolean };
   /** Context waiting to be sent with the next prompt, per session (ST-03, TM-05, CR-04, SM-08). */
   attachments: Record<string, PromptBlock[]>;
-  editor: { path: string; sessionId: string | null } | null;
+  /** `rev` changes when the open file should be reloaded (follow mode after the agent edited it). */
+  editor: { path: string; sessionId: string | null; rev?: number } | null;
+  /** PL-03: the compare run shown side by side, by its group id. */
+  compareGroup: string | null;
+  /** SR-07: the session being handed to another agent. */
+  handOffSessionId: string | null;
+  /** WA-06: the editor follows the file the selected session's agent is working on. */
+  follow: boolean;
+  /** Set by the editor; follow mode never replaces a file with unsaved changes. */
+  editorDirty: boolean;
   newSession: NewSessionPrefill | null;
   paletteOpen: boolean;
   inboxOpen: boolean;
@@ -80,6 +93,26 @@ interface Actions {
 
 let toastId = 1;
 
+/** WA-06: tool calls being followed, by id, so their completion reloads the file. */
+const followed = new Map<string, string>();
+
+function followAgent(e: SessionEvent) {
+  const s = useStore.getState();
+  if (!s.follow || e.sessionId !== s.selectedSessionId) return;
+  const session = s.sessions[e.sessionId];
+  if (e.type === 'tool.call' && e.locations[0] && session?.worktreePath) {
+    const loc = e.locations[0];
+    const path = /^([A-Za-z]:[\\/]|\/)/.test(loc) ? loc : `${session.worktreePath.replace(/[\\/]+$/, '')}/${loc}`;
+    followed.set(e.toolCallId, path);
+    if (s.editorDirty && s.editor?.path !== path) return;
+    useStore.setState({ editor: { path, sessionId: session.id, rev: (s.editor?.rev ?? 0) + 1 } });
+  } else if (e.type === 'tool.update' && e.status === 'completed') {
+    const path = followed.get(e.toolCallId);
+    followed.delete(e.toolCallId);
+    if (path && s.editor?.path === path && !s.editorDirty) useStore.setState({ editor: { ...s.editor, rev: (s.editor.rev ?? 0) + 1 } });
+  }
+}
+
 export const useStore = create<State & Actions>((set, get) => ({
   workspaces: [],
   workspaceId: null,
@@ -95,6 +128,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   connection: { host: false, pty: false },
   attachments: {},
   editor: null,
+  follow: false,
+  editorDirty: false,
+  compareGroup: null,
+  handOffSessionId: null,
   newSession: null,
   paletteOpen: false,
   inboxOpen: false,
@@ -158,6 +195,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     const view = get().views[e.sessionId];
     if (!view && !get().sessions[e.sessionId]) return;
     set((s) => ({ views: { ...s.views, [e.sessionId]: applyEvent(s.views[e.sessionId] ?? emptyView(), e) } }));
+    followAgent(e);
     // Turn boundaries change the turn list and the queue; refresh them from the host.
     if (e.type === 'turn.started' || e.type === 'turn.ended' || e.type === 'user.message') {
       void host.call('sessions.get', { sessionId: e.sessionId }).then((d) =>
