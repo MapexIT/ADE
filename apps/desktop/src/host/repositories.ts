@@ -307,6 +307,19 @@ export class AuditRepo {
     return entry;
   }
 
+  /** HI-07: every entry for a workspace, oldest first. */
+  exportAll(workspaceId: string): AuditEntry[] {
+    return this.db.all<R>('SELECT * FROM audit_log WHERE workspace_id = ? ORDER BY ts ASC', workspaceId).map((r) => ({
+      id: String(r.id),
+      ts: String(r.ts),
+      workspaceId: str(r.workspace_id),
+      sessionId: str(r.session_id),
+      actor: String(r.actor),
+      action: String(r.action),
+      detail: JSON.parse(String(r.detail_json)) as Record<string, unknown>,
+    }));
+  }
+
   list(workspaceId: string): AuditEntry[] {
     return this.db.all<R>('SELECT * FROM audit_log WHERE workspace_id = ? ORDER BY ts DESC LIMIT 1000', workspaceId).map((r) => ({
       id: String(r.id),

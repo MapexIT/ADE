@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, Tray } from 'electron';
 import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
@@ -35,7 +36,13 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
       supervisors.host.post({ type: 'background-query' });
     },
     onMessage: (msg) => {
-      const m = msg as { type?: string; sessionId?: string; title?: string; body?: string; live?: number; keepRunning?: boolean };
+      const m = msg as { type?: string; sessionId?: string; title?: string; body?: string; live?: number; keepRunning?: boolean; id?: number; action?: string; args?: Record<string, string> };
+      if (m.type === 'preview-request' && m.id !== undefined) {
+        void drivePreview(m.action ?? '', m.args ?? {}).then(
+          (result) => supervisors.host.post({ type: 'preview-response', id: m.id, ok: true, result }),
+          (err: Error) => supervisors.host.post({ type: 'preview-response', id: m.id, ok: false, error: err.message }),
+        );
+      }
       if (m.type === 'notify' && m.sessionId) notify(m.title ?? 'ADE', m.body ?? '', m.sessionId);
       if (m.type === 'background') {
         background = { live: m.live ?? 0, keepRunning: m.keepRunning !== false };
@@ -161,6 +168,12 @@ const handlers: Handlers<MainApi> = {
     const v = credentials.get(k as `env:${string}`);
     return v === null ? [] : [[k, v]];
   })),
+  'main.saveText': async ({ title, defaultName, content }) => {
+    const res = await dialog.showSaveDialog(window!, { title, defaultPath: defaultName, filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (res.canceled || !res.filePath) return { path: null };
+    await writeFile(res.filePath, content, 'utf8');
+    return { path: res.filePath };
+  },
   'main.openPreview': ({ url }) => {
     if (!isLocalPreviewUrl(url)) throw new RpcError('not_local', 'Only local web apps (localhost) open in the preview.');
     openPreview(url);
@@ -221,9 +234,47 @@ function openPreview(url: string) {
     }
   });
   win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
-  win.on('closed', () => previews.delete(origin));
+  win.on('closed', () => {
+    previews.delete(origin);
+    if (lastPreview === win) lastPreview = null;
+  });
+  win.on('focus', () => (lastPreview = win));
+  lastPreview = win;
   previews.set(origin, win);
   void win.loadURL(url);
+}
+
+/** HI-08: the agent drives the most recently used preview window through the host's MCP server. */
+let lastPreview: BrowserWindow | null = null;
+async function drivePreview(action: string, args: Record<string, string>): Promise<unknown> {
+  if (action === 'open') {
+    if (!isLocalPreviewUrl(args.url ?? '')) throw new Error('Only local addresses can be opened.');
+    openPreview(args.url!);
+    const win = previews.get(new URL(args.url!).origin)!;
+    lastPreview = win;
+    await new Promise<void>((resolve) => {
+      if (!win.webContents.isLoading()) return resolve();
+      win.webContents.once('did-stop-loading', () => resolve());
+    });
+    return null;
+  }
+  const win = lastPreview && !lastPreview.isDestroyed() ? lastPreview : [...previews.values()].find((w) => !w.isDestroyed());
+  if (!win) throw new Error('No preview is open. Open one with preview_open first.');
+  const sel = JSON.stringify(args.selector ?? '');
+  switch (action) {
+    case 'screenshot':
+      return (await win.webContents.capturePage()).toPNG().toString('base64');
+    case 'click':
+      return win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${sel}); if (!el) throw new Error('Nothing matches ' + ${sel}); el.click(); return null; })()`);
+    case 'type':
+      return win.webContents.executeJavaScript(
+        `(() => { const el = document.querySelector(${sel}); if (!el) throw new Error('Nothing matches ' + ${sel}); el.focus(); el.value = ${JSON.stringify(args.text ?? '')}; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return null; })()`,
+      );
+    case 'text':
+      return win.webContents.executeJavaScript('document.body ? document.body.innerText : ""');
+    default:
+      throw new Error(`Unknown preview action ${action}.`);
+  }
 }
 
 function createWindow() {

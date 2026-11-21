@@ -92,6 +92,20 @@ export class FileService {
     return full;
   }
 
+  /** The deepest workspace or worktree folder that holds `path` (ED-03 starts language servers there). */
+  rootOf(path: string): string {
+    const full = this.assertAllowed(path);
+    const roots = [
+      ...this.repos.workspaces.list().map((w) => w.rootPath),
+      ...this.repos.workspaces.list().flatMap((w) => this.repos.sessions.list(w.id).map((s) => s.worktreePath).filter((p): p is string => !!p)),
+    ].map((r) => resolve(r));
+    const inside = roots.filter((r) => {
+      const rel = relative(r, full);
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    });
+    return inside.sort((a, b) => b.length - a.length)[0] ?? dirname(full);
+  }
+
   async list(root: string): Promise<FileEntry[]> {
     const base = this.assertAllowed(root);
     let files: string[];

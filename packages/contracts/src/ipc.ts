@@ -215,6 +215,42 @@ export type EnvSet = z.infer<typeof EnvSet>;
 export const ScratchLanguage = z.enum(['javascript', 'typescript', 'python', 'csharp']);
 export type ScratchLanguage = z.infer<typeof ScratchLanguage>;
 
+/** ED-04: which instruction files each agent reads in a repository, and where they disagree. */
+export const InstructionStatus = z.object({
+  agents: z.array(
+    z.object({
+      agentId: AgentId,
+      files: z.array(z.object({ path: z.string(), scope: z.enum(['project', 'user', 'nested']), note: z.string().nullable() })),
+    }),
+  ),
+  problems: z.array(z.string()),
+});
+export type InstructionStatus = z.infer<typeof InstructionStatus>;
+
+/** HI-06: sessions whose conversation matches a search, with snippets. */
+export const SessionSearchResult = z.object({
+  sessionId: z.string(),
+  title: z.string(),
+  agentId: AgentId,
+  state: z.string(),
+  matches: z.array(z.object({ kind: z.enum(['you', 'agent', 'tool', 'notice']), snippet: z.string(), at: z.string() })),
+});
+export type SessionSearchResult = z.infer<typeof SessionSearchResult>;
+
+/** ED-03: a diagnostic from a language server, zero-based like LSP. */
+export const LspDiagnostic = z.object({
+  line: z.number().int(),
+  character: z.number().int(),
+  endLine: z.number().int(),
+  endCharacter: z.number().int(),
+  severity: z.enum(['error', 'warning', 'info', 'hint']),
+  message: z.string(),
+  source: z.string().nullable(),
+});
+export type LspDiagnostic = z.infer<typeof LspDiagnostic>;
+
+const LspPosition = z.object({ path: AbsPath, line: z.number().int().min(0), character: z.number().int().min(0) });
+
 /** TM-07: a named command for this workspace's terminals. */
 export const SavedCommand = z.object({
   id: Id,
@@ -446,6 +482,18 @@ export const hostApi = defineApi({
   'scratch.write': method(z.object({ extension: z.string().regex(/^[a-z0-9]{1,8}$/), content: z.string().max(200_000) }), z.object({ path: z.string() })),
   'envSets.list': method(z.object({ workspaceId: Id }), z.array(EnvSet)),
   'envSets.save': method(z.object({ workspaceId: Id, sets: z.array(EnvSet).max(50) }), Ok),
+  'instructions.status': method(z.object({ workspaceId: Id }), InstructionStatus),
+  'history.sessions': method(z.object({ workspaceId: Id.optional(), query: z.string().trim().min(2).max(500) }), z.array(SessionSearchResult)),
+  /** HI-07: the audit log as JSON with secrets and local paths redacted. */
+  'audit.export': method(z.object({ workspaceId: Id }), z.object({ fileName: z.string(), content: z.string() })),
+  'lsp.open': method(z.object({ path: AbsPath, text: z.string().max(5_000_000) }), z.object({ server: z.string().nullable(), reason: z.string().nullable() })),
+  'lsp.change': method(z.object({ path: AbsPath, text: z.string().max(5_000_000) }), Ok),
+  'lsp.close': method(z.object({ path: AbsPath }), Ok),
+  'lsp.diagnostics': method(z.object({ path: AbsPath }), z.array(LspDiagnostic)),
+  'lsp.hover': method(LspPosition, z.object({ contents: z.string() }).nullable()),
+  'lsp.definition': method(LspPosition, z.array(z.object({ path: z.string(), line: z.number().int(), character: z.number().int() }))),
+  /** HI-08: a screenshot the agent took of the preview, for the timeline. */
+  'screenshots.read': method(z.object({ file: z.string().regex(/^[\w-]+\.png$/) }), z.object({ dataUrl: z.string() })),
   'checks.settings': method(z.object({ workspaceId: Id }), CheckSettings),
   'checks.saveSettings': method(z.object({ workspaceId: Id, settings: CheckSettings }), Ok),
   'checks.run': method(z.object({ sessionId: Id }), z.array(CheckResult)),
@@ -617,6 +665,8 @@ export const mainApi = defineApi({
   'main.envSecret.get': method(z.object({ keys: z.array(z.string().regex(/^env:[\w-]+:[A-Za-z_][A-Za-z0-9_]*$/)).max(100) }), z.record(z.string(), z.string())),
   /** CR-10: opens a local web app in an isolated preview window (localhost only). */
   'main.openPreview': method(z.object({ url: z.url({ protocol: /^https?$/ }) }), Ok),
+  /** HI-07: asks where to save a text file, then writes it. */
+  'main.saveText': method(z.object({ title: z.string().max(200), defaultName: z.string().max(200), content: z.string() }), z.object({ path: z.string().nullable() })),
 });
 export type MainApi = typeof mainApi;
 

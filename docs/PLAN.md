@@ -155,8 +155,10 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M7-T05** Smart terminal v1 features (SM-09 to SM-14) and code runner v1 features (CR-05 to CR-11).
       Splits are not part of the saved layout. The runner MCP server is tested with a real MCP client but not
       yet called by a real agent.
-- [ ] **M7-T06** Language servers, instruction files, history search, audit export, preview pane (ED-03,
+- [x] **M7-T06** Language servers, instruction files, history search, audit export, preview pane (ED-03,
       ED-04, HI-06 to HI-08).
+      The LSP client is tested with a fake server, not yet with a real one; the preview tools are tested over
+      MCP with a fake driver, not yet called by a real agent against the real window.
 - [ ] **M7-T07** macOS installer (PK-04).
 
 **v1 gate:** a workflow runs three sandboxed agents and lands one result.

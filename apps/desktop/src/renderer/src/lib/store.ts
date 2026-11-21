@@ -68,6 +68,8 @@ interface State {
   /** `rev` changes when the open file should be reloaded (follow mode after the agent edited it). */
   editor: { path: string; sessionId: string | null; rev?: number } | null;
   suggestions: Suggestion[];
+  /** HI-06: the session search dialog. */
+  sessionSearchOpen: boolean;
   /** The run shown in the Run tab (CR-02); see lib/runs.ts. */
   activeRun: ActiveRun | null;
   /** Bumped when a run is recorded, so history views refresh. */
@@ -163,6 +165,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   compareGroup: null,
   handOffSessionId: null,
   suggestions: [],
+  sessionSearchOpen: false,
   activeRun: null,
   runsVersion: 0,
   newSession: null,

@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { agentLabel, promptPreview, TOOL_STATUS_LABELS } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
+import { ScreenshotItem } from '../HistoryTools.tsx';
 
 const TOOL_KIND_LABELS: Record<string, string> = {
   read: 'Read',
@@ -193,6 +194,8 @@ export const TimelineRow = memo(function TimelineRow({ item, sessionId }: { item
           <span className="h-px flex-1 bg-line" />
         </div>
       );
+    case 'screenshot':
+      return <ScreenshotItem url={item.url} file={item.file} />;
     case 'notice':
       return (
         <div className={cx('rounded-[var(--radius)] border px-3 py-2 whitespace-pre-wrap', item.level === 'error' ? 'border-danger-line bg-danger-tint text-danger' : item.level === 'warning' ? 'border-attention-line text-attention' : 'border-line text-ink-muted')}>
