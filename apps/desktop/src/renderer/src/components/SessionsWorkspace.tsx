@@ -47,7 +47,12 @@ export function SessionsWorkspace() {
   const apiRef = useRef<DockviewApi | null>(null);
   const editor = useStore((s) => s.editor);
 
-  useEffect(() => () => workspaceLayout.attach(null), []);
+  // Dockview keeps its instance across React's StrictMode remount and calls onReady only once, so the effect
+  // attaches again after the simulated unmount instead of relying on onReady.
+  useEffect(() => {
+    if (apiRef.current) workspaceLayout.attach(apiRef.current);
+    return () => workspaceLayout.attach(null);
+  }, []);
 
   const onReady = (event: DockviewReadyEvent) => {
     apiRef.current = event.api;
