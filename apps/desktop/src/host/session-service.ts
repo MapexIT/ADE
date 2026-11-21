@@ -619,7 +619,7 @@ export class SessionService {
     for (const [requestId] of live.pending) this.decide(sessionId, requestId, { outcome: 'cancelled' }, 'system', null);
     const endCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'end'), `ADE turn ${index} end`, session.inPlace).catch(() => null);
     this.repos.turns.end(turn.id, stopReason, endCommit);
-    if (endCommit) void this.checkOverlap(sessionId, endCommit).catch(() => undefined);
+    if (endCommit) this.inBackground(this.checkOverlap(sessionId, endCommit));
     if (endCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: endCommit, at: 'end' }, turn.id);
     this.append(sessionId, { type: 'turn.ended', turnId: turn.id, stopReason, usage: live.agent.usage }, turn.id);
     live.turn = null;
@@ -710,12 +710,21 @@ export class SessionService {
     return created;
   }
 
+  /** Work started after a turn that nobody awaits; shutdown waits for it so no Git process outlives the host. */
+  private readonly pending = new Set<Promise<unknown>>();
+
+  private inBackground(work: Promise<unknown>) {
+    const p = work.catch(() => undefined).finally(() => this.pending.delete(p));
+    this.pending.add(p);
+  }
+
   /** PL-04: changed paths per session at its last checkpoint, and the overlaps already reported. */
   private readonly touched = new Map<string, Set<string>>();
   private readonly flaggedOverlaps = new Set<string>();
 
   /** PL-04: after each turn, flag files this session and another live session in the same workspace both changed. */
   private async checkOverlap(sessionId: string, checkpoint: string): Promise<void> {
+    if (this.disposed) return;
     const session = this.repos.sessions.require(sessionId);
     if (!session.baseCommit || !session.worktreePath) return;
     const files = new Set((await changedFiles(session.worktreePath, session.baseCommit, checkpoint)).map((c) => c.path));
@@ -828,5 +837,6 @@ export class SessionService {
   async shutdown(): Promise<void> {
     this.disposed = true;
     await Promise.all([...this.live.keys()].map((id) => this.stopAgent(id)));
+    await Promise.all([...this.pending]);
   }
 }
