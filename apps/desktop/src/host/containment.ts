@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, posix } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import type { LaunchWrapper } from '@ade/acp-client';
 import type { AgentId, ContainmentStatus, Session } from '@ade/contracts';
 import { gitCommonDir } from '@ade/git';
@@ -37,6 +37,18 @@ export interface BubblewrapOptions {
   /** Host folder that becomes the private /tmp. */
   tmp: string;
   cwd: string;
+  /** Paths bound read-only again after the private /tmp, so ADE's own files under /tmp stay visible. */
+  readonly?: string[];
+}
+
+/**
+ * The app's own folders that live under /tmp and would vanish behind the private /tmp: an AppImage runs from
+ * a FUSE mount at /tmp/.mount_* (or an extraction under /tmp), and the agent runs on ADE's bundled runtime.
+ * Pure: the caller passes the environment.
+ */
+export function appPathsUnderTmp(execPath: string, appDir: string | undefined): string[] {
+  const underTmp = (p: string) => p === '/tmp' || p.startsWith('/tmp/');
+  return [...new Set([appDir, dirname(execPath)].filter((p): p is string => !!p && underTmp(p) && p !== '/tmp'))];
 }
 
 /** The bubblewrap arguments, ending with `--`; the command and its arguments follow. Pure. */
@@ -46,6 +58,7 @@ export function bubblewrapArgs(opts: BubblewrapOptions): string[] {
     '--dev', '/dev',
     '--proc', '/proc',
     '--bind', opts.tmp, '/tmp',
+    ...(opts.readonly ?? []).flatMap((p) => ['--ro-bind-try', p, p]),
     ...opts.writable.flatMap((p) => ['--bind-try', p, p]),
     '--setenv', 'TMPDIR', '/tmp',
     '--unshare-pid',
@@ -85,7 +98,7 @@ export class BubblewrapWrapper implements LaunchWrapper {
   readonly kind = 'bubblewrap' as const;
   readonly foreign = false;
 
-  constructor(private readonly opts: { bwrap: string; writable: string[]; tmp: string }) {}
+  constructor(private readonly opts: { bwrap: string; writable: string[]; tmp: string; readonly?: string[] }) {}
 
   toAgentPath(p: string) {
     return p;
@@ -96,7 +109,7 @@ export class BubblewrapWrapper implements LaunchWrapper {
   }
 
   wrap(cmd: { command: string; args: string[] }, { cwd, env }: { cwd: string; env: Record<string, string> }): ReturnType<LaunchWrapper['wrap']> {
-    const args = bubblewrapArgs({ writable: this.opts.writable, tmp: this.opts.tmp, cwd });
+    const args = bubblewrapArgs({ writable: this.opts.writable, tmp: this.opts.tmp, cwd, readonly: this.opts.readonly ?? [] });
     return { cmd: { command: this.opts.bwrap, args: [...args, cmd.command, ...cmd.args] }, cwd, env };
   }
 }
@@ -335,7 +348,7 @@ export class ContainmentService {
     const git = await gitCommonDir(repoRoot);
     if (session.containment === 'bubblewrap') {
       const writable = [worktree, git, ...extraWritable, ...AGENT_STATE_DIRS.map((d) => join(this.home, d))];
-      return new BubblewrapWrapper({ bwrap: 'bwrap', writable, tmp });
+      return new BubblewrapWrapper({ bwrap: 'bwrap', writable, tmp, readonly: appPathsUnderTmp(process.execPath, process.env.APPDIR) });
     }
     const linuxHome = this.wslHome;
     const state = linuxHome ? AGENT_STATE_DIRS.map((d) => posix.join(linuxHome, d)) : [];
