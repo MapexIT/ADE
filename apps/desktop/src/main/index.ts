@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, Tray } from 'electron';
 import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
+import { isLocalPreviewUrl } from './preview.ts';
 import { mainApi, RpcError, type Handlers, type MainApi } from '@ade/contracts';
 import { CredentialStore } from './credentials.ts';
 import { ProcessSupervisor, type ProcessName } from './supervisor.ts';
@@ -147,6 +148,24 @@ const handlers: Handlers<MainApi> = {
     supervisors[which].restart();
     return { ok: true };
   },
+  // CR-11: secret values of environment sets. They go to the renderer only to start a run with them.
+  'main.envSecret.set': ({ key, value }) => {
+    credentials.set(key as `env:${string}`, value);
+    return { ok: true };
+  },
+  'main.envSecret.delete': ({ key }) => {
+    credentials.delete(key as `env:${string}`);
+    return { ok: true };
+  },
+  'main.envSecret.get': ({ keys }) => Object.fromEntries(keys.flatMap((k) => {
+    const v = credentials.get(k as `env:${string}`);
+    return v === null ? [] : [[k, v]];
+  })),
+  'main.openPreview': ({ url }) => {
+    if (!isLocalPreviewUrl(url)) throw new RpcError('not_local', 'Only local web apps (localhost) open in the preview.');
+    openPreview(url);
+    return { ok: true };
+  },
 };
 
 ipcMain.handle('ade:main', async (event, raw: unknown) => {
@@ -167,6 +186,44 @@ ipcMain.handle('ade:main', async (event, raw: unknown) => {
 const devUrl = process.env.ELECTRON_RENDERER_URL;
 function isAppUrl(url: string) {
   return devUrl ? url.startsWith(devUrl) : url.startsWith('file://');
+}
+
+/**
+ * CR-10, HI-08: a local web app in its own window. It has no preload and no Node, its own storage partition,
+ * cannot open other windows and cannot navigate away from its origin (other links open in the browser).
+ */
+const previews = new Map<string, BrowserWindow>();
+function openPreview(url: string) {
+  const origin = new URL(url).origin;
+  const existing = previews.get(origin);
+  if (existing && !existing.isDestroyed()) {
+    void existing.loadURL(url);
+    existing.show();
+    existing.focus();
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    title: `Preview · ${origin}`,
+    backgroundColor: '#0F1318',
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, partition: 'preview' },
+  });
+  win.webContents.setWindowOpenHandler(({ url: target }) => {
+    if (/^https?:\/\//.test(target)) void shell.openExternal(target);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, target) => {
+    if (new URL(target).origin !== origin) {
+      e.preventDefault();
+      if (/^https?:\/\//.test(target)) void shell.openExternal(target);
+    }
+  });
+  win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  win.on('closed', () => previews.delete(origin));
+  previews.set(origin, win);
+  void win.loadURL(url);
 }
 
 function createWindow() {

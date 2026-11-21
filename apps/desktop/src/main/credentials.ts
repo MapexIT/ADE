@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { safeStorage } from 'electron';
 
-export type CredentialKey = 'shortcut' | 'github';
+/** Connector tokens, and environment-set secrets as `env:<set>:<NAME>` (CR-11). */
+export type CredentialKey = 'shortcut' | 'github' | `env:${string}`;
 
 /**
  * Connector tokens, encrypted with Electron safeStorage (rule 7). The file only ever holds ciphertext.
@@ -29,17 +30,18 @@ export class CredentialStore {
     return true;
   }
 
-  private load(): Partial<Record<CredentialKey, string>> {
+  private load(): Record<string, string> {
     if (!existsSync(this.file)) return {};
     try {
-      return JSON.parse(readFileSync(this.file, 'utf8')) as Partial<Record<CredentialKey, string>>;
+      return JSON.parse(readFileSync(this.file, 'utf8')) as Record<string, string>;
     } catch {
       return {};
     }
   }
 
+  /** Connector tokens only; environment secrets are never listed. */
   stored(): CredentialKey[] {
-    return Object.keys(this.load()) as CredentialKey[];
+    return (Object.keys(this.load()) as CredentialKey[]).filter((k) => !k.startsWith('env:'));
   }
 
   set(key: CredentialKey, secret: string): void {

@@ -23,6 +23,9 @@ import { parse as parseYaml } from 'yaml';
 import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { askOnce } from './one-shot.ts';
+import { ScratchService } from './scratch.ts';
+import { readFileSync, rmSync } from 'node:fs';
+import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { TerminalLayout } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
@@ -47,6 +50,8 @@ export interface HostConfig {
   homeDir?: string;
   /** RV-12: overrides the GitHub CLI and how it is run (tests only). */
   github?: { gh: string | null; run: Runner };
+  /** CR-08: the runner MCP server's entry; when set, sessions get the `ade-runner` tools. */
+  runnerMcpEntry?: string;
   /** CO-05, CO-08, CO-09: replaces the Shortcut MCP actions (tests only). */
   shortcut?: ShortcutActions;
   /** CN-07: overrides the platform and process runner the sandbox probe uses (tests only). */
@@ -122,7 +127,38 @@ export function createHost(config: HostConfig) {
   sessions.inboxSources.push(() => workflows.inbox());
   const resolveCommand = commandResolver(config.node, config.nodeEnv);
   const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
-  sessions.afterTurn = (sessionId) => checks.afterTurn(sessionId);
+  const runnerLog = (sessionId: string) => join(config.userData, 'runner', `${sessionId}.jsonl`);
+  mkdirSync(join(config.userData, 'runner'), { recursive: true });
+  /** CR-08: runs the agent made through the runner tool join the run history after each turn. */
+  const ingestRunner = (sessionId: string) => {
+    const file = runnerLog(sessionId);
+    let text = '';
+    try {
+      text = readFileSync(file, 'utf8');
+      rmSync(file, { force: true });
+    } catch {
+      return;
+    }
+    const session = repos.sessions.get(sessionId);
+    if (!session) return;
+    for (const line of text.split('\n').filter(Boolean)) {
+      try {
+        const r = JSON.parse(line) as { command: string[]; cwd: string; startedAt: string; endedAt: string; exitCode: number | null; output: string };
+        const run = repos.runs.record(
+          { runConfigId: null, sessionId, worktreePath: session.worktreePath ?? '', command: r.command, startedAt: r.startedAt, endedAt: r.endedAt, exitCode: r.exitCode, output: r.output },
+          session.workspaceId,
+        );
+        sessions.record(sessionId, { type: 'run.finished', runId: run.id, exitCode: r.exitCode });
+      } catch {
+        // a torn line: skip it
+      }
+    }
+  };
+  sessions.afterTurn = async (sessionId) => {
+    ingestRunner(sessionId);
+    await checks.afterTurn(sessionId);
+  };
+  const scratch = new ScratchService(join(config.userData, 'scratch'), containment, config.node, config.nodeEnv);
   const branches = new BranchService(repos, sessions);
   const gh = config.github ? config.github.gh : findOnPath('gh');
   const ghRun = config.github?.run ?? runFile;
@@ -166,7 +202,7 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
-      if (/^(rules|commands|checks|sync|board|mcp)\./.test(key) || key === 'pullRequests') throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
+      if (/^(rules|commands|checks|sync|board|mcp|envsets)\./.test(key) || key === 'pullRequests') throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
       repos.settings.set(key, value);
       if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
@@ -312,6 +348,18 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'checks.run': ({ sessionId }) => checks.run(sessionId),
+    'scratch.prepare': ({ language, code }) => scratch.prepare(language, code),
+    'scratch.write': ({ extension, content }) => scratch.write(extension, content),
+    'envSets.list': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return repos.settings.get(`envsets.${workspaceId}`, []);
+    },
+    'envSets.save': ({ workspaceId, sets }) => {
+      workspaceRoot(workspaceId);
+      // Secret values never reach the host: only names and plain values are stored here.
+      repos.settings.set(`envsets.${workspaceId}`, sets.map((s) => ({ ...s, vars: s.vars.map((v) => (v.secret ? { ...v, value: '' } : v)) })));
+      return { ok: true };
+    },
     'history.record': ({ workspaceId, sessionId, command, cwd, exitCode }) => {
       repos.history.record({ workspaceId, sessionId, command, cwd, exitCode });
       return { ok: true };
@@ -375,10 +423,12 @@ export function createHost(config: HostConfig) {
       return repos.runs.configs(workspaceId);
     },
     'runs.saveConfig': (c) => repos.runs.saveUser(c),
-    'runs.record': (run) => {
-      const ws = run.sessionId
-        ? repos.sessions.get(run.sessionId)?.workspaceId
-        : repos.workspaces.list().find((w) => run.worktreePath.startsWith(w.rootPath))?.id;
+    'runs.record': ({ workspaceId, ...run }) => {
+      const ws =
+        workspaceId ??
+        (run.sessionId
+          ? repos.sessions.get(run.sessionId)?.workspaceId
+          : repos.workspaces.list().find((w) => run.worktreePath.startsWith(w.rootPath))?.id);
       const saved = repos.runs.record(run, ws ?? null);
       workflows.onRunRecorded(run, ws ?? null);
       if (run.sessionId)
@@ -451,6 +501,19 @@ export function createHost(config: HostConfig) {
       }
       if (resolved.servers.length) {
         sessions.record(sessionId, { type: 'notice', level: 'info', text: `Shared MCP servers: ${resolved.servers.map((s) => s.name).join(', ')}.` });
+      }
+    }
+    // CR-08: the runner tools, with this workspace's configurations, running inside the session's worktree.
+    const session = repos.sessions.get(sessionId);
+    if (config.runnerMcpEntry && ws && session?.worktreePath && repos.settings.get<boolean>('runner.forAgents', true)) {
+      const configs = repos.runs.configs(workspaceId).map((c) => ({ name: c.name, command: c.command, cwd: c.cwd === '.' ? '.' : relPath(ws.rootPath, c.cwd) || '.' }));
+      if (configs.length) {
+        servers.push({
+          name: 'ade-runner',
+          command: config.node.command,
+          args: [...config.node.args, config.runnerMcpEntry],
+          env: { ...config.nodeEnv, ADE_RUNNER_CONFIG: JSON.stringify(configs), ADE_RUNNER_ROOT: session.worktreePath, ADE_RUNNER_LOG: runnerLog(sessionId) },
+        });
       }
     }
     // CO-10: the user's personal servers, for every workspace.

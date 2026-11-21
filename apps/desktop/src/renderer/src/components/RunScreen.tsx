@@ -1,66 +1,60 @@
-import { Badge, Button, EmptyState, SectionLabel } from '@ade/ui';
-import type { Run, RunConfig } from '@ade/contracts';
+import { Badge, Button, EmptyState, SectionLabel, Tabs } from '@ade/ui';
+import type { EnvSet, Run, RunConfig } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
-import { host, pty } from '../lib/bridge.ts';
+import { host, main } from '../lib/bridge.ts';
 import { attachmentText, joinPath } from '../lib/format.ts';
-import { attempt, currentWorkspace, selectedSession, useStore } from '../lib/store.ts';
-import { onRunFinished, useTerminals } from '../lib/terminals.ts';
-import { Field, inputClass } from './Modal.tsx';
-import { TerminalView } from './terminal/TerminalView.tsx';
 import { sendChecked } from '../lib/guards.ts';
+import { startRun } from '../lib/runs.ts';
+import { attempt, currentWorkspace, selectedSession, useStore } from '../lib/store.ts';
+import { Field, inputClass } from './Modal.tsx';
+import { CompareRunsDialog, EnvSetsDialog, ScratchpadPanel, TestResultsPanel } from './RunExtras.tsx';
+import { TerminalView } from './terminal/TerminalView.tsx';
 
 const runAsText = (r: Run) => `$ ${r.command.join(' ')}\n${r.output.trimEnd().slice(-20_000)}\n[exit ${r.exitCode ?? 'unknown'}]`;
 
-/** Screen 8: run bar, configurations, output and history (CR-01 to CR-04). */
+/** Screen 8: run bar, output, scratchpad and history (CR-01 to CR-11). */
 export function RunScreen() {
   const workspace = useStore(currentWorkspace);
   const session = useStore(selectedSession);
   const sessions = useStore((s) => s.sessions);
   const attach = useStore((s) => s.attach);
   const toast = useStore((s) => s.toast);
+  const active = useStore((s) => s.activeRun);
+  const runsVersion = useStore((s) => s.runsVersion);
   const [configs, setConfigs] = useState<RunConfig[]>([]);
   const [configId, setConfigId] = useState('');
   const [target, setTarget] = useState<string>('checkout');
   const [history, setHistory] = useState<Run[]>([]);
-  const [current, setCurrent] = useState<{ runId: string; terminalId: string; startedAt: string; config: RunConfig; cwd: string; sessionId: string | null } | null>(null);
   const [draft, setDraft] = useState({ name: '', command: '' });
+  const [view, setView] = useState<'output' | 'scratchpad'>('output');
+  const [envSets, setEnvSets] = useState<EnvSet[]>([]);
+  const [envSetId, setEnvSetId] = useState('');
+  const [editingEnv, setEditingEnv] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  const [comparing, setComparing] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
     if (!workspace) return;
-    const [c, h] = await Promise.all([host.call('runs.configs', { workspaceId: workspace.id }), host.call('runs.history', { workspaceId: workspace.id })]);
+    const [c, h, e] = await Promise.all([host.call('runs.configs', { workspaceId: workspace.id }), host.call('runs.history', { workspaceId: workspace.id }), host.call('envSets.list', { workspaceId: workspace.id })]);
     setConfigs(c);
     setHistory(h);
+    setEnvSets(e);
     setConfigId((id) => (id && c.some((x) => x.id === id) ? id : (c[0]?.id ?? '')));
+    setEnvSetId((id) => (id && e.some((x) => x.id === id) ? id : ''));
   }, [workspace]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, runsVersion, editingEnv]);
 
   useEffect(() => {
     if (session?.worktreePath) setTarget(session.id);
   }, [session]);
 
-  useEffect(
-    () =>
-      onRunFinished(async (r) => {
-        if (!current || r.runId !== current.runId) return;
-        await attempt(() =>
-          host.call('runs.record', {
-            runConfigId: current.config.id,
-            sessionId: current.sessionId,
-            worktreePath: current.cwd,
-            command: current.config.command,
-            startedAt: current.startedAt,
-            endedAt: new Date().toISOString(),
-            exitCode: r.exitCode,
-            output: r.output,
-          }),
-        );
-        void refresh();
-      }),
-    [current, refresh],
-  );
+  // A new run (from the run bar, the editor or the scratchpad) shows its output.
+  useEffect(() => {
+    if (active?.runId) setView('output');
+  }, [active?.runId]);
 
   if (!workspace) return <EmptyState title="Run" body="Open a repository to detect its run, test and build commands." />;
 
@@ -72,13 +66,11 @@ export function RunScreen() {
     const base = sessionId ? sessions[sessionId]?.worktreePath : workspace.rootPath;
     if (!base) return;
     const cwd = config.cwd === '.' ? base : joinPath(base, config.cwd);
-    const runId = crypto.randomUUID();
-    const res = await attempt(() => pty.call('pty.run', { command: config.command, cwd, sessionId, runId }));
-    if (res) {
-      setCurrent({ runId, terminalId: res.terminalId, startedAt: new Date().toISOString(), config, cwd, sessionId });
-      useTerminals.setState((s) => ({ terminals: { ...s.terminals } }));
-    }
+    setView('output');
+    await startRun({ command: config.command, cwd, sessionId, configId: config.id, label: config.name, envSetId: envSetId || null });
   };
+  const shown = history.find((r) => r.id === selectedRun) ?? (active ? history.find((r) => r.startedAt >= active.startedAt && r.command.join(' ') === active.command.join(' ')) : undefined);
+  const compareRuns = comparing.length === 2 ? (comparing.map((id) => history.find((r) => r.id === id)!).sort((a, b) => a.startedAt.localeCompare(b.startedAt)) as [Run, Run]) : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -104,44 +96,94 @@ export function RunScreen() {
             ))}
           </select>
         </Field>
+        <Field label="Environment" htmlFor="run-env">
+          <select id="run-env" value={envSetId} onChange={(e) => setEnvSetId(e.target.value)} className={`${inputClass} min-w-40`}>
+            <option value="">None</option>
+            {envSets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Button variant="ghost" onClick={() => setEditingEnv(true)}>
+          Environment sets
+        </Button>
         <Button variant="primary" disabled={!config} onClick={() => void run()} aria-label="Run the configuration">
           Run
         </Button>
         {config ? <code className="self-center text-[12px] text-ink-muted">{config.command.join(' ')}</code> : null}
+        {active?.previewUrl ? (
+          <Button className="self-center" onClick={() => void attempt(() => main('main.openPreview', { url: active.previewUrl! }))}>
+            Open preview
+          </Button>
+        ) : null}
       </div>
       <div className="flex min-h-0 flex-1">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {current ? (
-            <TerminalView key={current.terminalId} id={current.terminalId} />
+          <div className="border-b border-line bg-surface px-3 pt-1">
+            <Tabs
+              label="Run view"
+              value={view}
+              onChange={setView}
+              items={[
+                { value: 'output', label: active ? `Output · ${active.label}` : 'Output' },
+                { value: 'scratchpad', label: 'Scratchpad' },
+              ]}
+            />
+          </div>
+          {view === 'scratchpad' ? (
+            <ScratchpadPanel />
+          ) : active ? (
+            <TerminalView key={active.terminalId} id={active.terminalId} />
           ) : (
-            <EmptyState title="Nothing running" body="Pick a configuration and a worktree, then run it. Every run is kept in the history." />
+            <EmptyState title="Nothing running" body="Pick a configuration and a worktree, then run it; or run a file from the editor, or a snippet in the scratchpad. Every run is kept in the history." />
           )}
         </main>
         <aside aria-label="Run history" className="flex w-96 flex-col gap-3 overflow-auto border-l border-line bg-surface p-3">
-          <SectionLabel>History</SectionLabel>
+          {shown ? <TestResultsPanel run={shown} /> : null}
+          <div className="flex items-center gap-2">
+            <SectionLabel>History</SectionLabel>
+            {comparing.length ? (
+              <span className="ml-auto text-[12px] text-ink-muted">{comparing.length === 1 ? 'Choose one more run to compare' : ''}</span>
+            ) : null}
+          </div>
           {history.length === 0 ? <p className="m-0 text-ink-muted">No runs yet.</p> : null}
           {history.map((r) => (
-            <div key={r.id} className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-line p-2.5">
+            <div key={r.id} className={`flex flex-col gap-1.5 rounded-[var(--radius)] border p-2.5 ${shown?.id === r.id ? 'border-accent' : 'border-line'}`}>
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate text-[12px]">{r.command.join(' ')}</code>
+                <button type="button" className="min-w-0 flex-1 truncate text-left font-mono text-[12px] hover:underline" onClick={() => setSelectedRun(r.id)}>
+                  {r.command.join(' ')}
+                </button>
                 <Badge tone={r.exitCode === 0 ? 'ok' : 'danger'}>{r.exitCode === 0 ? 'Passed' : `Failed · exit ${r.exitCode}`}</Badge>
               </div>
               <span className="text-[12px] text-ink-muted">
                 {new Date(r.startedAt).toLocaleString('en-GB')} · {r.sessionId ? (sessions[r.sessionId]?.title ?? 'session') : 'your checkout'}
               </span>
-              {r.sessionId ? (
-                <Button
-                  size="dense"
-                  onClick={() =>
-                    sendChecked(runAsText(r), () => {
-                      attach(r.sessionId!, attachmentText(`Run: ${r.command.join(' ')}`, runAsText(r)));
-                      toast('Attached to the next prompt.');
-                    })
-                  }
-                >
-                  Send run to agent
-                </Button>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <label className="flex min-h-9 items-center gap-1.5 text-[12px]">
+                  <input
+                    type="checkbox"
+                    checked={comparing.includes(r.id)}
+                    onChange={(e) => setComparing((c) => (e.target.checked ? [...c, r.id].slice(-2) : c.filter((x) => x !== r.id)))}
+                    className="size-4 accent-[var(--accent)]"
+                  />
+                  Compare
+                </label>
+                {r.sessionId ? (
+                  <Button
+                    size="dense"
+                    onClick={() =>
+                      sendChecked(runAsText(r), () => {
+                        attach(r.sessionId!, attachmentText(`Run: ${r.command.join(' ')}`, runAsText(r)));
+                        toast('Attached to the next prompt.');
+                      })
+                    }
+                  >
+                    Send run to agent
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ))}
           <SectionLabel className="mt-2">Add a configuration</SectionLabel>
@@ -166,6 +208,8 @@ export function RunScreen() {
           </Button>
         </aside>
       </div>
+      <CompareRunsDialog runs={compareRuns} onClose={() => setComparing([])} />
+      <EnvSetsDialog open={editingEnv} onClose={() => setEditingEnv(false)} workspaceId={workspace.id} />
     </div>
   );
 }
