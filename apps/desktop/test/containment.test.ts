@@ -6,6 +6,7 @@ import { git } from '@ade/git';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import {
+  appPathsUnderTmp,
   bubblewrapArgs,
   BubblewrapWrapper,
   execRunner,
@@ -29,6 +30,17 @@ afterEach(() => {
 });
 
 describe('bubblewrap arguments', () => {
+  it('keeps an AppImage visible behind the private /tmp', () => {
+    expect(appPathsUnderTmp('/tmp/.mount_ADEabc/ade', '/tmp/.mount_ADEabc')).toEqual(['/tmp/.mount_ADEabc']);
+    expect(appPathsUnderTmp('/tmp/appimage_extracted_1/ade', undefined)).toEqual(['/tmp/appimage_extracted_1']);
+    expect(appPathsUnderTmp('/opt/ADE/ade', undefined)).toEqual([]);
+    const args = bubblewrapArgs({ writable: ['/w'], tmp: '/data/tmp/s1', cwd: '/w', readonly: ['/tmp/.mount_ADEabc'] });
+    const at = args.indexOf('--ro-bind-try');
+    // After the private /tmp, or the bind would be hidden by it.
+    expect(at).toBeGreaterThan(args.indexOf('/data/tmp/s1'));
+    expect(args.slice(at, at + 3)).toEqual(['--ro-bind-try', '/tmp/.mount_ADEabc', '/tmp/.mount_ADEabc']);
+  });
+
   it('makes everything read-only except the writable paths and a private /tmp', () => {
     const args = bubblewrapArgs({ writable: ['/w/tree', '/repo/.git'], tmp: '/data/tmp/s1', cwd: '/w/tree' });
     expect(args.slice(0, 3)).toEqual(['--ro-bind', '/', '/']);

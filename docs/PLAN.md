@@ -120,7 +120,9 @@ block attached; running a configuration adds a history row.
 - [x] **M5-T05** First-run setup and settings (PK-02, HI-05).
 - [x] **M5-T06** Installers, self-update and signing configuration (PK-01, PK-03). Signing certificates
       come from the user: leave documented placeholders, never commit secrets.
-- [ ] **M5-T07** Clean-machine install test in CI for Windows and Linux.
+- [x] **M5-T07** Clean-machine install test in CI for Windows and Linux. The on-demand "Install test" workflow
+      installs the NSIS installer, the `.deb` and the AppImage on fresh runners and runs the app's smoke test
+      (`ADE_SMOKE_TEST_RESULT`). All three pass. Hosted runners are fresh VMs, not bare OS installs.
 
 **MVP gate:** from a single installer on a clean Windows machine and a clean Linux machine, complete one
 task with each of the three agents from prompt to landed change, then restart with history intact. Stop.
