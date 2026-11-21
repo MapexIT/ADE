@@ -167,7 +167,7 @@ describe('host with the fake agent', () => {
   it('refuses Autonomous when the session is not sandboxed (AP-01, CN-05)', async () => {
     const ws = await host.handlers['workspace.open']({ path: repo });
     await expect(
-      host.handlers['sessions.create']({ workspaceId: ws.id, agentId: 'fake', prompt: text('hi'), permissionProfile: 'autonomous', bringChanges: false }),
+      host.handlers['sessions.create']({ workspaceId: ws.id, agentId: 'fake', prompt: text('hi'), permissionProfile: 'autonomous', bringChanges: false, hostSandbox: false }),
     ).rejects.toMatchObject({ code: 'autonomous_requires_sandbox' });
   });
 
