@@ -16,11 +16,11 @@ export class CredentialCache {
   }
 }
 
-export type Runner = (file: string, args: string[], env: NodeJS.ProcessEnv) => Promise<{ code: number; stdout: string; stderr: string }>;
+export type Runner = (file: string, args: string[], env: NodeJS.ProcessEnv, cwd?: string) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-export const runFile: Runner = (file, args, env) =>
+export const runFile: Runner = (file, args, env, cwd) =>
   new Promise((resolve) => {
-    execFile(file, args, { env, windowsHide: true, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(file, args, { env, ...(cwd ? { cwd } : {}), windowsHide: true, timeout: 120_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? (err as { code: number }).code : 1) : 0;
       resolve({ code, stdout: String(stdout), stderr: String(stderr) });
     });

@@ -12,7 +12,10 @@ import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig, resolveMcpServers } from './workspace-config.ts';
 import type { McpServerSpec } from '@ade/acp-client';
 import { listWorkflows } from './workflows.ts';
-import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider } from './connectors.ts';
+import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider, type Runner } from './connectors.ts';
+import { ChecksService } from './checks.ts';
+import { BranchService } from './branches.ts';
+import { ReviewAssistant } from './review-assistant.ts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -33,6 +36,8 @@ export interface HostConfig {
   databasePath?: string;
   /** Home folder for the agents' user skills folders (SK-05); tests point it at a temporary folder. */
   homeDir?: string;
+  /** RV-12: overrides the GitHub CLI and how it is run (tests only). */
+  github?: { gh: string | null; run: Runner };
   /** CN-07: overrides the platform and process runner the sandbox probe uses (tests only). */
   sandbox?: { platform?: NodeJS.Platform; exec?: Exec };
 }
@@ -104,6 +109,15 @@ export function createHost(config: HostConfig) {
     () => sessions.refreshInbox(),
   );
   sessions.inboxSources.push(() => workflows.inbox());
+  const resolveCommand = commandResolver(config.node, config.nodeEnv);
+  const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
+  sessions.afterTurn = (sessionId) => checks.afterTurn(sessionId);
+  const branches = config.github
+    ? new BranchService(repos, sessions, review, credentials, config.github.run, config.github.gh)
+    : new BranchService(repos, sessions, review, credentials);
+  workflows.openPullRequest = (sessionId, input) => branches.pullRequest(sessionId, input);
+  mkdirSync(join(config.userData, 'review-tmp'), { recursive: true });
+  const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const skills = new SkillService(join(config.userData, 'skills'), config.homeDir ?? homedir());
   sessions.installSkills = async (repoRoot, worktree, agentId, names) =>
     skills.install(worktree, agentId, await skills.resolve(repoRoot, names));
@@ -126,7 +140,7 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
-      if (key.startsWith('rules.') || key.startsWith('commands.')) throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
+      if (key.startsWith('rules.') || key.startsWith('commands.') || key.startsWith('checks.')) throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
       repos.settings.set(key, value);
       if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
@@ -198,6 +212,34 @@ export function createHost(config: HostConfig) {
     'sessions.handOff': ({ sessionId, agentId, note }) => sessions.handOff(sessionId, agentId, note),
     'sessions.detach': ({ sessionId }) => sessions.detach(sessionId),
     'sessions.overlaps': ({ workspaceId }) => sessions.overlaps(workspaceId),
+    'sessions.baseStatus': ({ sessionId }) => branches.baseStatus(sessionId),
+    'sessions.rebase': ({ sessionId, askAgent }) => branches.rebase(sessionId, askAgent),
+    'sessions.pullRequest': ({ sessionId, ...input }) => branches.pullRequest(sessionId, input),
+    'sessions.draftCommitMessage': async ({ sessionId, hint }) => {
+      const reply = await sessions.ask(
+        sessionId,
+        [
+          'Write a commit message for the changes in this worktree: a subject line of at most 72 characters in the imperative mood, a blank line, then a short body saying why. Reply with the message only. Do not change any files.',
+          hint?.trim() ?? '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      );
+      return { message: cleanCommitMessage(reply) };
+    },
+    'sessions.reviewAssist': ({ sessionId, agentId, focus }) => assistant.run(sessionId, agentId, focus),
+    'sessions.reviewAssessment': ({ sessionId }) => assistant.assessment(sessionId),
+    'checks.settings': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return checks.settings(workspaceId);
+    },
+    'checks.saveSettings': ({ workspaceId, settings }) => {
+      workspaceRoot(workspaceId);
+      checks.save(workspaceId, settings);
+      return { ok: true };
+    },
+    'checks.run': ({ sessionId }) => checks.run(sessionId),
+    'checks.results': ({ sessionId }) => checks.last(sessionId),
     'commands.list': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
       return repos.settings.get(`commands.${workspaceId}`, []);
@@ -331,3 +373,13 @@ export function createHost(config: HostConfig) {
 }
 
 export type Host = ReturnType<typeof createHost>;
+
+/** RV-13: strips code fences and quotes an agent may wrap the message in. Pure. */
+export function cleanCommitMessage(reply: string): string {
+  return reply
+    .trim()
+    .replace(/^```[a-z]*\s*\n?/i, '')
+    .replace(/\n?```\s*$/, '')
+    .replace(/^(["'])([\s\S]*)\1$/, '$2')
+    .trim();
+}

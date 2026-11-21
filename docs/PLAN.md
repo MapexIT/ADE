@@ -147,8 +147,8 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       terminal UI; follow mode; shared MCP servers; saved commands (PL-03 to PL-05, SR-06 to SR-08, WA-06,
       ST-05, TM-07). Compare and hand-off are tested with the fake agent standing in; the background tray and
       "open in the agent's UI" are not covered by an automated test against a real window or agent.
-- [ ] **M7-T03** Checks, batch review, review assistant, rebase and conflicts, pull requests (RV-09 to
-      RV-14).
+- [x] **M7-T03** Checks, batch review, review assistant, rebase and conflicts, pull requests (RV-09 to
+      RV-14). Pull requests are tested against a local bare remote with `gh` stubbed; not yet opened on GitHub.
 - [ ] **M7-T04** Connector state sync, review comments, failed checks, progress notes, board view (CO-05
       to CO-10).
 - [ ] **M7-T05** Smart terminal v1 features (SM-09 to SM-14) and code runner v1 features (CR-05 to CR-11).

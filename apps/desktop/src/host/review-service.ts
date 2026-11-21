@@ -69,19 +69,32 @@ export class ReviewService {
     if (s.inPlace) return this.keepInPlace(s, mode, files);
     const workspace = this.repos.workspaces.get(s.workspaceId)!;
     const from = base ?? s.baseCommit;
-    let detail: Record<string, unknown>;
     if (mode === 'apply') {
       const head = await snapshot(s.worktreePath, null, 'ADE land');
       const how = await applyToCheckout(s.worktreePath, workspace.rootPath, from, head, files);
-      detail = { files, how };
+      await this.recordLanding(sessionId, 'apply', files, { how }, 'apply');
     } else {
-      // One commit on top of the run's base, so checkpoint commits never reach the branch history.
-      if (base && base !== s.baseCommit) await git(['reset', '--soft', base], { cwd: s.worktreePath });
-      const commit = await commitFiles(s.worktreePath, files, message?.trim() || s.title);
-      detail = { files, commit, branch: s.branch };
+      const { commit } = await this.commitForLanding(sessionId, files, message, base);
+      await this.recordLanding(sessionId, 'commit', files, { commit, branch: s.branch }, 'commit');
     }
-    const agent = this.repos.sessions.require(sessionId).agentId;
-    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: `session.land.${mode}`, detail: { ...detail, agent } });
+  }
+
+  /**
+   * Commits the selected files on the session branch, as one commit on top of `base` (a workflow run's base)
+   * so checkpoint commits never reach the branch history. Does not end the session.
+   */
+  async commitForLanding(sessionId: string, files: string[], message?: string, base?: string): Promise<{ commit: string }> {
+    const s = this.requireWorktree(sessionId);
+    if (this.sessions.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish before landing.');
+    if (s.inPlace) throw new RpcError('in_place', 'A session in your checkout keeps its changes where they are; commit them yourself.');
+    if (base && base !== s.baseCommit) await git(['reset', '--soft', base], { cwd: s.worktreePath });
+    return { commit: await commitFiles(s.worktreePath, files, message?.trim() || s.title) };
+  }
+
+  /** Records a land in the audit log and the timeline, then ends the session. */
+  async recordLanding(sessionId: string, mode: 'apply' | 'commit', files: string[], detail: Record<string, unknown>, action: string): Promise<void> {
+    const s = this.repos.sessions.require(sessionId);
+    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: `session.land.${action}`, detail: { files, ...detail, agent: s.agentId } });
     this.sessions.record(sessionId, { type: 'session.landed', mode, files });
     await this.sessions.finish(sessionId, 'land');
   }

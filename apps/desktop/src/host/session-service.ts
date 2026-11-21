@@ -620,6 +620,9 @@ export class SessionService {
     const endCommit = await snapshot(session.worktreePath!, checkpointRefName(sessionId, index, 'end'), `ADE turn ${index} end`, session.inPlace).catch(() => null);
     this.repos.turns.end(turn.id, stopReason, endCommit);
     if (endCommit) this.inBackground(this.checkOverlap(sessionId, endCommit));
+    if (stopReason !== 'cancelled' && stopReason !== 'error' && this.afterTurn && this.repos.queue.list(sessionId).length === 0) {
+      this.inBackground(this.afterTurn(sessionId));
+    }
     if (endCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: endCommit, at: 'end' }, turn.id);
     this.append(sessionId, { type: 'turn.ended', turnId: turn.id, stopReason, usage: live.agent.usage }, turn.id);
     live.turn = null;
@@ -802,6 +805,42 @@ export class SessionService {
     }
     void this.sendNext(sessionId);
     return this.repos.sessions.require(sessionId);
+  }
+
+  /** RV-10: runs after every finished turn when nothing else is queued (the workspace's checks). Set by the composition root. */
+  afterTurn: ((sessionId: string) => Promise<void>) | null = null;
+
+  /**
+   * Sends one prompt and returns the agent's reply once the turn ends (RV-13). The exchange stays in the
+   * timeline like any other turn.
+   */
+  async ask(sessionId: string, text: string, timeoutMs = 10 * 60_000): Promise<string> {
+    const session = this.repos.sessions.require(sessionId);
+    if (isTerminal(session.state)) throw new RpcError('session_ended', 'This session has ended.');
+    if (this.hasActiveTurn(sessionId) || this.repos.queue.list(sessionId).length || ['starting', 'working', 'waiting-on-user', 'queued'].includes(session.state)) {
+      throw new RpcError('busy', 'Wait for the agent to finish first.');
+    }
+    const from = this.repos.events.lastSeq(sessionId);
+    const ended = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        off();
+        reject(new RpcError('timeout', 'The agent did not answer in time.'));
+      }, timeoutMs);
+      const off = this.bus.on('session.event', (e) => {
+        if (e.sessionId !== sessionId || e.seq <= from) return;
+        const crashed = e.type === 'session.state_changed' && (e.to === 'interrupted' || isTerminal(e.to));
+        if (e.type === 'turn.ended' || crashed) {
+          clearTimeout(timer);
+          off();
+          if (crashed) reject(new RpcError('agent_failed', 'The agent stopped before answering.'));
+          else resolve();
+        }
+      });
+    });
+    await this.prompt(sessionId, [{ type: 'text', text }]);
+    await ended;
+    const reply = this.repos.events.list(sessionId).filter((e) => e.seq > from && e.type === 'agent.message').at(-1);
+    return reply?.type === 'agent.message' ? reply.text : '';
   }
 
   /** SR-08: stops ADE's agent process so the agent's own terminal UI can resume the same conversation. */
