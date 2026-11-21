@@ -32,6 +32,50 @@ interface Descriptor {
    * user installs the agent's ACP adapter in the distribution (`npm i -g @agentclientprotocol/claude-agent-acp`).
    */
   foreignLaunch?(wrapper: LaunchWrapper): Command;
+  /**
+   * CN-04: how this agent's own sandbox is switched on for a profile on a platform, and the honest state that
+   * results. Absent means the agent has no sandbox ADE can switch on (the session is not sandboxed).
+   */
+  agentSandbox?(profile: PermissionProfile, platform: NodeJS.Platform): AgentSandbox;
+}
+
+/** CN-04: launch settings for an agent's own sandbox. Facts and sources are in docs/DECISIONS.md. */
+export interface AgentSandbox {
+  state: SandboxState;
+  env?: Record<string, string>;
+  sessionMeta?: Record<string, unknown>;
+}
+
+/**
+ * Codex (codex-acp 2.8, Codex 0.170): `INITIAL_AGENT_MODE` picks a preset of approval policy and sandbox. Every
+ * profile maps to a sandboxed preset; full access is never chosen. Commands run in Codex's sandbox, verified on
+ * Linux (writes outside the workspace fail, also nested inside ADE's bubblewrap). On Windows the sandbox depends
+ * on Codex's own `windows.sandbox` setup, which ADE cannot confirm through the adapter, so it is not claimed.
+ */
+export const CODEX_MODES: Record<PermissionProfile, string> = {
+  ask: 'read-only',
+  'read-only': 'read-only',
+  'auto-edit': 'workspace-write',
+  autonomous: 'agent',
+};
+
+export function codexSandbox(profile: PermissionProfile, platform: NodeJS.Platform): AgentSandbox {
+  return { state: platform === 'linux' ? 'commands-sandboxed' : 'not-sandboxed', env: { INITIAL_AGENT_MODE: CODEX_MODES[profile] } };
+}
+
+/**
+ * Claude Code (claude-agent-acp 0.109, Agent SDK 0.3.328): `_meta.claudeCode.options.sandbox` on `session/new`.
+ * With `enabled: true` the SDK fails closed (`failIfUnavailable` defaults to true): without bubblewrap the
+ * session errors instead of running commands unsandboxed. `allowUnsandboxedCommands: false` removes the model's
+ * `dangerouslyDisableSandbox` escape. Linux only: native Windows needs a one-time `/sandbox install` and macOS
+ * is not verified yet.
+ */
+export function claudeSandbox(_profile: PermissionProfile, platform: NodeJS.Platform): AgentSandbox {
+  if (platform !== 'linux') return { state: 'not-sandboxed' };
+  return {
+    state: 'commands-sandboxed',
+    sessionMeta: { claudeCode: { options: { sandbox: { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false } } } },
+  };
 }
 
 /** Permission profile -> the agent mode ids that implement it, in preference order (matched by id, not by agent). */
@@ -41,7 +85,8 @@ interface Descriptor {
 const PROFILE_MODES: Record<PermissionProfile, string[]> = {
   ask: ['default', 'ask', 'read-only'],
   'auto-edit': ['acceptEdits', 'workspace-write', 'auto-edit'],
-  autonomous: ['bypassPermissions', 'agent-full-access', 'full-access'],
+  // Never Codex's agent-full-access: it switches Codex's sandbox off (CN-04).
+  autonomous: ['bypassPermissions', 'agent'],
   'read-only': ['plan', 'read-only', 'readonly'],
 };
 
@@ -89,16 +134,19 @@ export class AcpRuntime implements AgentRuntime {
   }
 
   async start(opts: StartOptions): Promise<AgentSession> {
+    // CN-04: the agent's own sandbox. Inside WSL the agent runs on Linux, whatever the host is.
+    const sandbox = this.d.agentSandbox?.(opts.permissionProfile, opts.wrapper?.kind === 'wsl' ? 'linux' : process.platform);
+    const withMeta: StartOptions = sandbox?.sessionMeta ? { ...opts, sessionMeta: sandbox.sessionMeta } : opts;
     if (opts.wrapper?.foreign) {
       const cmd = this.foreignCommand(opts.wrapper);
       if (!cmd) throw new Error(`${this.label} cannot run inside ${opts.wrapper.kind.toUpperCase()}.`);
-      return this.connect(cmd, buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), opts);
+      return this.connect(cmd, { ...buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), ...sandbox?.env }, withMeta);
     }
     const install = await this.detect();
     const launch = this.d.launch(install, this.locator);
     if (!launch) throw new Error(`${this.label} cannot be started: it is not installed or its adapter is missing.`);
-    const env = { ...buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), ...launch.env };
-    return this.connect(launch.cmd, env, opts);
+    const env = { ...buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), ...launch.env, ...sandbox?.env };
+    return this.connect(launch.cmd, env, withMeta);
   }
 
   private async connect(cmd: Command, env: Record<string, string>, opts: StartOptions): Promise<AgentSession> {
@@ -108,12 +156,9 @@ export class AcpRuntime implements AgentRuntime {
     return session;
   }
 
-  /**
-   * Honest safety (rule 5): no agent sandbox is switched on by ADE until the spike verifies how each adapter
-   * accepts sandbox settings at launch (docs/DECISIONS.md). Until then every session is "not sandboxed".
-   */
-  sandboxFor(_profile: PermissionProfile, _platform: NodeJS.Platform): SandboxState {
-    return 'not-sandboxed';
+  /** Honest safety (rule 5): only what the agent's verified sandbox settings enforce; otherwise "not sandboxed". */
+  sandboxFor(profile: PermissionProfile, platform: NodeJS.Platform): SandboxState {
+    return this.d.agentSandbox?.(profile, platform).state ?? 'not-sandboxed';
   }
 }
 
@@ -144,6 +189,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/claude-agent-acp')),
       // Bin names from the adapters' package.json (claude-agent-acp 0.109, codex-acp 2.8).
       foreignLaunch: () => ({ command: 'claude-agent-acp', args: [] }),
+      agentSandbox: claudeSandbox,
     },
     {
       id: 'codex',
@@ -153,6 +199,7 @@ export function createRuntimes(locator: AdapterLocator, opts: { fakeAgentEntry?:
       envPolicy: { prefixes: ['CODEX_'], names: ['OPENAI_API_KEY', 'OPENAI_BASE_URL'] },
       launch: () => nodeLaunch(locator, locator.adapterEntry('@agentclientprotocol/codex-acp')),
       foreignLaunch: () => ({ command: 'codex-acp', args: [] }),
+      agentSandbox: codexSandbox,
     },
   ];
   if (opts.fakeAgentEntry) {

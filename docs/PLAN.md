@@ -84,8 +84,10 @@ of the three agents on Windows and on Linux.
 - [x] **M3-T03** Changes view with Monaco diff; per-turn diff (RV-01, RV-03).
 - [x] **M3-T04** Comment to agent; edit in place with attribution (RV-05, RV-06).
 - [x] **M3-T05** Land and discard; audit log (RV-07, RV-08, HI-02).
-- [ ] **M3-T06** Sandbox pass-through, sandbox badge, minimal environment (CN-04 to CN-06).
-      Badge and minimal environment are done and tested; pass-through waits for spike question 5.
+- [x] **M3-T06** Sandbox pass-through, sandbox badge, minimal environment (CN-04 to CN-06). Codex and Claude
+      Code sandboxes are switched on at launch on Linux. Windows is not claimed until it is verified through the
+      adapters. The Codex sandbox was verified with `codex sandbox`; the full path has not been run with
+      signed-in agents.
 
 **Gate (Playwright, fake agent):** two turns edit two files; the per-turn diff is correct; undo turn 2;
 land one file into the checkout; discard the session; the final patch exists in app data.
