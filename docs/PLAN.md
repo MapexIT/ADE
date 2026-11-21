@@ -15,8 +15,9 @@ Feature IDs refer to `docs/FEATURES.md`.
 
 Goal: answer the eight spike questions in `docs/DECISIONS.md` before any product code exists.
 
-- [ ] **M0-T01** Minimal Electron + TypeScript app with one utility process. Done when `pnpm dev` opens a
-      window on Windows and Linux.
+- [x] **M0-T01** Minimal Electron + TypeScript app with one utility process. Done when `pnpm dev` opens a
+      window on Windows and Linux. Superseded by the product: the installed app opens its window and passes the
+      smoke test on Windows and Ubuntu (M5-T07).
 - [ ] **M0-T02** ACP hello world: spawn `opencode acp`, run `initialize`, `session/new` and one
       `session/prompt`, and print every `session/update`. Repeat with the Claude Code and Codex adapters.
       Done when all three answer one prompt and their `initialize` responses are saved to `docs/spike/`.
@@ -25,8 +26,8 @@ Goal: answer the eight spike questions in `docs/DECISIONS.md` before any product
       questions 2 and 3 are answered.
 - [ ] **M0-T04** Time worktree creation plus a setup script on two real repositories. Done when question 4
       is answered.
-- [ ] **M0-T05** Find how to switch on each agent's sandbox and permission mode at launch. Done when
-      question 5 is answered.
+- [x] **M0-T05** Find how to switch on each agent's sandbox and permission mode at launch. Done when
+      question 5 is answered. Answered in M3-T06 (see `docs/DECISIONS.md`).
 - [ ] **M0-T06** node-pty with shell integration in PowerShell, bash and zsh: print parsed command
       boundaries and exit codes. Done when question 8 is answered.
 - [ ] **M0-T07** Build unsigned installers and install them on a clean Windows machine and a clean Linux
