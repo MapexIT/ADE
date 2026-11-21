@@ -142,7 +142,7 @@ describe('workflow runs with real sessions (M6-T02)', () => {
 
     host.handlers['workflows.decideGate']({ runId: started.id, nodeId: 'review', approved: true });
     r = await until(started.id, 'succeeded');
-    expect(node(r, 'open-pr').summary).toContain('does not open pull requests yet');
+    expect(node(r, 'open-pr').summary).toContain('push the branch and open the pull request yourself');
 
     // One commit with every node's work, directly on top of the run's base.
     const landed = host.repos.sessions.require(critique.id);

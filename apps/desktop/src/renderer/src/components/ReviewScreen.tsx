@@ -1,14 +1,19 @@
 import { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
-import type { DiffText } from '@ade/contracts';
+import type { DiffText, ReviewAssessment } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import { host } from '../lib/bridge.ts';
 import { agentLabel, joinPath, languageOf } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, selectedSession, useStore } from '../lib/store.ts';
 import { TurnPicker, useChanges } from './Inspector.tsx';
+import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton } from './ReviewExtras.tsx';
+import type { ReviewComment } from '../lib/review.ts';
+
+const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
+const RISK_ORDER = { high: 0, medium: 1, low: 2 } as const;
 
 /** Review and land (RV-01, RV-03, RV-05, RV-06, RV-07, RV-08). Review is the product. */
 export function ReviewScreen() {
@@ -24,6 +29,20 @@ export function ReviewScreen() {
   const [inline, setInline] = useState(false);
   const [comment, setComment] = useState<{ line: number; text: string } | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
+  const [pending, setPending] = useState<ReviewComment[]>([]);
+  const [drafting, setDrafting] = useState(false);
+  const [assessment, setAssessment] = useState<ReviewAssessment | null>(null);
+  const onAssessment = useCallback((a: ReviewAssessment | null) => setAssessment(a), []);
+  const risk = useMemo(() => new Map((assessment?.ranking ?? []).map((r) => [r.path, r])), [assessment]);
+  const ordered = useMemo(
+    () => (risk.size ? [...changes].sort((a, b) => (RISK_ORDER[risk.get(a.path)?.risk ?? 'low'] ?? 3) - (RISK_ORDER[risk.get(b.path)?.risk ?? 'low'] ?? 3)) : changes),
+    [changes, risk],
+  );
+  // Comments belong to the session they were written for.
+  useEffect(() => {
+    setPending([]);
+    setCommitMessage('');
+  }, [session?.id]);
   const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
 
   useEffect(() => {
@@ -44,6 +63,19 @@ export function ReviewScreen() {
   const busy = isLive(session.state);
   const ended = session.state === 'landed' || session.state === 'discarded';
   const files = [...selected];
+
+  const addToReview = () => {
+    if (!comment || !active || !comment.text.trim()) return;
+    setPending((p) => [...p, { path: active, line: comment.line, text: comment.text.trim() }]);
+    setComment(null);
+  };
+
+  const draftMessage = async () => {
+    setDrafting(true);
+    const res = await attempt(() => host.call('sessions.draftCommitMessage', { sessionId: session.id }));
+    setDrafting(false);
+    if (res?.message) setCommitMessage(res.message);
+  };
 
   const sendComment = (mode: 'now') => {
     if (!comment || !active) return;
@@ -86,13 +118,15 @@ export function ReviewScreen() {
           <TurnPicker sessionId={session.id} value={turnIndex} onChange={setTurnIndex} />
         </div>
       </div>
+      {!ended ? <BaseBanner session={session} /> : null}
       {ended ? (
         <EmptyState title={`This session has ${session.state === 'landed' ? 'landed' : 'been discarded'}`} body="Its worktree is gone. The audit log records what landed and who decided." />
       ) : (
         <div className="flex min-h-0 flex-1 flex-wrap">
           <aside aria-label="Changed files" className="flex min-h-0 w-72 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
             <SectionLabel>{changes.length} files · computed from Git</SectionLabel>
-            {changes.map((c) => (
+            {changes.length ? <AssistantPanel session={session} onResult={onAssessment} /> : null}
+            {ordered.map((c) => (
               <div key={c.path} className={cx('flex flex-col gap-1.5 rounded-[var(--radius)] border p-2.5', active === c.path ? 'border-2 border-accent bg-accent-tint' : 'border-line')}>
                 <div className="flex items-center gap-2">
                   <input
@@ -117,7 +151,13 @@ export function ReviewScreen() {
                   <span className="text-danger">-{c.deletions}</span>
                   <Badge>{c.status}</Badge>
                   <Badge tone={c.editedByUser ? 'accent' : 'neutral'}>{c.editedByUser ? 'You edited' : 'Agent'}</Badge>
+                  {risk.get(c.path) ? (
+                    <Badge tone={RISK_TONE[risk.get(c.path)!.risk]} title={risk.get(c.path)!.reason}>
+                      {risk.get(c.path)!.risk} risk
+                    </Badge>
+                  ) : null}
                 </div>
+                {risk.get(c.path)?.reason ? <span className="text-[12px] text-ink-muted">{risk.get(c.path)!.reason}</span> : null}
               </div>
             ))}
             {changes.length === 0 ? <p className="m-0 text-ink-muted">No changes in this range.</p> : null}
@@ -170,7 +210,10 @@ export function ReviewScreen() {
                     </label>
                     <textarea id="line-comment" rows={2} value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} autoFocus className="rounded-[var(--radius)] border border-line bg-bg p-2.5 text-ink focus:border-accent focus:outline-none" />
                     <div className="flex gap-2">
-                      <Button variant="primary" disabled={!comment.text.trim()} onClick={() => sendComment('now')}>
+                      <Button variant="primary" disabled={!comment.text.trim()} onClick={addToReview}>
+                        Add to review
+                      </Button>
+                      <Button disabled={!comment.text.trim()} onClick={() => sendComment('now')}>
                         {busy ? 'Queue as the next prompt' : 'Send now as a prompt'}
                       </Button>
                       <Button variant="ghost" onClick={() => setComment(null)}>
@@ -184,6 +227,8 @@ export function ReviewScreen() {
               <EmptyState title="Select a file" body="Pick a changed file to see its diff against the base commit." />
             )}
 
+            <BatchReviewPanel session={session} comments={pending} onChange={setPending} />
+            <ChecksPanel session={session} />
             <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-line bg-surface p-3">
               <span className="font-semibold">
                 Land {files.length} of {changes.length} files
@@ -194,7 +239,10 @@ export function ReviewScreen() {
                   <label htmlFor="commit-msg" className="sr-only">
                     Commit message
                   </label>
-                  <input id="commit-msg" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 text-ink focus:border-accent focus:outline-none" />
+                  <textarea id="commit-msg" rows={commitMessage.includes('\n') ? 4 : 1} value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 py-2.5 text-ink focus:border-accent focus:outline-none" />
+                  <Button size="dense" variant="ghost" disabled={busy || drafting || !changes.length} onClick={() => void draftMessage()} title="RV-13: asks this session's agent (adds a turn)">
+                    {drafting ? 'Drafting…' : 'Draft with the agent'}
+                  </Button>
                 </>
               )}
               <div className="ml-auto flex flex-wrap gap-2">
@@ -210,6 +258,7 @@ export function ReviewScreen() {
                     <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
                       Commit to branch
                     </Button>
+                    <PullRequestButton session={session} files={files} message={commitMessage} disabled={busy || !files.length} />
                   </>
                 )}
                 <Button

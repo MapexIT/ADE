@@ -73,6 +73,9 @@ export class WorkflowService {
   private owned: Set<string> | null = null;
   private readonly offs: (() => void)[] = [];
 
+  /** RV-12: set by the composition root; pull-request land steps use it. */
+  openPullRequest: ExecutorDeps['openPullRequest'] = null;
+
   constructor(
     private readonly repos: Repositories,
     private readonly bus: EventBus,
@@ -339,6 +342,7 @@ export class WorkflowService {
       this.repos.workflowRuns.save(row.id, active.runner.current.status, active.runner.current, c);
     const deps: ExecutorDeps = {
       ...this.deps,
+      openPullRequest: this.openPullRequest,
       saveContext,
       claimSession: (id) => this.ownedSessions().add(id),
     };

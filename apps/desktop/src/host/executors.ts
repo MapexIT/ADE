@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { findOnPath, killTree, spawnCommand, toSpawnable, type Command } from '@ade/acp-client';
+import { findOnPath, toSpawnable, type Command } from '@ade/acp-client';
 import type { AgentId, PromptBlock, SessionEvent } from '@ade/contracts';
 import { changedFiles, diffPatch, git, snapshot } from '@ade/git';
 import {
@@ -17,6 +17,7 @@ import type { EventBus } from './bus.ts';
 import type { Repositories } from './repositories.ts';
 import type { ReviewService } from './review-service.ts';
 import type { SessionService } from './session-service.ts';
+import { runArgv } from './run-command.ts';
 
 /** Hand-off text limits: enough for an agent to act on, small enough for a prompt. */
 const MAX_DIFF = 40_000;
@@ -58,6 +59,8 @@ export interface ExecutorDeps {
   saveContext(ctx: RunContext): void;
   /** Marks a session as started by a workflow, so it never fires workflow triggers itself. */
   claimSession(sessionId: string): void;
+  /** RV-12: commits, pushes and opens a pull request (set by the composition root). */
+  openPullRequest?: ((sessionId: string, input: { files: string[]; title: string; body: string; draft: boolean; base?: string }) => Promise<{ url: string }>) | null;
 }
 
 const text = (t: string): PromptBlock[] => [{ type: 'text', text: t }];
@@ -201,8 +204,10 @@ export class CommandExecutor implements NodeExecutor<CommandNode> {
   }
 
   async execute(node: CommandNode, _packet: HandOff, exec: ExecutionContext): Promise<NodeResult> {
-    const resolved = this.deps.resolveCommand(node.run);
-    if (!resolved)
+    const cwd = await this.cwd();
+    const startedAt = new Date().toISOString();
+    const result = await runArgv(node.run, { cwd, resolve: this.deps.resolveCommand, signal: exec.signal });
+    if (!result)
       return {
         outcome: 'fail',
         packet: {
@@ -210,32 +215,7 @@ export class CommandExecutor implements NodeExecutor<CommandNode> {
           summary: `${node.run[0]} was not found.`,
         },
       };
-    const cwd = await this.cwd();
-    const startedAt = new Date().toISOString();
-    const { code, output } = await new Promise<{ code: number | null; output: string }>((resolve) => {
-      let out = '';
-      const child = spawnCommand(
-        { command: resolved.command.command, args: [...resolved.command.args, ...node.run.slice(1)] },
-        {
-          cwd,
-          env: { ...process.env, ...resolved.env, CI: '1', FORCE_COLOR: '0' },
-          stdio: ['ignore', 'pipe', 'pipe'],
-        },
-      );
-      const add = (b: Buffer) => {
-        out += b.toString('utf8');
-        if (out.length > 400_000) out = out.slice(-200_000);
-      };
-      child.stdout?.on('data', add);
-      child.stderr?.on('data', add);
-      const abort = () => child.pid && void killTree(child.pid);
-      exec.signal.addEventListener('abort', abort);
-      child.on('error', (err) => resolve({ code: null, output: `${out}\n${err.message}` }));
-      child.on('close', (c) => {
-        exec.signal.removeEventListener('abort', abort);
-        resolve({ code: c, output: out });
-      });
-    });
+    const { code, output } = result;
     // Visible in the run history like any other run (CR-04).
     this.deps.repos.runs.record(
       {
@@ -288,7 +268,21 @@ export class LandExecutor implements NodeExecutor<LandNode> {
     const message = packet.workItem.title ? `${packet.workItem.title}` : this.ctx.workflowName;
     const mode = node.mode === 'apply' ? 'apply' : 'commit';
     const session = this.deps.repos.sessions.require(head.sessionId);
-    await this.deps.review.land(head.sessionId, mode, files, message, this.ctx.baseCommit);
+    let url: string | null = null;
+    if (node.mode === 'pull-request' && this.deps.openPullRequest) {
+      // Only reached after a gate approved it (the engine refuses land nodes without one).
+      const body = [packet.workItem.description ?? '', packet.summary ?? '', `Opened by the ADE workflow "${this.ctx.workflowName}".`].filter(Boolean).join('\n\n');
+      try {
+        url = (await this.deps.openPullRequest(head.sessionId, { files, title: message, body, draft: false, base: this.ctx.baseCommit })).url;
+      } catch (err) {
+        // No GitHub CLI or no origin remote: both are checked before anything is committed, so commit only.
+        const code = (err as { code?: string }).code;
+        if (code !== 'no_gh' && code !== 'no_remote') throw err;
+        await this.deps.review.land(head.sessionId, 'commit', files, message, this.ctx.baseCommit);
+      }
+    } else {
+      await this.deps.review.land(head.sessionId, mode, files, message, this.ctx.baseCommit);
+    }
     this.deps.repos.audit.append({
       workspaceId: this.ctx.workspaceId,
       sessionId: head.sessionId,
@@ -301,7 +295,9 @@ export class LandExecutor implements NodeExecutor<LandNode> {
         ? `Applied ${files.length} file(s) to your checkout.`
         : node.mode === 'commit'
           ? `Committed ${files.length} file(s) on ${session.branch}.`
-          : `Committed ${files.length} file(s) on ${session.branch}. ADE does not open pull requests yet: push the branch and open one yourself.`;
+          : url
+            ? `Opened a pull request with ${files.length} file(s): ${url}`
+            : `Committed ${files.length} file(s) on ${session.branch}. The GitHub CLI or an origin remote is missing, so push the branch and open the pull request yourself.`;
     return { outcome: 'pass', sessionId: head.sessionId, packet: { summary } };
   }
 }

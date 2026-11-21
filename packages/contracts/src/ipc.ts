@@ -81,6 +81,42 @@ export const ContainmentStatus = z.object({
 });
 export type ContainmentStatus = z.infer<typeof ContainmentStatus>;
 
+/** RV-10: which run configurations are a workspace's checks, and whether they run after every turn. */
+export const CheckSettings = z.object({ configIds: z.array(Id).max(20), afterTurn: z.boolean() });
+export type CheckSettings = z.infer<typeof CheckSettings>;
+
+export const CheckResult = z.object({
+  configId: z.string(),
+  name: z.string(),
+  command: z.array(z.string()),
+  exitCode: z.number().int().nullable(),
+  /** The end of the output. */
+  output: z.string(),
+  runId: z.string(),
+  finishedAt: z.string(),
+});
+export type CheckResult = z.infer<typeof CheckResult>;
+
+/** RV-11: how far the user's checkout moved since the session started, and what would conflict. */
+export const BaseStatus = z.object({
+  base: z.string(),
+  head: z.string(),
+  branch: z.string().nullable(),
+  behind: z.number().int(),
+  conflicts: z.array(z.string()),
+});
+export type BaseStatus = z.infer<typeof BaseStatus>;
+
+/** RV-14: a second agent's read-only pre-review. */
+export const ReviewAssessment = z.object({
+  agentId: AgentId,
+  ranking: z.array(z.object({ path: z.string(), risk: z.enum(['high', 'medium', 'low']), reason: z.string() })),
+  /** The agent's reply, shown when it could not be read as a ranking. */
+  raw: z.string(),
+  createdAt: z.string(),
+});
+export type ReviewAssessment = z.infer<typeof ReviewAssessment>;
+
 /** TM-07: a named command for this workspace's terminals. */
 export const SavedCommand = z.object({
   id: Id,
@@ -254,6 +290,30 @@ export const hostApi = defineApi({
   /** SR-07: the same worktree continues with another agent, given the last message and the diff. */
   'sessions.handOff': method(z.object({ sessionId: Id, agentId: AgentId, note: z.string().max(10_000).optional() }), Session),
   /** SR-08: stops ADE's agent process so the agent's own UI can resume the conversation. */
+  'sessions.baseStatus': method(z.object({ sessionId: Id }), BaseStatus),
+  /** RV-11: moves the session onto the checkout's current commit; conflicts stay as markers for the agent. */
+  'sessions.rebase': method(z.object({ sessionId: Id, askAgent: z.boolean().default(false) }), BaseStatus),
+  /** RV-12: commit the selected files, push the branch and open a pull request with the GitHub CLI. */
+  'sessions.pullRequest': method(
+    z.object({
+      sessionId: Id,
+      files: z.array(z.string()).min(1),
+      title: z.string().trim().min(1).max(250),
+      body: z.string().max(60_000).default(''),
+      message: z.string().max(10_000).optional(),
+      draft: z.boolean().default(false),
+    }),
+    z.object({ url: z.string() }),
+  ),
+  /** RV-13: asks the session's own agent for a commit message (one turn in the timeline). */
+  'sessions.draftCommitMessage': method(z.object({ sessionId: Id, hint: z.string().max(2000).optional() }), z.object({ message: z.string() })),
+  /** RV-14: another agent pre-reviews the diff read-only and ranks files by risk. */
+  'sessions.reviewAssist': method(z.object({ sessionId: Id, agentId: AgentId, focus: z.string().max(2000).optional() }), ReviewAssessment),
+  'sessions.reviewAssessment': method(z.object({ sessionId: Id }), ReviewAssessment.nullable()),
+  'checks.settings': method(z.object({ workspaceId: Id }), CheckSettings),
+  'checks.saveSettings': method(z.object({ workspaceId: Id, settings: CheckSettings }), Ok),
+  'checks.run': method(z.object({ sessionId: Id }), z.array(CheckResult)),
+  'checks.results': method(z.object({ sessionId: Id }), z.array(CheckResult)),
   /** PL-04: live sessions in a workspace that changed the same files. */
   'sessions.overlaps': method(
     z.object({ workspaceId: Id }),
