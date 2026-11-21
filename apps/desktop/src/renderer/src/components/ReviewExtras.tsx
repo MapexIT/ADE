@@ -1,8 +1,8 @@
 import { Badge, Button, cx, SectionLabel } from '@ade/ui';
-import type { AgentId, BaseStatus, CheckResult, CheckSettings, ReviewAssessment, RunConfig, Session } from '@ade/contracts';
+import type { AgentId, BaseStatus, CheckResult, CheckSettings, PullRequestStatus, ReviewAssessment, RunConfig, Session } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
 import { useCallback, useEffect, useState } from 'react';
-import { host } from '../lib/bridge.ts';
+import { host, main } from '../lib/bridge.ts';
 import { agentLabel } from '../lib/format.ts';
 import { batchReviewPrompt, checkFailurePrompt, type ReviewComment } from '../lib/review.ts';
 import { attempt, useStore } from '../lib/store.ts';
@@ -232,8 +232,100 @@ export function BatchReviewPanel({ session, comments, onChange }: { session: Ses
   );
 }
 
+/** CO-06, CO-07: the session's open pull request: its review and checks, and pushing new commits to it. */
+export function PullRequestPanel({ session, status, onRefresh }: { session: Session; status: PullRequestStatus; onRefresh: () => void }) {
+  const toast = useStore((s) => s.toast);
+  const [message, setMessage] = useState('');
+  const [working, setWorking] = useState<string | null>(null);
+  const busy = isLive(session.state);
+  const failing = status.checks.filter((c) => c.bucket === 'fail');
+  const pending = status.checks.filter((c) => c.bucket === 'pending');
+  const act = async (label: string, work: () => Promise<unknown>) => {
+    setWorking(label);
+    await work();
+    setWorking(null);
+    onRefresh();
+  };
+  return (
+    <section aria-label="Pull request" className="flex flex-col gap-2 rounded-[var(--radius)] border border-accent bg-surface p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Pull request{status.number ? ` #${status.number}` : ''}</span>
+        <Badge tone={status.state === 'OPEN' ? 'accent' : status.state === 'MERGED' ? 'ok' : 'neutral'}>{status.state.toLowerCase()}</Badge>
+        {status.reviewDecision ? <Badge tone={status.reviewDecision === 'APPROVED' ? 'ok' : 'attention'}>{status.reviewDecision.toLowerCase().replace('_', ' ')}</Badge> : null}
+        <Badge tone={failing.length ? 'attention' : pending.length ? 'neutral' : 'ok'}>
+          {status.checks.length ? (failing.length ? `${failing.length} check(s) failing` : pending.length ? `${pending.length} check(s) running` : 'Checks passing') : 'No checks'}
+        </Badge>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: status.url }))}>
+            Open on GitHub
+          </Button>
+          <Button size="dense" variant="ghost" onClick={onRefresh}>
+            Refresh
+          </Button>
+          <Button
+            size="dense"
+            disabled={!!working}
+            onClick={() =>
+              void act('review', async () => {
+                const r = await attempt(() => host.call('sessions.sendReviewComments', { sessionId: session.id }));
+                if (r) toast(r.count ? `Sent ${r.count} review comment(s) to the agent.` : 'There are no review comments yet.');
+              })
+            }
+          >
+            Send review comments
+          </Button>
+          <Button
+            size="dense"
+            disabled={!!working || !failing.length}
+            onClick={() =>
+              void act('checks', async () => {
+                const r = await attempt(() => host.call('sessions.sendFailedChecks', { sessionId: session.id }));
+                if (r) toast(`Sent ${r.count} failing check(s) to the agent.`);
+              })
+            }
+          >
+            Send failing checks
+          </Button>
+        </div>
+      </div>
+      {status.checks.length ? (
+        <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0 text-[12px]">
+          {status.checks.map((c) => (
+            <li key={`${c.workflow}/${c.name}`}>
+              <Badge tone={c.bucket === 'fail' ? 'attention' : c.bucket === 'pass' ? 'ok' : 'neutral'}>
+                {c.name}: {c.bucket}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <label htmlFor="push-msg" className="sr-only">
+          Commit message for the update
+        </label>
+        <input id="push-msg" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Commit message for the new changes" className={cx(inputClass, 'min-h-9 min-w-64 flex-1')} />
+        <Button
+          size="dense"
+          variant="primary"
+          disabled={busy || !!working || !message.trim()}
+          onClick={() =>
+            void act('push', async () => {
+              if (await attempt(() => host.call('sessions.pushUpdate', { sessionId: session.id, message: message.trim() }))) {
+                setMessage('');
+                toast('Pushed to the pull request.');
+              }
+            })
+          }
+        >
+          Commit and push
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 /** RV-12: commit, push and open a pull request; RV-13 fills the title from the agent. */
-export function PullRequestButton({ session, files, message, disabled }: { session: Session; files: string[]; message: string; disabled: boolean }) {
+export function PullRequestButton({ session, files, message, disabled, onOpened }: { session: Session; files: string[]; message: string; disabled: boolean; onOpened?: () => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -256,6 +348,7 @@ export function PullRequestButton({ session, files, message, disabled }: { sessi
     if (res) {
       setOpen(false);
       toast(`Opened ${res.url}`);
+      onOpened?.();
     }
   };
   return (
@@ -267,7 +360,7 @@ export function PullRequestButton({ session, files, message, disabled }: { sessi
         open={open}
         onOpenChange={setOpen}
         title="Open a pull request"
-        description={`Commits ${files.length} file(s) on ${session.branch}, pushes the branch to origin and opens a pull request with the GitHub CLI. The session then ends.`}
+        description={`Commits ${files.length} file(s) on ${session.branch}, pushes the branch to origin and opens a pull request with the GitHub CLI. The session stays open for review comments and checks, and lands when the pull request is merged.`}
         footer={
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>

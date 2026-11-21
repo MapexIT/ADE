@@ -149,8 +149,9 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       "open in the agent's UI" are not covered by an automated test against a real window or agent.
 - [x] **M7-T03** Checks, batch review, review assistant, rebase and conflicts, pull requests (RV-09 to
       RV-14). Pull requests are tested against a local bare remote with `gh` stubbed; not yet opened on GitHub.
-- [ ] **M7-T04** Connector state sync, review comments, failed checks, progress notes, board view (CO-05
-      to CO-10).
+- [x] **M7-T04** Connector state sync, review comments, failed checks, progress notes, board view (CO-05
+      to CO-10). Tested with Shortcut and `gh` stubbed; not yet run against a real Shortcut workspace or a
+      real pull request.
 - [ ] **M7-T05** Smart terminal v1 features (SM-09 to SM-14) and code runner v1 features (CR-05 to CR-11).
 - [ ] **M7-T06** Language servers, instruction files, history search, audit export, preview pane (ED-03,
       ED-04, HI-06 to HI-08).

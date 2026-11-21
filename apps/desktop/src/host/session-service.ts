@@ -286,6 +286,7 @@ export class SessionService {
     this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
+    if (this.onCreated) this.inBackground(this.onCreated(session));
     return session;
   }
 
@@ -806,6 +807,9 @@ export class SessionService {
     void this.sendNext(sessionId);
     return this.repos.sessions.require(sessionId);
   }
+
+  /** CO-05: told about every new session (moves its work item). Set by the composition root. */
+  onCreated: ((session: Session) => Promise<void>) | null = null;
 
   /** RV-10: runs after every finished turn when nothing else is queued (the workspace's checks). Set by the composition root. */
   afterTurn: ((sessionId: string) => Promise<void>) | null = null;

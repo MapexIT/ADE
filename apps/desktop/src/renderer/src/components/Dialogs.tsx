@@ -10,6 +10,7 @@ import { useTerminals } from '../lib/terminals.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
 import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
 import { WorkspaceRules } from './WorkspaceRules.tsx';
+import { PersonalMcpSettings, WorkItemSyncSettings } from './ConnectorSettings.tsx';
 
 /** CN-07: one line describing the host sandbox on this machine. */
 export function sandboxSummary(s: ContainmentStatus | null): string {
@@ -280,6 +281,8 @@ export function SettingsDialog() {
           </label>
         </section>
         {workspaceId ? <WorkspaceRules workspaceId={workspaceId} /> : null}
+        {workspaceId ? <WorkItemSyncSettings workspaceId={workspaceId} /> : null}
+        <PersonalMcpSettings />
       </div>
     </Modal>
   );

@@ -117,6 +117,54 @@ export const ReviewAssessment = z.object({
 });
 export type ReviewAssessment = z.infer<typeof ReviewAssessment>;
 
+/** CO-05 and CO-08: what ADE does to a session's work item. Shortcut moves name workflow state ids. Off by default. */
+export const SyncSettings = z.object({
+  moveOnStart: z.number().int().nullable(),
+  moveOnPullRequest: z.number().int().nullable(),
+  moveOnMerge: z.number().int().nullable(),
+  /** Post a summary (and the pull request link) to the work item when the session lands or opens a pull request. */
+  progressNotes: z.boolean(),
+  /** Add "Closes <issue>" to pull requests for GitHub issues, so GitHub closes them on merge. */
+  closeIssues: z.boolean(),
+});
+export type SyncSettings = z.infer<typeof SyncSettings>;
+
+/** CO-06 and CO-07: a session's pull request as GitHub reports it. */
+export const PullRequestStatus = z.object({
+  url: z.string(),
+  number: z.number().int().nullable(),
+  state: z.string(),
+  reviewDecision: z.string().nullable(),
+  checks: z.array(z.object({ name: z.string(), bucket: z.string(), link: z.string(), workflow: z.string() })),
+});
+export type PullRequestStatus = z.infer<typeof PullRequestStatus>;
+
+/** CO-09: a Shortcut iteration or a GitHub Projects board, with the sessions working on each item. */
+export const BoardSettings = z.object({
+  source: z.enum(['shortcut', 'github']),
+  githubOwner: z.string().max(100).nullable(),
+  githubProject: z.number().int().positive().nullable(),
+});
+export type BoardSettings = z.infer<typeof BoardSettings>;
+
+export const Board = z.object({
+  title: z.string(),
+  columns: z.array(
+    z.object({
+      name: z.string(),
+      items: z.array(
+        z.object({
+          ref: z.string(),
+          title: z.string(),
+          url: z.string().nullable(),
+          sessions: z.array(z.object({ id: z.string(), title: z.string(), state: z.string() })),
+        }),
+      ),
+    }),
+  ),
+});
+export type Board = z.infer<typeof Board>;
+
 /** TM-07: a named command for this workspace's terminals. */
 export const SavedCommand = z.object({
   id: Id,
@@ -310,6 +358,22 @@ export const hostApi = defineApi({
   /** RV-14: another agent pre-reviews the diff read-only and ranks files by risk. */
   'sessions.reviewAssist': method(z.object({ sessionId: Id, agentId: AgentId, focus: z.string().max(2000).optional() }), ReviewAssessment),
   'sessions.reviewAssessment': method(z.object({ sessionId: Id }), ReviewAssessment.nullable()),
+  'sessions.pullRequestStatus': method(z.object({ sessionId: Id }), PullRequestStatus.nullable()),
+  /** RV-12: commits what changed since and pushes it to the open pull request's branch. */
+  'sessions.pushUpdate': method(z.object({ sessionId: Id, message: z.string().trim().min(1).max(10_000) }), Ok),
+  /** CO-06: the pull request's review comments, as one prompt. */
+  'sessions.sendReviewComments': method(z.object({ sessionId: Id }), z.object({ count: z.number().int() })),
+  /** CO-07: failing GitHub Actions jobs and their logs, as one prompt. */
+  'sessions.sendFailedChecks': method(z.object({ sessionId: Id }), z.object({ count: z.number().int() })),
+  'sync.settings': method(z.object({ workspaceId: Id }), SyncSettings),
+  'sync.save': method(z.object({ workspaceId: Id, settings: SyncSettings }), Ok),
+  'connectors.shortcutStates': method(z.object({}), z.array(z.object({ id: z.number().int(), name: z.string(), type: z.string() }))),
+  'board.settings': method(z.object({ workspaceId: Id }), BoardSettings),
+  'board.save': method(z.object({ workspaceId: Id, settings: BoardSettings }), Ok),
+  'board.get': method(z.object({ workspaceId: Id }), Board),
+  /** CO-10: personal MCP servers (YAML, the same shape as `mcpServers` in .ade/workspace.yaml) for every session. */
+  'mcp.personal': method(z.object({}), z.object({ yaml: z.string() })),
+  'mcp.savePersonal': method(z.object({ yaml: z.string().max(20_000) }), Ok),
   'checks.settings': method(z.object({ workspaceId: Id }), CheckSettings),
   'checks.saveSettings': method(z.object({ workspaceId: Id, settings: CheckSettings }), Ok),
   'checks.run': method(z.object({ sessionId: Id }), z.array(CheckResult)),

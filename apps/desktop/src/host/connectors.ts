@@ -162,6 +162,11 @@ export class ShortcutMcpProvider implements WorkItemProvider {
     return !!this.creds.get('shortcut');
   }
 
+  /** The MCP connection, shared with the Shortcut actions (CO-05, CO-08, CO-09). */
+  get connection(): McpHttpConnection {
+    return this.conn;
+  }
+
   async list(query?: string): Promise<WorkItem[]> {
     const client = await this.conn.ensure();
     const { tools } = await client.listTools();

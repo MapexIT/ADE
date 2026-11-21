@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { inputClass } from './Modal.tsx';
+import { BoardView } from './BoardView.tsx';
 
 /** Screen 5: Shortcut stories and GitHub issues, start a session from one (CO-01 to CO-04). Read scope only. */
 export function WorkItemsScreen() {
@@ -11,6 +12,8 @@ export function WorkItemsScreen() {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<WorkItem[] | null>(null);
   const [connected, setConnected] = useState<string[]>([]);
+  const [view, setView] = useState<'list' | 'board'>('list');
+  const workspaceId = useStore((s) => s.workspaceId);
   const sessions = useStore((s) => s.sessions);
   const set = useStore((s) => s.set);
 
@@ -48,13 +51,24 @@ export function WorkItemsScreen() {
             { value: 'github', label: 'GitHub' },
           ]}
         />
+        <Tabs
+          label="View"
+          value={view}
+          onChange={setView}
+          items={[
+            { value: 'list', label: 'Assigned to me' },
+            { value: 'board', label: 'Board' },
+          ]}
+        />
         <label htmlFor="wi-search" className="sr-only">
           Search work items
         </label>
         <input id="wi-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by title or id" className={`${inputClass} mb-2 ml-auto min-w-72`} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        {!connected.includes(source) && (items?.length ?? 0) === 0 ? (
+        {view === 'board' ? (
+          workspaceId ? <BoardView workspaceId={workspaceId} /> : <EmptyState title="Open a repository" body="The board shows which items have sessions in this repository." />
+        ) : !connected.includes(source) && (items?.length ?? 0) === 0 ? (
           <EmptyState
             title={`${source === 'shortcut' ? 'Shortcut' : 'GitHub'} is not connected`}
             body="Connect it in settings to browse the stories and issues assigned to you. ADE asks for read scope only, and the token stays in your system's credential store."

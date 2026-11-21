@@ -1,6 +1,6 @@
 import { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
-import type { DiffText, ReviewAssessment } from '@ade/contracts';
+import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
@@ -9,7 +9,7 @@ import { agentLabel, joinPath, languageOf } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, selectedSession, useStore } from '../lib/store.ts';
 import { TurnPicker, useChanges } from './Inspector.tsx';
-import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton } from './ReviewExtras.tsx';
+import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton, PullRequestPanel } from './ReviewExtras.tsx';
 import type { ReviewComment } from '../lib/review.ts';
 
 const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
@@ -32,6 +32,13 @@ export function ReviewScreen() {
   const [pending, setPending] = useState<ReviewComment[]>([]);
   const [drafting, setDrafting] = useState(false);
   const [assessment, setAssessment] = useState<ReviewAssessment | null>(null);
+  const [pr, setPr] = useState<PullRequestStatus | null>(null);
+  const sessionId = session?.id ?? null;
+  const loadPr = useCallback(() => {
+    if (!sessionId) return;
+    void host.call('sessions.pullRequestStatus', { sessionId }).then(setPr).catch(() => setPr(null));
+  }, [sessionId]);
+  useEffect(loadPr, [loadPr, session?.state]);
   const onAssessment = useCallback((a: ReviewAssessment | null) => setAssessment(a), []);
   const risk = useMemo(() => new Map((assessment?.ranking ?? []).map((r) => [r.path, r])), [assessment]);
   const ordered = useMemo(
@@ -227,6 +234,7 @@ export function ReviewScreen() {
               <EmptyState title="Select a file" body="Pick a changed file to see its diff against the base commit." />
             )}
 
+            {pr ? <PullRequestPanel session={session} status={pr} onRefresh={loadPr} /> : null}
             <BatchReviewPanel session={session} comments={pending} onChange={setPending} />
             <ChecksPanel session={session} />
             <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-line bg-surface p-3">
@@ -258,7 +266,7 @@ export function ReviewScreen() {
                     <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
                       Commit to branch
                     </Button>
-                    <PullRequestButton session={session} files={files} message={commitMessage} disabled={busy || !files.length} />
+                    {pr ? null : <PullRequestButton session={session} files={files} message={commitMessage} disabled={busy || !files.length} onOpened={loadPr} />}
                   </>
                 )}
                 <Button
