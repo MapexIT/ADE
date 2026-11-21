@@ -59,6 +59,8 @@ export interface ExecutorDeps {
   saveContext(ctx: RunContext): void;
   /** Marks a session as started by a workflow, so it never fires workflow triggers itself. */
   claimSession(sessionId: string): void;
+  /** CO-05, CO-08: runs a connector step's action on the run's work item and says what it did. */
+  connectorAction?: ((connector: 'shortcut' | 'github', action: string, ref: string, text: string) => Promise<string>) | null;
   /** RV-12: commits, pushes and opens a pull request (set by the composition root). */
   openPullRequest?: ((sessionId: string, input: { files: string[]; title: string; body: string; draft: boolean; base?: string }) => Promise<{ url: string }>) | null;
 }
@@ -302,14 +304,24 @@ export class LandExecutor implements NodeExecutor<LandNode> {
   }
 }
 
-/** Connector actions (comment, move a story) arrive with CO-05 to CO-10 in M7; until then the node says so. */
+/**
+ * Connector steps act on the run's work item (`workItem.ref`): `comment` posts the hand-off summary to the
+ * Shortcut story or GitHub issue; `move:<workflow state id>` moves a Shortcut story.
+ */
 export class ConnectorExecutor implements NodeExecutor<ConnectorNode> {
   readonly type = 'connector' as const;
-  async execute(node: ConnectorNode): Promise<NodeResult> {
-    return {
-      outcome: 'fail',
-      packet: { summary: `The ${node.connector} action "${node.action}" is not supported yet.` },
-    };
+  constructor(private readonly deps: ExecutorDeps) {}
+
+  async execute(node: ConnectorNode, packet: HandOff): Promise<NodeResult> {
+    const ref = packet.workItem.ref;
+    if (!ref) return { outcome: 'fail', packet: { summary: `The ${node.connector} step needs a work item, and this run was not started from one.` } };
+    if (!this.deps.connectorAction) return { outcome: 'fail', packet: { summary: 'Connector actions are not available.' } };
+    try {
+      const text = packet.summary || `Update from the ADE workflow.`;
+      return { outcome: 'pass', packet: { summary: await this.deps.connectorAction(node.connector, node.action, ref, text) } };
+    } catch (err) {
+      return { outcome: 'fail', packet: { summary: `The ${node.connector} action "${node.action}" failed: ${(err as Error).message}` } };
+    }
   }
 }
 

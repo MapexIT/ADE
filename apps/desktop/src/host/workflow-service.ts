@@ -75,6 +75,8 @@ export class WorkflowService {
 
   /** RV-12: set by the composition root; pull-request land steps use it. */
   openPullRequest: ExecutorDeps['openPullRequest'] = null;
+  /** CO-05, CO-08: set by the composition root; connector steps use it. */
+  connectorAction: ExecutorDeps['connectorAction'] = null;
 
   constructor(
     private readonly repos: Repositories,
@@ -343,6 +345,7 @@ export class WorkflowService {
     const deps: ExecutorDeps = {
       ...this.deps,
       openPullRequest: this.openPullRequest,
+      connectorAction: this.connectorAction,
       saveContext,
       claimSession: (id) => this.ownedSessions().add(id),
     };
@@ -358,7 +361,7 @@ export class WorkflowService {
         new AgentExecutor(deps, ctx),
         new CommandExecutor(deps, ctx),
         new LandExecutor(deps, ctx),
-        new ConnectorExecutor(),
+        new ConnectorExecutor(deps),
       ],
       {
         onState: () => this.publish(row.id),

@@ -1,20 +1,13 @@
-import { findOnPath } from '@ade/acp-client';
 import { RpcError, type BaseStatus, type Session } from '@ade/contracts';
 import { CHECKPOINT_IDENTITY, currentBranch, git, restoreSnapshot, revParse, snapshot } from '@ade/git';
-import { runFile, type CredentialCache, type Runner } from './connectors.ts';
 import type { Repositories } from './repositories.ts';
-import type { ReviewService } from './review-service.ts';
 import type { SessionService } from './session-service.ts';
 
-/** RV-11 and RV-12: keeping a session's branch on top of the checkout, and publishing it as a pull request. */
+/** RV-11: keeping a session's branch on top of the checkout. */
 export class BranchService {
   constructor(
     private readonly repos: Repositories,
     private readonly sessions: SessionService,
-    private readonly review: ReviewService,
-    private readonly creds: CredentialCache,
-    private readonly run: Runner = runFile,
-    private readonly gh: string | null = findOnPath('gh'),
   ) {}
 
   private worktreeSession(sessionId: string): Session & { worktreePath: string; baseCommit: string } {
@@ -78,31 +71,5 @@ export class BranchService {
       ]);
     }
     return { base: head, head, branch: await currentBranch(root), behind: 0, conflicts };
-  }
-
-  /**
-   * RV-12: commits the selected files on the session branch, pushes it to `origin` and opens a pull request
-   * with the GitHub CLI (the user's own `gh` login, or the stored GitHub token). Only on this explicit call.
-   */
-  async pullRequest(sessionId: string, input: { files: string[]; title: string; body: string; message?: string; draft: boolean; base?: string }): Promise<{ url: string }> {
-    const s = this.worktreeSession(sessionId);
-    if (!this.gh) throw new RpcError('no_gh', 'The GitHub CLI (gh) is not installed.');
-    const root = this.repos.workspaces.get(s.workspaceId)!.rootPath;
-    await git(['remote', 'get-url', 'origin'], { cwd: root }).catch(() => {
-      throw new RpcError('no_remote', 'This repository has no remote called origin.');
-    });
-    const base = await currentBranch(root);
-    const { commit } = await this.review.commitForLanding(sessionId, input.files, input.message?.trim() || input.title, input.base);
-    const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
-    const push = await this.run('git', ['push', '-u', 'origin', s.branch!], env, s.worktreePath);
-    if (push.code !== 0) throw new RpcError('push_failed', `git push failed: ${(push.stderr || push.stdout).trim().slice(0, 1000)}`);
-    const token = this.creds.get('github');
-    const args = ['pr', 'create', '--head', s.branch!, '--title', input.title, '--body', input.body || ' ', ...(base ? ['--base', base] : []), ...(input.draft ? ['--draft'] : [])];
-    const pr = await this.run(this.gh, args, { ...env, GH_PROMPT_DISABLED: '1', ...(token ? { GH_TOKEN: token } : {}) }, s.worktreePath);
-    if (pr.code !== 0) throw new RpcError('pr_failed', `The branch was pushed, but gh could not open the pull request: ${(pr.stderr || pr.stdout).trim().slice(0, 1000)}`);
-    const url = pr.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? '';
-    await this.review.recordLanding(sessionId, 'commit', input.files, { commit, branch: s.branch, pullRequest: url }, 'pull-request');
-    this.sessions.record(sessionId, { type: 'notice', level: 'info', text: `Opened a pull request: ${url}` });
-    return { url };
   }
 }

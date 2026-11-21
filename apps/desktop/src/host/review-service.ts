@@ -91,12 +91,16 @@ export class ReviewService {
     return { commit: await commitFiles(s.worktreePath, files, message?.trim() || s.title) };
   }
 
+  /** CO-05, CO-08: told about every land (action: apply, commit, keep or merged). Set by the composition root. */
+  onLanded: ((session: Session, action: string, detail: Record<string, unknown>) => Promise<void>) | null = null;
+
   /** Records a land in the audit log and the timeline, then ends the session. */
   async recordLanding(sessionId: string, mode: 'apply' | 'commit', files: string[], detail: Record<string, unknown>, action: string): Promise<void> {
     const s = this.repos.sessions.require(sessionId);
-    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: `session.land.${action}`, detail: { files, ...detail, agent: s.agentId } });
+    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: action === 'merged' ? 'github' : 'user', action: `session.land.${action}`, detail: { files, ...detail, agent: s.agentId } });
     this.sessions.record(sessionId, { type: 'session.landed', mode, files });
     await this.sessions.finish(sessionId, 'land');
+    await this.onLanded?.(s, action, detail).catch(() => undefined);
   }
 
   /**
@@ -117,6 +121,7 @@ export class ReviewService {
     this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, agent: s.agentId } });
     this.sessions.record(s.id, { type: 'session.landed', mode: 'apply', files });
     await this.sessions.finish(s.id, 'land');
+    await this.onLanded?.(s, 'keep', { files }).catch(() => undefined);
   }
 
   private async dropSessionRefs(s: Session) {

@@ -12,9 +12,15 @@ import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig, resolveMcpServers } from './workspace-config.ts';
 import type { McpServerSpec } from '@ade/acp-client';
 import { listWorkflows } from './workflows.ts';
-import { CredentialCache, GitHubCliProvider, ShortcutMcpProvider, type Runner } from './connectors.ts';
+import { CredentialCache, GitHubCliProvider, runFile, ShortcutMcpProvider, type Runner } from './connectors.ts';
 import { ChecksService } from './checks.ts';
 import { BranchService } from './branches.ts';
+import { PullRequestService } from './pull-requests.ts';
+import { McpShortcutActions, type ShortcutActions } from './shortcut-actions.ts';
+import { WorkItemSync } from './work-item-sync.ts';
+import { findOnPath } from '@ade/acp-client';
+import { parse as parseYaml } from 'yaml';
+import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
@@ -38,6 +44,8 @@ export interface HostConfig {
   homeDir?: string;
   /** RV-12: overrides the GitHub CLI and how it is run (tests only). */
   github?: { gh: string | null; run: Runner };
+  /** CO-05, CO-08, CO-09: replaces the Shortcut MCP actions (tests only). */
+  shortcut?: ShortcutActions;
   /** CN-07: overrides the platform and process runner the sandbox probe uses (tests only). */
   sandbox?: { platform?: NodeJS.Platform; exec?: Exec };
 }
@@ -112,10 +120,25 @@ export function createHost(config: HostConfig) {
   const resolveCommand = commandResolver(config.node, config.nodeEnv);
   const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
   sessions.afterTurn = (sessionId) => checks.afterTurn(sessionId);
-  const branches = config.github
-    ? new BranchService(repos, sessions, review, credentials, config.github.run, config.github.gh)
-    : new BranchService(repos, sessions, review, credentials);
-  workflows.openPullRequest = (sessionId, input) => branches.pullRequest(sessionId, input);
+  const branches = new BranchService(repos, sessions);
+  const gh = config.github ? config.github.gh : findOnPath('gh');
+  const ghRun = config.github?.run ?? runFile;
+  const shortcutActions = config.shortcut ?? new McpShortcutActions(shortcut.connection);
+  const sync = new WorkItemSync(repos, sessions, () => (config.shortcut || credentials.get('shortcut') ? shortcutActions : null), credentials, ghRun, gh);
+  const pullRequests = new PullRequestService(repos, sessions, review, credentials, sync, ghRun, gh);
+  workflows.openPullRequest = (sessionId, input) => pullRequests.open(sessionId, input);
+  workflows.connectorAction = (connector, action, ref, text) => sync.runAction(connector, action, ref, text);
+  sessions.onCreated = (s) => sync.onSessionCreated(s);
+  review.onLanded = (s, action, detail) => sync.onLanded(s, action, detail);
+  // CO-05: a merged pull request lands its session. Checked every five minutes and whenever its status is shown.
+  const mergeTimer = setInterval(() => void pullRequests.pollMerges().catch(() => undefined), 5 * 60_000);
+  mergeTimer.unref();
+  const personalMcp = (): McpServerConfig[] => {
+    const raw = repos.settings.get<string>('mcp.personal', '');
+    if (!raw.trim()) return [];
+    const parsed = McpServerConfig.array().safeParse(parseYaml(raw) ?? []);
+    return parsed.success ? parsed.data : [];
+  };
   mkdirSync(join(config.userData, 'review-tmp'), { recursive: true });
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const skills = new SkillService(join(config.userData, 'skills'), config.homeDir ?? homedir());
@@ -140,7 +163,7 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
-      if (key.startsWith('rules.') || key.startsWith('commands.') || key.startsWith('checks.')) throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
+      if (/^(rules|commands|checks|sync|board|mcp)\./.test(key) || key === 'pullRequests') throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
       repos.settings.set(key, value);
       if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
@@ -214,7 +237,54 @@ export function createHost(config: HostConfig) {
     'sessions.overlaps': ({ workspaceId }) => sessions.overlaps(workspaceId),
     'sessions.baseStatus': ({ sessionId }) => branches.baseStatus(sessionId),
     'sessions.rebase': ({ sessionId, askAgent }) => branches.rebase(sessionId, askAgent),
-    'sessions.pullRequest': ({ sessionId, ...input }) => branches.pullRequest(sessionId, input),
+    'sessions.pullRequest': ({ sessionId, ...input }) => pullRequests.open(sessionId, input),
+    'sessions.pullRequestStatus': ({ sessionId }) => pullRequests.status(sessionId),
+    'sessions.pushUpdate': async ({ sessionId, message }) => {
+      await pullRequests.pushUpdate(sessionId, message);
+      return { ok: true };
+    },
+    'sessions.sendReviewComments': ({ sessionId }) => pullRequests.sendReviewComments(sessionId),
+    'sessions.sendFailedChecks': ({ sessionId }) => pullRequests.sendFailedChecks(sessionId),
+    'sync.settings': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return sync.settings(workspaceId);
+    },
+    'sync.save': ({ workspaceId, settings }) => {
+      workspaceRoot(workspaceId);
+      sync.save(workspaceId, settings);
+      repos.audit.append({ workspaceId, sessionId: null, actor: 'user', action: 'sync.saved', detail: { settings } });
+      return { ok: true };
+    },
+    'connectors.shortcutStates': async () => {
+      if (!config.shortcut && !credentials.get('shortcut')) throw new RpcError('not_connected', 'Connect Shortcut first.');
+      return (await shortcutActions.workflowStates()).map(({ id, name, type }) => ({ id, name, type }));
+    },
+    'board.settings': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return sync.boardSettings(workspaceId);
+    },
+    'board.save': ({ workspaceId, settings }) => {
+      workspaceRoot(workspaceId);
+      sync.saveBoard(workspaceId, settings);
+      return { ok: true };
+    },
+    'board.get': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return sync.board(workspaceId);
+    },
+    'mcp.personal': () => ({ yaml: repos.settings.get<string>('mcp.personal', '') }),
+    'mcp.savePersonal': async ({ yaml }) => {
+      let data: unknown;
+      try {
+        data = parseYaml(yaml) ?? [];
+      } catch (err) {
+        throw new RpcError('invalid', `This is not valid YAML: ${(err as Error).message}`);
+      }
+      const parsed = McpServerConfig.array().max(20).safeParse(data);
+      if (!parsed.success) throw new RpcError('invalid', `Each server needs a name and a command or a url: ${parsed.error.issues[0]?.message ?? ''}`);
+      repos.settings.set('mcp.personal', yaml);
+      return { ok: true };
+    },
     'sessions.draftCommitMessage': async ({ sessionId, hint }) => {
       const reply = await sessions.ask(
         sessionId,
@@ -337,6 +407,12 @@ export function createHost(config: HostConfig) {
         sessions.record(sessionId, { type: 'notice', level: 'info', text: `Shared MCP servers: ${resolved.servers.map((s) => s.name).join(', ')}.` });
       }
     }
+    // CO-10: the user's personal servers, for every workspace.
+    const personal = resolveMcpServers(personalMcp(), process.env);
+    servers.push(...personal.servers);
+    for (const s of personal.skipped) {
+      sessions.record(sessionId, { type: 'notice', level: 'warning', text: `Personal MCP server "${s.name}" was not passed to the agent: ${s.missing.join(', ')} is not set.` });
+    }
     if (repos.settings.get<boolean>('connectors.shareWithAgents', false)) {
       const token = credentials.get('shortcut');
       if (token) servers.push({ name: 'shortcut', url: ShortcutMcpProvider.URL, headers: { Authorization: `Bearer ${token}` } });
@@ -355,6 +431,8 @@ export function createHost(config: HostConfig) {
     sessions,
     review,
     containment,
+    sync,
+    pullRequests,
     workItems,
     workflows,
     skills,
@@ -365,6 +443,7 @@ export function createHost(config: HostConfig) {
       void shortcut.reset();
     },
     async dispose() {
+      clearInterval(mergeTimer);
       await workflows.dispose();
       await sessions.shutdown();
       db.close();

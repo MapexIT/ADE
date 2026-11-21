@@ -129,8 +129,9 @@ describe('RV-12 pull request', () => {
     expect(res.url).toBe('https://github.com/example/demo/pull/7');
     expect(ghCalls[0]).toEqual(['pr', 'create', '--head', session.branch!, '--title', 'Add the feature', '--body', 'Why it matters.', '--base', 'main', '--draft']);
     expect((await git(['branch', '--list', session.branch!], { cwd: remote })).trim()).toContain(session.branch!);
-    expect(host.repos.sessions.require(session.id).state).toBe('landed');
-    expect(host.repos.audit.forSession(session.id, 'session.land.pull-request')[0]!.detail).toMatchObject({ pullRequest: res.url, files: ['feature.txt'] });
+    // The session stays open for review comments and checks; it lands when the pull request is merged.
+    expect(host.repos.sessions.require(session.id).state).toBe('ready');
+    expect(host.repos.audit.forSession(session.id, 'session.pull_request.opened')[0]!.detail).toMatchObject({ url: res.url, files: ['feature.txt'] });
   }, 40_000);
 
   it('refuses without an origin remote, before committing anything', async () => {
