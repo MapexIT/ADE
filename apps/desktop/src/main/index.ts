@@ -344,4 +344,11 @@ app.on('before-quit', (e) => {
   void Promise.all([supervisors.host.stop(), supervisors.pty.stop()]).finally(() => app.quit());
 });
 
-app.on('window-all-closed', () => app.quit());
+// PK-04: on macOS an app stays open without windows and comes back from the Dock.
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+app.on('activate', () => {
+  if (!window) createWindow();
+  else showWindow();
+});

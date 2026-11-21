@@ -159,6 +159,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       ED-04, HI-06 to HI-08).
       The LSP client is tested with a fake server, not yet with a real one; the preview tools are tested over
       MCP with a fake driver, not yet called by a real agent against the real window.
-- [ ] **M7-T07** macOS installer (PK-04).
+- [x] **M7-T07** macOS installer (PK-04). Builds unsigned in the on-demand "Package macOS" workflow; signing and
+      notarisation need an Apple Developer ID and an App Store Connect key (release gate).
 
 **v1 gate:** a workflow runs three sandboxed agents and lands one result.
