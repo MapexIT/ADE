@@ -178,6 +178,25 @@ export const Board = z.object({
 });
 export type Board = z.infer<typeof Board>;
 
+/**
+ * CO-11: what ADE can see of the user's GitHub and Shortcut set-up, so an empty work item screen can say what
+ * is missing. Read locally from `gh` and `git config`; nothing is sent anywhere.
+ */
+export const ConnectionStatus = z.object({
+  github: z.object({
+    cli: z.object({ installed: z.boolean(), version: z.string().nullable() }),
+    /** The account `gh` (or a stored token) signs in as; null when it is not signed in. */
+    account: z.object({ login: z.string(), name: z.string().nullable() }).nullable(),
+    tokenStored: z.boolean(),
+    /** Why the account could not be read, as `gh` put it. */
+    problem: z.string().nullable(),
+  }),
+  shortcut: z.object({ tokenStored: z.boolean() }),
+  /** The identity Git commits with, from the open repository's config (or the global one). */
+  git: z.object({ installed: z.boolean(), name: z.string().nullable(), email: z.string().nullable() }),
+});
+export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
+
 /** SM-11: one command from a terminal, a run or an agent. */
 export const HistoryEntry = z.object({
   command: z.string(),
@@ -475,6 +494,7 @@ export const hostApi = defineApi({
   'sessions.sendFailedChecks': method(z.object({ sessionId: Id }), z.object({ count: z.number().int() })),
   'sync.settings': method(z.object({ workspaceId: Id }), SyncSettings),
   'sync.save': method(z.object({ workspaceId: Id, settings: SyncSettings }), Ok),
+  'connectors.status': method(z.object({ workspaceId: Id.nullable() }), ConnectionStatus),
   'connectors.shortcutStates': method(z.object({}), z.array(z.object({ id: z.number().int(), name: z.string(), type: z.string() }))),
   'board.settings': method(z.object({ workspaceId: Id }), BoardSettings),
   'board.save': method(z.object({ workspaceId: Id, settings: BoardSettings }), Ok),

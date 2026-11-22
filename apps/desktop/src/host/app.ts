@@ -12,6 +12,7 @@ import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig, resolveMcpServers } from './workspace-config.ts';
 import type { McpServerSpec } from '@ade/acp-client';
 import { listWorkflows } from './workflows.ts';
+import { ConnectionStatusService } from './connection-status.ts';
 import { CredentialCache, GitHubCliProvider, runFile, ShortcutMcpProvider, type Runner } from './connectors.ts';
 import { ChecksService } from './checks.ts';
 import { BranchService } from './branches.ts';
@@ -176,6 +177,7 @@ export function createHost(config: HostConfig) {
   const branches = new BranchService(repos, sessions);
   const gh = config.github ? config.github.gh : findOnPath('gh');
   const ghRun = config.github?.run ?? runFile;
+  const connectionStatus = new ConnectionStatusService(credentials, ghRun, gh, findOnPath('git'));
   const shortcutActions = config.shortcut ?? new McpShortcutActions(shortcut.connection);
   const sync = new WorkItemSync(repos, sessions, () => (config.shortcut || credentials.get('shortcut') ? shortcutActions : null), credentials, ghRun, gh);
   const pullRequests = new PullRequestService(repos, sessions, review, credentials, sync, ghRun, gh);
@@ -527,6 +529,7 @@ export function createHost(config: HostConfig) {
       });
     },
     'workItems.sources': () => workItems.sources(),
+    'connectors.status': ({ workspaceId }) => connectionStatus.status(rootOrNull(workspaceId)),
     'workItems.list': ({ source, query }) => workItems.list(source, query),
   };
 
