@@ -84,7 +84,11 @@ export function matchPath(path: string, query: string): number[] | null {
   if (at >= 0) return Array.from({ length: q.length }, (_, i) => at + i);
   const out: number[] = [];
   let j = 0;
-  for (let i = 0; i < p.length && j < q.length; i++) if (p[i] === q[j]) (out.push(i), j++);
+  for (let i = 0; i < p.length && j < q.length; i++) {
+    if (p[i] !== q[j]) continue;
+    out.push(i);
+    j++;
+  }
   return j === q.length ? out : null;
 }
 

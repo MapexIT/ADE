@@ -1,11 +1,11 @@
 import { ExternalLink, GitCompareArrows, History, PanelRight } from 'lucide-react';
 import { Button, cx, EmptyState, SectionLabel, Tabs } from '@ade/ui';
-import type { FileChange, FileEntry } from '@ade/contracts';
+import type { FileChange } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
-import { joinPath } from '../lib/format.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../lib/store.ts';
+import { FileTree } from './FileTree.tsx';
 
 export function TurnPicker({ sessionId, value, onChange }: { sessionId: string; value: number | null; onChange: (v: number | null) => void }) {
   const turns = useStore((s) => s.turns[sessionId] ?? EMPTY);
@@ -48,33 +48,6 @@ export function ChangeRow({ c }: { c: FileChange }) {
       <span className="text-ink-muted">{c.status === 'binary' ? 'binary' : c.status}</span>
       <span className="text-accent-soft">+{c.additions}</span>
       <span className="text-danger">-{c.deletions}</span>
-    </div>
-  );
-}
-
-function FileTree({ root, sessionId }: { root: string; sessionId: string | null }) {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [filter, setFilter] = useState('');
-  const openEditor = useStore((s) => s.openEditor);
-  useEffect(() => {
-    void attempt(() => host.call('files.list', { root })).then((f) => setFiles(f ?? []));
-  }, [root]);
-  const shown = useMemo(() => files.filter((f) => !f.isDir && f.path.toLowerCase().includes(filter.toLowerCase())).slice(0, 400), [files, filter]);
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <label htmlFor="tree-filter" className="sr-only">
-        Filter files
-      </label>
-      <input id="tree-filter" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter files" className="min-h-9 rounded-[var(--radius)] border border-line bg-bg px-2.5 text-ink focus:border-accent focus:outline-none" />
-      <ul className="m-0 min-h-0 flex-1 list-none overflow-auto p-0">
-        {shown.map((f) => (
-          <li key={f.path}>
-            <button type="button" onClick={() => openEditor(joinPath(root, f.path), sessionId)} className="w-full truncate rounded px-2 py-1 text-left font-mono text-[12px] hover:bg-surface-raised" title={f.path}>
-              {f.path}
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -177,7 +150,7 @@ export function Inspector() {
           )}
         </div>
       ) : root ? (
-        <FileTree root={root} sessionId={session.worktreePath ? session.id : null} />
+        <FileTree root={root} sessionId={session.worktreePath ? session.id : null} changes={changes} />
       ) : null}
     </aside>
   );

@@ -20,7 +20,7 @@ test('closed panels can be shown again, and a file opens with the session panel 
   await togglePanel(page, 'Session');
   await togglePanel(page, 'Sessions');
   await expect(tab(page, 'Session')).toHaveCount(0);
-  await page.getByRole('button', { name: 'README.md' }).click();
+  await page.getByRole('treeitem', { name: 'README.md' }).click();
   await expect(tab(page, 'Editor')).toBeVisible();
   await expect(page.locator('.monaco-editor').first()).toBeVisible();
 

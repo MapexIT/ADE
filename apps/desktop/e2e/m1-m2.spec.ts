@@ -13,7 +13,7 @@ test('M1 gate: open a repository, edit and save a file, restart, workspace and l
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
 
   // Open README.md from the inspector's file list and save an edit.
-  await page.getByRole('button', { name: 'README.md' }).click();
+  await page.getByRole('treeitem', { name: 'README.md' }).click();
   await expect(page.locator('.monaco-editor').first()).toBeVisible();
   await page.locator('.monaco-editor .view-lines').first().click();
   await page.keyboard.press('Control+End');
