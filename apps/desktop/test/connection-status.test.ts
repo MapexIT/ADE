@@ -24,8 +24,8 @@ describe('CO-11 connection status', () => {
   it('parses what gh prints', () => {
     expect(parseGhVersion('gh version 2.101.0 (2026-09-15)\nhttps://github.com/cli/cli/releases/tag/v2.101.0\n')).toBe('2.101.0');
     expect(parseGhVersion('nonsense')).toBeNull();
-    expect(parseGhUser('{"login":"octocat","name":"The Octocat","id":1}')).toEqual({ login: 'octocat', name: 'The Octocat' });
-    expect(parseGhUser('{"login":"octocat","name":null}')).toEqual({ login: 'octocat', name: null });
+    expect(parseGhUser('{"login":"octocat","name":"The Octocat","id":1,"email":"octo@example.invalid"}')).toEqual({ login: 'octocat', id: 1, name: 'The Octocat', email: 'octo@example.invalid' });
+    expect(parseGhUser('{"login":"octocat","name":null,"email":null}')).toEqual({ login: 'octocat', id: null, name: null, email: null });
     expect(parseGhUser('{"message":"Bad credentials"}')).toBeNull();
     expect(parseGhUser('not json')).toBeNull();
     expect(firstLine('\n  To get started with GitHub CLI, please run:  gh auth login\nmore')).toBe('To get started with GitHub CLI, please run:  gh auth login');
@@ -37,12 +37,12 @@ describe('CO-11 connection status', () => {
     creds.set({ shortcut: 'sc-secret' });
     const { run, calls } = fake({
       '--version': { code: 0, stdout: 'gh version 2.101.0 (2026-09-15)\n' },
-      'api user': { code: 0, stdout: '{"login":"octocat","name":"The Octocat"}' },
+      'api user': { code: 0, stdout: '{"login":"octocat","id":583231,"name":"The Octocat","email":null}' },
       ...GIT_OK,
     });
     const status = await new ConnectionStatusService(creds, run, '/bin/gh', '/bin/git').status('/repo');
     expect(status).toEqual({
-      github: { cli: { installed: true, version: '2.101.0' }, account: { login: 'octocat', name: 'The Octocat' }, tokenStored: false, problem: null },
+      github: { cli: { installed: true, version: '2.101.0' }, account: { login: 'octocat', id: 583231, name: 'The Octocat', email: null }, tokenStored: false, problem: null },
       shortcut: { tokenStored: true },
       git: { installed: true, name: 'Ada Lovelace', email: 'ada@example.invalid' },
     });

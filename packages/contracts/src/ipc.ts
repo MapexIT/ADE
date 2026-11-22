@@ -186,7 +186,7 @@ export const ConnectionStatus = z.object({
   github: z.object({
     cli: z.object({ installed: z.boolean(), version: z.string().nullable() }),
     /** The account `gh` (or a stored token) signs in as; null when it is not signed in. */
-    account: z.object({ login: z.string(), name: z.string().nullable() }).nullable(),
+    account: z.object({ login: z.string(), id: z.number().int().nullable(), name: z.string().nullable(), email: z.string().nullable() }).nullable(),
     tokenStored: z.boolean(),
     /** Why the account could not be read, as `gh` put it. */
     problem: z.string().nullable(),

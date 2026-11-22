@@ -33,11 +33,12 @@ export function parseGhVersion(stdout: string): string | null {
 }
 
 /** The fields ADE shows from `gh api user` (GitHub's "Get the authenticated user" endpoint). */
-export function parseGhUser(stdout: string): { login: string; name: string | null } | null {
+export function parseGhUser(stdout: string): NonNullable<ConnectionStatus['github']['account']> | null {
   try {
-    const u = JSON.parse(stdout) as { login?: unknown; name?: unknown };
+    const u = JSON.parse(stdout) as { login?: unknown; id?: unknown; name?: unknown; email?: unknown };
     if (typeof u.login !== 'string' || !u.login) return null;
-    return { login: u.login, name: typeof u.name === 'string' && u.name ? u.name : null };
+    const text = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return { login: u.login, id: Number.isInteger(u.id) ? (u.id as number) : null, name: text(u.name), email: text(u.email) };
   } catch {
     return null;
   }
