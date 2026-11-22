@@ -1,4 +1,5 @@
 import { loader } from '@monaco-editor/react';
+import { palette } from '@ade/ui';
 import * as monaco from 'monaco-editor';
 import editorWorker from 'monaco-editor/editor/editor.worker?worker';
 
@@ -11,22 +12,30 @@ monaco.editor.defineTheme('ade-dark', {
   inherit: true,
   rules: [],
   colors: {
-    'editor.background': '#0B0E13',
-    'editor.foreground': '#E6EAF0',
-    'editorLineNumber.foreground': '#5C6878',
-    'editorLineNumber.activeForeground': '#9AA7B6',
-    'editor.selectionBackground': '#1E2A40',
-    'editor.lineHighlightBackground': '#161B22',
-    'editorCursor.foreground': '#7FA6F5',
-    'editorWidget.background': '#161B22',
-    'editorWidget.border': '#2A3441',
-    // Three hues: additions use the accent, deletions use danger.
-    'diffEditor.insertedTextBackground': '#7FA6F533',
-    'diffEditor.insertedLineBackground': '#1E2A40',
-    'diffEditor.removedTextBackground': '#FF9B9B33',
-    'diffEditor.removedLineBackground': '#3A1A1A',
-    'scrollbarSlider.background': '#3A465680',
+    'editor.background': palette.surfaceSunken,
+    'editor.foreground': palette.ink,
+    'editorLineNumber.foreground': palette.inkFaint,
+    'editorLineNumber.activeForeground': palette.accentSoft,
+    'editor.selectionBackground': '#3b2a63',
+    'editor.inactiveSelectionBackground': '#2a2042',
+    'editor.lineHighlightBackground': palette.surface,
+    'editor.lineHighlightBorder': '#00000000',
+    'editorCursor.foreground': palette.accent,
+    'editorIndentGuide.background1': palette.line,
+    'editorIndentGuide.activeBackground1': palette.lineStrong,
+    'editorWidget.background': palette.surfaceRaised,
+    'editorWidget.border': palette.lineStrong,
+    'editorSuggestWidget.selectedBackground': palette.accentTint,
+    focusBorder: palette.accent,
+    // Three colours: additions are violet, deletions are white.
+    'diffEditor.insertedTextBackground': '#8b5cf640',
+    'diffEditor.insertedLineBackground': palette.accentTint,
+    'diffEditor.removedTextBackground': '#ffffff26',
+    'diffEditor.removedLineBackground': '#1c1c21',
+    'scrollbarSlider.background': '#3a3a4280',
+    'scrollbarSlider.hoverBackground': '#52525b99',
   },
+
 });
 
 export const EDITOR_OPTIONS = {

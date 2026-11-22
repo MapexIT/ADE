@@ -67,7 +67,7 @@ export function InlineViewer({ block, cwd }: { block: CommandBlock; cwd: string 
   const [image, setImage] = useState<string | null>(null);
   if (!view) return null;
   const frame = (label: string, body: ReactNode) => (
-    <div className="flex flex-col gap-1 rounded-[var(--radius-small)] border border-line bg-[#0F141B] p-2" aria-label={label}>
+    <div className="flex flex-col gap-1 rounded-[var(--radius-small)] border border-line bg-surface p-2" aria-label={label}>
       <span className="font-sans text-[11px] font-semibold text-ink-muted uppercase">{label}</span>
       {body}
     </div>

@@ -1,5 +1,5 @@
 import { Background, Controls, ReactFlow } from '@xyflow/react';
-import { Badge, Button, SectionLabel } from '@ade/ui';
+import { Badge, Button, palette, SectionLabel } from '@ade/ui';
 import type { WorkflowRunView } from '@ade/contracts';
 import { useMemo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
@@ -68,7 +68,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
           onNodeClick={(_, n) => setSelected(n.id)}
           proOptions={{ hideAttribution: true }}
         >
-          <Background color="#2A3441" gap={20} />
+          <Background color={palette.lineStrong} gap={22} size={1.2} />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
