@@ -10,6 +10,7 @@ import { useTerminals } from '../../lib/terminals.ts';
 import { SavedCommands } from './SavedCommands.tsx';
 import { AskBar, HistoryDialog, SuggestionsBar, useTerminalLayout } from './TerminalExtras.tsx';
 import { SmartBlocks } from './SmartBlocks.tsx';
+import { SplitPane } from '../SplitPane.tsx';
 import { TerminalView } from './TerminalView.tsx';
 
 import { AGENT_COMMANDS } from '../../lib/agent-ui.ts';
@@ -92,14 +93,19 @@ export function TerminalBody({ terminal }: { terminal: TerminalInfo & { exited: 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className={cx('flex min-h-0 flex-1', terminal.kind === 'agent-ui' && terminal.agentState === 'waiting' && 'attention-ring border-2')}>
-        <div className="min-h-0 min-w-0 flex-1">
-          <TerminalView id={terminal.id} autoFocus />
-        </div>
         {terminal.smart ? (
-          <div className="hidden min-h-0 w-[42%] max-w-xl border-l border-line lg:block">
-            <SmartBlocks terminalId={terminal.id} />
+          // The terminal and its command blocks share the width; the divider is dragged and the split remembered.
+          <SplitPane
+            storageKey="ade.terminal.blocksShare"
+            label="Resize the terminal and its command blocks"
+            start={<TerminalView id={terminal.id} autoFocus />}
+            end={<SmartBlocks terminalId={terminal.id} />}
+          />
+        ) : (
+          <div className="min-h-0 min-w-0 flex-1">
+            <TerminalView id={terminal.id} autoFocus />
           </div>
-        ) : null}
+        )}
       </div>
       {terminal.smart ? <StatusBar terminal={terminal} /> : null}
     </div>
