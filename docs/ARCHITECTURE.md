@@ -57,6 +57,7 @@ ade/
 | `runs` | id, run_config_id, session_id, worktree_path, started_at, ended_at, exit_code, summary_json |
 | `workflow_runs`, `workflow_node_runs` | v1: run state, node state, session_id per node, budgets used |
 | `skills_index` | v1: name, description, location (`repo`, `library`), path |
+| `review_marks` | v1: session_id, path, fingerprint, marked_at (one row per reviewed file, RV-15) |
 | `audit_log` | id, ts, workspace_id, session_id, actor, action, detail_json (append-only) |
 | `settings` | key, value_json |
 
