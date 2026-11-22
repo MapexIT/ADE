@@ -122,7 +122,7 @@ function PlanPanel({ sessionId }: { sessionId: string }) {
   const plan = useStore((s) => s.views[sessionId]?.plan ?? EMPTY);
   if (!plan.length) return null;
   return (
-    <section aria-label="Plan" className="mx-4 mt-3 flex flex-col gap-1.5 rounded-[var(--radius)] border border-line bg-surface p-3">
+    <section aria-label="Plan" className="mx-4 mt-3 flex max-h-32 shrink-0 flex-col gap-1.5 overflow-auto rounded-[var(--radius)] border border-line bg-surface p-3">
       <SectionLabel>Plan</SectionLabel>
       {plan.map((p, i) => (
         <div key={i} className={cx(p.status === 'completed' && 'text-ink-muted line-through', p.status === 'in_progress' && 'font-semibold')}>
@@ -161,7 +161,7 @@ function Timeline({ sessionId }: { sessionId: string }) {
   return (
     <div
       ref={parentRef}
-      className="min-h-0 flex-1 overflow-auto px-4"
+      className="min-h-40 flex-1 overflow-auto px-4"
       onScroll={(e) => {
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -338,7 +338,7 @@ export function SessionView() {
     );
   }
   return (
-    <main className="flex h-full min-w-0 flex-col" aria-label="Session">
+    <main className="flex h-full min-w-0 flex-col overflow-y-auto" aria-label="Session">
       <SessionHeader session={memoSession} />
       <PlanPanel sessionId={memoSession.id} />
       <Timeline sessionId={memoSession.id} />

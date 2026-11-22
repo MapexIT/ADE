@@ -273,3 +273,125 @@ textarea,
   overflow: hidden;
   border: 1px solid var(--line);
 }
+
+/* WA-07: the observability status orb. Rings ripple out while busy; it breathes while waiting for you. */
+.ade-orb {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--orb-color);
+  box-shadow: 0 0 12px -2px var(--orb-color);
+}
+.ade-orb-busy::before,
+.ade-orb-busy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid var(--orb-color);
+  animation: ade-orb-ripple 1.8s var(--ease) infinite;
+}
+.ade-orb-busy::after {
+  animation-delay: 0.9s;
+}
+.ade-orb-waiting {
+  animation: ade-orb-breathe 1.6s ease-in-out infinite;
+}
+.ade-orb-idle {
+  box-shadow: none;
+  opacity: 0.85;
+}
+.ade-orb-stopped {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px solid var(--ink-muted);
+}
+@keyframes ade-orb-ripple {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@keyframes ade-orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px -2px var(--orb-color);
+  }
+  50% {
+    transform: scale(1.18);
+    box-shadow: 0 0 18px 2px var(--orb-color);
+  }
+}
+
+/* A soft light sweeping across the "now" line while the agent works. */
+.ade-shimmer {
+  background: linear-gradient(90deg, var(--ink) 0%, var(--ink) 40%, var(--accent-soft) 50%, var(--ink) 60%, var(--ink) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ade-shimmer 2.4s linear infinite;
+}
+@keyframes ade-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+
+/* Waiting time is striped so it reads without colour. */
+.ade-stripes {
+  background-image: repeating-linear-gradient(135deg, rgb(0 0 0 / 0.35) 0 4px, transparent 4px 8px);
+}
+
+/* Cards of busy agents carry a slowly turning violet edge. */
+@property --ade-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.ade-live-edge {
+  position: relative;
+}
+.ade-live-edge::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--ade-angle), transparent 0deg, var(--accent) 60deg, transparent 140deg, transparent 360deg);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ade-spin 3.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes ade-spin {
+  to {
+    --ade-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ade-orb-busy::before,
+  .ade-orb-busy::after,
+  .ade-orb-waiting,
+  .ade-shimmer,
+  .ade-live-edge::before {
+    animation: none !important;
+  }
+  .ade-shimmer {
+    color: var(--ink);
+    background: none;
+  }
+}
