@@ -31,5 +31,6 @@ describe('help centre content', () => {
     expect(tabFor('RV-01')).toBe('review');
     expect(tabFor('CO-01')).toBe('work-items');
     expect(tabFor('PK-01')).toBeUndefined();
+    expect(tabFor('WA-07')).toBe('observe');
   });
 });
