@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, Skill } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -148,7 +149,7 @@ export function SkillsScreen() {
           ) : pane?.kind === 'draft' && workspaceId ? (
             <SkillDraft workspaceId={workspaceId} />
           ) : (
-            <EmptyState
+            <EmptyState icon={<Sparkles className="size-5" />}
               title="Pick a skill"
               body="Browse the library on the left, build a skill in a form, or have an agent draft one."
             />

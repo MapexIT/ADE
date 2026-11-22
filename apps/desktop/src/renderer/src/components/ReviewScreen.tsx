@@ -1,3 +1,4 @@
+import { Archive, FileQuestion, GitCompareArrows, MousePointerClick } from 'lucide-react';
 import { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
@@ -65,7 +66,7 @@ export function ReviewScreen() {
     void attempt(() => host.call('sessions.diff', { sessionId: session.id, path: active, turnIndex })).then((d) => setDiff(d ?? null));
   }, [session, active, turnIndex]);
 
-  if (!session) return <EmptyState title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
+  if (!session) return <EmptyState icon={<GitCompareArrows className="size-5" />} title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
 
   const busy = isLive(session.state);
   const ended = session.state === 'landed' || session.state === 'discarded';
@@ -127,7 +128,7 @@ export function ReviewScreen() {
       </div>
       {!ended ? <BaseBanner session={session} /> : null}
       {ended ? (
-        <EmptyState title={`This session has ${session.state === 'landed' ? 'landed' : 'been discarded'}`} body="Its worktree is gone. The audit log records what landed and who decided." />
+        <EmptyState icon={<Archive className="size-5" />} title={`This session has ${session.state === 'landed' ? 'landed' : 'been discarded'}`} body="Its worktree is gone. The audit log records what landed and who decided." />
       ) : (
         <div className="flex min-h-0 flex-1 flex-wrap">
           <aside aria-label="Changed files" className="flex min-h-0 w-72 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
@@ -198,7 +199,7 @@ export function ReviewScreen() {
                 </div>
                 <div className="min-h-64 flex-1 overflow-hidden rounded-[var(--radius)] border border-line">
                   {diff.binary ? (
-                    <EmptyState title="Binary file" body="Binary changes cannot be shown as text. They land like any other file." />
+                    <EmptyState icon={<FileQuestion className="size-5" />} title="Binary file" body="Binary changes cannot be shown as text. They land like any other file." />
                   ) : (
                     <DiffEditor
                       theme="ade-dark"
@@ -231,7 +232,7 @@ export function ReviewScreen() {
                 ) : null}
               </>
             ) : (
-              <EmptyState title="Select a file" body="Pick a changed file to see its diff against the base commit." />
+              <EmptyState icon={<MousePointerClick className="size-5" />} title="Select a file" body="Pick a changed file to see its diff against the base commit." />
             )}
 
             {pr ? <PullRequestPanel session={session} status={pr} onRefresh={loadPr} /> : null}

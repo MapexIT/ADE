@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react';
 import { Badge, Button, cx, EmptyState } from '@ade/ui';
 import type { Board, BoardSettings } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
@@ -67,7 +68,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : null}
       {problem ? (
-        <EmptyState title="The board could not be loaded" body={problem} action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
+        <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
       ) : board ? (
         <>
           <h2 className="m-0 text-[14px] font-semibold">{board.title}</h2>

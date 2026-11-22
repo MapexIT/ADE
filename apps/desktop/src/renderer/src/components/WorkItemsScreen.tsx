@@ -1,3 +1,4 @@
+import { FolderGit2, Inbox, ListTodo } from 'lucide-react';
 import { Badge, Button, EmptyState, Tabs } from '@ade/ui';
 import type { WorkItem } from '@ade/contracts';
 import { useEffect, useMemo, useState } from 'react';
@@ -67,9 +68,9 @@ export function WorkItemsScreen() {
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {view === 'board' ? (
-          workspaceId ? <BoardView workspaceId={workspaceId} /> : <EmptyState title="Open a repository" body="The board shows which items have sessions in this repository." />
+          workspaceId ? <BoardView workspaceId={workspaceId} /> : <EmptyState icon={<FolderGit2 className="size-5" />} title="Open a repository" body="The board shows which items have sessions in this repository." />
         ) : !connected.includes(source) && (items?.length ?? 0) === 0 ? (
-          <EmptyState
+          <EmptyState icon={<ListTodo className="size-5" />}
             title={`${source === 'shortcut' ? 'Shortcut' : 'GitHub'} is not connected`}
             body="Connect it in settings to browse the stories and issues assigned to you. ADE asks for read scope only, and the token stays in your system's credential store."
             action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>}
@@ -77,7 +78,7 @@ export function WorkItemsScreen() {
         ) : items === null ? (
           <p className="text-ink-muted">Loading…</p>
         ) : items.length === 0 ? (
-          <EmptyState title="Nothing assigned to you" body="Work items assigned to you appear here, grouped by state." />
+          <EmptyState icon={<Inbox className="size-5" />} title="Nothing assigned to you" body="Work items assigned to you appear here, grouped by state." />
         ) : (
           <div className="grid gap-4 xl:grid-cols-3">
             {groups.map(([state, list]) => (

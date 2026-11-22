@@ -1,3 +1,4 @@
+import { Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button, cx, SectionLabel } from '@ade/ui';
 import type { Session } from '@ade/contracts';
@@ -55,10 +56,10 @@ export function SessionsList() {
 
   return (
     <aside aria-label="Sessions" className="flex h-full flex-col gap-3 overflow-auto bg-surface p-3">
-      <Button variant="primary" onClick={() => set({ newSession: {} })}>
+      <Button variant="primary" onClick={() => set({ newSession: {} })} icon={<Plus className="size-4" aria-hidden="true" />}>
         New session
       </Button>
-      <Button variant="ghost" onClick={() => set({ sessionSearchOpen: true })}>
+      <Button variant="ghost" onClick={() => set({ sessionSearchOpen: true })} icon={<Search className="size-4" aria-hidden="true" />}>
         Search sessions
       </Button>
       {Object.keys(sessions).length === 0 ? (

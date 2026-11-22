@@ -84,6 +84,7 @@ interface State {
   editorDirty: boolean;
   newSession: NewSessionPrefill | null;
   paletteOpen: boolean;
+  helpOpen: boolean;
   inboxOpen: boolean;
   settingsOpen: boolean;
   firstRunOpen: boolean;
@@ -170,6 +171,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   runsVersion: 0,
   newSession: null,
   paletteOpen: false,
+  helpOpen: false,
   inboxOpen: false,
   settingsOpen: false,
   firstRunOpen: false,

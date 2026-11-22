@@ -1,3 +1,4 @@
+import { Play } from 'lucide-react';
 import { Badge, Button, EmptyState, SectionLabel, Tabs } from '@ade/ui';
 import type { EnvSet, Run, RunConfig } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
@@ -56,7 +57,7 @@ export function RunScreen() {
     if (active?.runId) setView('output');
   }, [active?.runId]);
 
-  if (!workspace) return <EmptyState title="Run" body="Open a repository to detect its run, test and build commands." />;
+  if (!workspace) return <EmptyState icon={<Play className="size-5" />} title="Run" body="Open a repository to detect its run, test and build commands." />;
 
   const worktrees = Object.values(sessions).filter((s) => s.worktreePath && s.state !== 'landed' && s.state !== 'discarded');
   const config = configs.find((c) => c.id === configId);
@@ -137,7 +138,7 @@ export function RunScreen() {
           ) : active ? (
             <TerminalView key={active.terminalId} id={active.terminalId} />
           ) : (
-            <EmptyState title="Nothing running" body="Pick a configuration and a worktree, then run it; or run a file from the editor, or a snippet in the scratchpad. Every run is kept in the history." />
+            <EmptyState icon={<Play className="size-5" />} title="Nothing running" body="Pick a configuration and a worktree, then run it; or run a file from the editor, or a snippet in the scratchpad. Every run is kept in the history." />
           )}
         </main>
         <aside aria-label="Run history" className="flex w-96 flex-col gap-3 overflow-auto border-l border-line bg-surface p-3">

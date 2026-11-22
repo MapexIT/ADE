@@ -1,3 +1,4 @@
+import { Ban, Check, CheckCheck, MessageSquareX, X } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { PermissionOption, ToolContent } from '@ade/contracts';
 import type { TimelineItem } from '@ade/session-core';
@@ -109,12 +110,13 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
             variant={i === 0 && o.kind.startsWith('allow') ? 'primary' : o.kind.startsWith('allow') ? 'secondary' : 'secondary'}
             className={cx(o.kind === 'allow_always' && 'border-accent text-accent')}
             onClick={() => void answer(o.optionId)}
+            icon={<OptionIcon kind={o.kind} />}
           >
             {o.name}
           </Button>
         ))}
         {rejectOptions[0] ? (
-          <Button onClick={() => setNoteFor(rejectOptions[0]!)} aria-expanded={!!noteFor}>
+          <Button onClick={() => setNoteFor(rejectOptions[0]!)} aria-expanded={!!noteFor} icon={<MessageSquareX className="size-4" aria-hidden="true" />}>
             Reject with a note
           </Button>
         ) : null}
@@ -264,4 +266,10 @@ export function QueuedMessages({ sessionId }: { sessionId: string }) {
       ))}
     </div>
   );
+}
+
+/** One icon per ACP permission option kind, next to the option's own words. */
+function OptionIcon({ kind }: { kind: string }) {
+  const Icon = kind === 'allow_always' ? CheckCheck : kind.startsWith('allow') ? Check : kind === 'reject_always' ? Ban : X;
+  return <Icon className="size-4" aria-hidden="true" />;
 }

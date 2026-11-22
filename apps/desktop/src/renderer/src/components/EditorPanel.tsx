@@ -1,3 +1,4 @@
+import { FileCode } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { Badge, Button, EmptyState } from '@ade/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -155,7 +156,7 @@ export function EditorPanel() {
   if (!editor) {
     return (
       <>
-        <EmptyState
+        <EmptyState icon={<FileCode className="size-5" />}
           title="Editor"
           body="Open a file from the Files tab in the inspector, go to a file by name, or follow the agent."
           action={

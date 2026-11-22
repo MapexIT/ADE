@@ -1,5 +1,6 @@
+import { Bot, CircleAlert, FolderGit2, Info, MessagesSquare, Navigation, SquareTerminal, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { Badge, Button, cx, Kbd, SectionLabel } from '@ade/ui';
+import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
 import type { ContainmentStatus, ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
@@ -20,6 +21,19 @@ export function sandboxSummary(s: ContainmentStatus | null): string {
   return `${s.kind === 'wsl' ? `WSL2 (${s.distro}) with bubblewrap` : 'bubblewrap'}. ${SANDBOX_SCOPE}`;
 }
 
+const GROUP_ICONS: Record<string, LucideIcon> = {
+  Workspace: FolderGit2,
+  Session: MessagesSquare,
+  Navigate: Navigation,
+  Terminal: SquareTerminal,
+  App: Bot,
+};
+
+function PaletteIcon({ group }: { group: string }) {
+  const Icon = GROUP_ICONS[group] ?? Bot;
+  return <Icon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />;
+}
+
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen);
   const set = useStore((s) => s.set);
@@ -32,7 +46,7 @@ export function CommandPalette() {
         <Command.List className="max-h-96 overflow-auto">
           <Command.Empty className="p-3 text-ink-muted">No matching command.</Command.Empty>
           {groups.map((g) => (
-            <Command.Group key={g} heading={g} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-ink-muted [&_[cmdk-group-heading]]:uppercase">
+            <Command.Group key={g} heading={g} className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-ink-muted [&_[cmdk-group-heading]]:uppercase">
               {commands
                 .filter((c) => c.group === g)
                 .map((c) => (
@@ -43,9 +57,10 @@ export function CommandPalette() {
                       set({ paletteOpen: false });
                       void c.run();
                     }}
-                    className="flex min-h-9 cursor-pointer items-center justify-between rounded px-2 data-[selected=true]:bg-accent-tint"
+                    className="flex min-h-9 cursor-pointer items-center gap-3 rounded-[var(--radius-small)] px-3 data-[selected=true]:bg-accent-tint"
                   >
-                    {c.title}
+                    <PaletteIcon group={c.group} />
+                    <span className="flex-1">{c.title}</span>
                     {c.shortcut ? <Kbd>{c.shortcut}</Kbd> : null}
                   </Command.Item>
                 ))}
@@ -330,6 +345,7 @@ export function FirstRunDialog() {
       open={open}
       onOpenChange={(o) => !o && finish()}
       title="Welcome to ADE"
+      icon={<Logo size={44} />}
       description="ADE supervises the coding agents you already use. Nothing leaves this machine except what agents and connectors send themselves."
       wide
       footer={
@@ -418,7 +434,8 @@ export function Toasts() {
   return (
     <div aria-live="polite" className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
       {toasts.map((t) => (
-        <div key={t.id} role={t.tone === 'danger' ? 'alert' : 'status'} className={cx('pointer-events-auto max-w-md rounded-[var(--radius)] border px-3 py-2 shadow-xl', t.tone === 'danger' ? 'border-danger-line bg-danger-tint text-danger' : 'border-line bg-surface-raised text-ink')}>
+        <div key={t.id} role={t.tone === 'danger' ? 'alert' : 'status'} className={cx('ade-toast pointer-events-auto flex max-w-md items-center gap-2.5 rounded-[var(--radius)] border p-3 shadow-[var(--shadow-pop)] backdrop-blur-xl', t.tone === 'danger' ? 'border-danger-line bg-danger-tint text-danger' : 'border-line bg-[var(--surface-glass)] text-ink')}>
+          {t.tone === 'danger' ? <CircleAlert className="size-4 shrink-0" aria-hidden="true" /> : <Info className="size-4 shrink-0 text-accent-soft" aria-hidden="true" />}
           {t.text}
         </div>
       ))}
