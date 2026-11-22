@@ -5,6 +5,7 @@ import { STATE_LABELS } from '@ade/session-core';
 import { useCallback, useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
+import { ConnectionGuide } from './ConnectionGuide.tsx';
 import { inputClass } from './Modal.tsx';
 
 /** CO-09: the current Shortcut iteration or a GitHub Projects board, with a badge for every session on an item. */
@@ -68,7 +69,10 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : null}
       {problem ? (
-        <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
+        <>
+          <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
+          {settings ? <ConnectionGuide key={settings.source} source={settings.source} onChecked={() => void load()} /> : null}
+        </>
       ) : board ? (
         <>
           <h2 className="m-0 text-[14px] font-semibold">{board.title}</h2>
