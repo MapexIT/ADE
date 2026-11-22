@@ -60,7 +60,7 @@ export function TopBar() {
         </Menu.Portal>
       </Menu.Root>
 
-      <nav aria-label="Main" className="flex min-w-0 shrink gap-1 overflow-x-auto rounded-[var(--radius)] border border-line bg-surface-sunken/70 p-1 [scrollbar-width:none]">
+      <nav aria-label="Main" className="flex min-w-0 shrink gap-1 overflow-x-auto rounded-[var(--radius)] border border-line bg-surface-sunken/70 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <button
             key={t.tab}
@@ -70,14 +70,14 @@ export function TopBar() {
             title={t.label}
             onClick={() => setTab(t.tab)}
             className={cx(
-              'flex min-h-8 shrink-0 items-center gap-2 rounded-[var(--radius-small)] px-2.5 xl:px-3',
+              'flex min-h-8 shrink-0 items-center gap-2 rounded-[var(--radius-small)] px-2.5 2xl:px-3',
               tab === t.tab
                 ? 'bg-accent-tint font-semibold text-ink shadow-[inset_0_0_0_1px_rgb(139_92_246/0.55)]'
                 : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
             )}
           >
             <t.Icon className="size-4" aria-hidden="true" />
-            <span className="hidden xl:inline">{t.label}</span>
+            <span className="hidden 2xl:inline">{t.label}</span>
           </button>
         ))}
       </nav>
