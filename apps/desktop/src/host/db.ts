@@ -199,6 +199,16 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX command_history_created ON command_history(created_at);
   `,
+  // M8-T03: review progress (RV-15). One row per file the user marked as reviewed.
+  `
+  CREATE TABLE review_marks (
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    path TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    marked_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, path)
+  );
+  `,
 ];
 
 export function migrate(db: Database): number {

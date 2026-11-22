@@ -117,6 +117,19 @@ export const ReviewAssessment = z.object({
 });
 export type ReviewAssessment = z.infer<typeof ReviewAssessment>;
 
+/** RV-15: one file's diff against the base, as `git diff --raw` identifies it: "<oldMode> <newMode> <oldSha> <newSha>". */
+export const ReviewFingerprint = z.string().regex(/^[0-7]{6} [0-7]{6} [0-9a-f]{40,64} [0-9a-f]{40,64}$/);
+/** RV-15: not reviewed, reviewed as it is now, or changed since it was reviewed. */
+export const ReviewState = z.enum(['unreviewed', 'reviewed', 'changed']);
+export type ReviewState = z.infer<typeof ReviewState>;
+/** RV-15: the review state of every file in a session's change set (all turns). */
+export const ReviewProgress = z.object({
+  files: z.array(z.object({ path: z.string(), fingerprint: ReviewFingerprint, state: ReviewState, markedAt: z.string().nullable() })),
+  reviewed: z.number().int(),
+  total: z.number().int(),
+});
+export type ReviewProgress = z.infer<typeof ReviewProgress>;
+
 /** CO-05 and CO-08: what ADE does to a session's work item. Shortcut moves name workflow state ids. Off by default. */
 export const SyncSettings = z.object({
   moveOnStart: z.number().int().nullable(),

@@ -174,7 +174,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 
 - [x] **M8-T01** Feature, decisions, data model and plan for review progress (RV-15).
 - [x] **M8-T02** Git helpers: per-file diff fingerprints and blob contents.
-- [ ] **M8-T03** `review_marks` table, repository and pure classification.
+- [x] **M8-T03** `review_marks` table, repository and pure classification.
 - [ ] **M8-T04** Host API: progress, mark, unmark, diff since review.
 - [ ] **M8-T05** Files landed without review are recorded in the land audit entry.
 - [ ] **M8-T06** Review screen: badges and count, mark and move to the next file, land warning, palette
