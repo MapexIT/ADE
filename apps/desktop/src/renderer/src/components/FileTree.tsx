@@ -315,7 +315,8 @@ export function FileTree({ root, sessionId, changes = [] }: { root: string; sess
         onKeyDown={onKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="relative min-h-0 flex-1 overflow-auto rounded-[var(--radius)] outline-none focus-visible:ring-1 focus-visible:ring-accent"
+        // Focus shows on the active row (aria-activedescendant), so the list itself draws no ring.
+        className="relative min-h-0 flex-1 overflow-auto outline-none focus-visible:outline-none"
       >
         {entries === null ? (
           <p className="m-0 p-2 text-ink-muted">Loading files…</p>

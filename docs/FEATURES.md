@@ -198,7 +198,7 @@ Node types: agent, command, gate, loop, branch, fan-out, connector, land.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| ED-01 | Editor | MVP | Monaco with syntax highlighting, file tree, search and go to file for the checkout and every worktree. Saving detects external changes. |
+| ED-01 | Editor | MVP | Monaco with syntax highlighting, file tree, search and go to file for the checkout and every worktree. Saving detects external changes. The file tree is virtualised, with compact folders, indent guides, file-type icons, the session's changes marked on files and counted on folders, a "Changed only" view, a filter that opens the folders it matches in, the editor's file revealed, and WAI-ARIA tree keyboard navigation with type-ahead. |
 | ED-02 | Open in my editor | MVP | Opens a worktree in the configured external editor. |
 | ED-03 | Language servers | v1 | Diagnostics, hover, go to definition. |
 | ED-04 | Instruction files | v1 | Shows which instruction files each agent reads and flags divergence. |

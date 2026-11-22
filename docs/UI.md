@@ -46,7 +46,7 @@ A Dockview workspace with a fixed top bar:
   Review), Needs-you button with a count, command palette (Ctrl K).
 - Left: sessions list grouped as Needs you, Working, Ready for review, Done.
 - Centre: the active surface (timeline, diff, canvas, terminal, runner).
-- Right: inspector for the selection (changes, node settings, checkpoints).
+- Right: inspector for the selection (changes, file tree, node settings, checkpoints).
 - Bottom: terminal panel, collapsible, with tabs and splits.
 
 Default to three visible regions at most. Everything else opens on demand and remembers its place.
