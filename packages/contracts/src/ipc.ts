@@ -459,6 +459,13 @@ export const hostApi = defineApi({
   /** RV-14: another agent pre-reviews the diff read-only and ranks files by risk. */
   'sessions.reviewAssist': method(z.object({ sessionId: Id, agentId: AgentId, focus: z.string().max(2000).optional() }), ReviewAssessment),
   'sessions.reviewAssessment': method(z.object({ sessionId: Id }), ReviewAssessment.nullable()),
+  'sessions.reviewProgress': method(z.object({ sessionId: Id }), ReviewProgress),
+  'sessions.markReviewed': method(
+    z.object({ sessionId: Id, files: z.array(z.object({ path: z.string().min(1).max(4096), fingerprint: ReviewFingerprint })).min(1).max(5000) }),
+    ReviewProgress,
+  ),
+  'sessions.unmarkReviewed': method(z.object({ sessionId: Id, paths: z.array(z.string().min(1).max(4096)).min(1).max(5000) }), ReviewProgress),
+  'sessions.diffSinceReviewed': method(z.object({ sessionId: Id, path: z.string().min(1).max(4096) }), DiffText),
   'sessions.pullRequestStatus': method(z.object({ sessionId: Id }), PullRequestStatus.nullable()),
   /** RV-12: commits what changed since and pushes it to the open pull request's branch. */
   'sessions.pushUpdate': method(z.object({ sessionId: Id, message: z.string().trim().min(1).max(10_000) }), Ok),

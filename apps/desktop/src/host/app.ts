@@ -353,6 +353,10 @@ export function createHost(config: HostConfig) {
     },
     'sessions.reviewAssist': ({ sessionId, agentId, focus }) => assistant.run(sessionId, agentId, focus),
     'sessions.reviewAssessment': ({ sessionId }) => assistant.assessment(sessionId),
+    'sessions.reviewProgress': ({ sessionId }) => review.progress(sessionId),
+    'sessions.markReviewed': ({ sessionId, files }) => review.markReviewed(sessionId, files),
+    'sessions.unmarkReviewed': ({ sessionId, paths }) => review.unmarkReviewed(sessionId, paths),
+    'sessions.diffSinceReviewed': ({ sessionId, path }) => review.diffSinceReviewed(sessionId, path),
     'checks.settings': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
       return checks.settings(workspaceId);

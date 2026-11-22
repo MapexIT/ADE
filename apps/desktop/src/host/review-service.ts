@@ -1,9 +1,25 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { RpcError, type DiffText, type FileChange, type Session } from '@ade/contracts';
+import { RpcError, type DiffText, type FileChange, type ReviewProgress, type Session } from '@ade/contracts';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { applyToCheckout, changedFiles, commitFiles, deleteRefs, diffPatch, discardWorktree, fileAt, git, looksBinary, restoreFiles, restoreSnapshot, snapshot } from '@ade/git';
+import {
+  applyToCheckout,
+  blobContent,
+  changedBlobs,
+  changedFiles,
+  commitFiles,
+  deleteRefs,
+  diffPatch,
+  discardWorktree,
+  fileAt,
+  git,
+  looksBinary,
+  restoreFiles,
+  restoreSnapshot,
+  snapshot,
+} from '@ade/git';
 import type { Repositories } from './repositories.ts';
+import { classifyReview, reviewedBlob } from './review-progress.ts';
 import { snapshotRefName, type HostPaths, type SessionService } from './session-service.ts';
 
 const PATCH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -44,6 +60,52 @@ export class ReviewService {
     const changes = await changedFiles(worktree, from, to);
     const oldPath = changes.find((c) => c.path === path)?.oldPath ?? path;
     const [oldBuf, newBuf] = await Promise.all([fileAt(worktree, from, oldPath), fileAt(worktree, to, path)]);
+    const binary = looksBinary(oldBuf) || looksBinary(newBuf);
+    return { path, oldText: binary ? '' : (oldBuf?.toString('utf8') ?? ''), newText: binary ? '' : (newBuf?.toString('utf8') ?? ''), binary };
+  }
+
+  /** RV-15: the review state of every file changed across all turns. */
+  async progress(sessionId: string): Promise<ReviewProgress> {
+    const current = await this.currentBlobs(sessionId);
+    return classifyReview(current, this.repos.reviewMarks.list(sessionId));
+  }
+
+  private async currentBlobs(sessionId: string): Promise<Map<string, string>> {
+    const { from, to, worktree } = await this.range(sessionId, null);
+    return changedBlobs(worktree, from, to);
+  }
+
+  /**
+   * RV-15: marks files as reviewed with the fingerprint the client was shown (AC5), so a change made between
+   * loading the list and clicking shows as changed since review. Paths outside the change set are ignored.
+   */
+  async markReviewed(sessionId: string, files: { path: string; fingerprint: string }[]): Promise<ReviewProgress> {
+    const current = await this.currentBlobs(sessionId);
+    this.repos.db.transaction(() => {
+      for (const f of files) if (current.has(f.path)) this.repos.reviewMarks.set(sessionId, f.path, f.fingerprint);
+    });
+    return classifyReview(current, this.repos.reviewMarks.list(sessionId));
+  }
+
+  async unmarkReviewed(sessionId: string, paths: string[]): Promise<ReviewProgress> {
+    this.requireWorktree(sessionId);
+    this.repos.db.transaction(() => {
+      for (const p of paths) this.repos.reviewMarks.remove(sessionId, p);
+    });
+    return this.progress(sessionId);
+  }
+
+  /** RV-15 (AC6): the diff from the content the user reviewed to the file as it is now. */
+  async diffSinceReviewed(sessionId: string, path: string): Promise<DiffText> {
+    const { to, worktree } = await this.range(sessionId, null);
+    const mark = this.repos.reviewMarks.list(sessionId).find((m) => m.path === path);
+    if (!mark) throw new RpcError('not_reviewed', 'This file has not been marked as reviewed.');
+    const sha = reviewedBlob(mark.fingerprint);
+    const oldBuf = await blobContent(worktree, sha);
+    if (oldBuf === null && !/^0+$/.test(sha)) {
+      throw new RpcError('not_available', 'The reviewed version of this file is no longer available. Showing the full diff instead.');
+    }
+    const newBuf = await fileAt(worktree, to, path);
     const binary = looksBinary(oldBuf) || looksBinary(newBuf);
     return { path, oldText: binary ? '' : (oldBuf?.toString('utf8') ?? ''), newText: binary ? '' : (newBuf?.toString('utf8') ?? ''), binary };
   }

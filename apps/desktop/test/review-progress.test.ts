@@ -1,7 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { hostApi } from '@ade/contracts';
+import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
+import { git } from '@ade/git';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createHost, type Host } from '../src/host/app.ts';
 import { migrate, openDatabase } from '../src/host/db.ts';
 import { Repositories } from '../src/host/repositories.ts';
 import { classifyReview, reviewedBlob, unreviewedAmong } from '../src/host/review-progress.ts';
@@ -69,5 +73,125 @@ describe('RV-15 review marks table', () => {
       db.close();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+let root: string;
+let repo: string;
+let host: Host;
+
+const makeHost = () =>
+  createHost({ userData: join(root, 'userData'), node: { command: process.execPath, args: [] }, nodeEnv: {}, fakeAgentEntry: FAKE_AGENT_ENTRY });
+
+beforeEach(async () => {
+  root = mkdtempSync(join(tmpdir(), 'ade-rp-'));
+  repo = join(root, 'repo');
+  mkdirSync(repo);
+  await git(['init', '-q', '-b', 'main'], { cwd: repo });
+  await git(['config', 'user.name', 'T'], { cwd: repo });
+  await git(['config', 'user.email', 't@example.invalid'], { cwd: repo });
+  writeFileSync(join(repo, 'README.md'), '# Demo\n');
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-q', '-m', 'init'], { cwd: repo });
+  host = makeHost();
+});
+
+afterEach(async () => {
+  await host.dispose();
+  rmSync(root, { recursive: true, force: true });
+});
+
+function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const tick = () => {
+      const v = check();
+      if (v) return resolve(v);
+      if (Date.now() - started > timeoutMs) return reject(new Error('timed out waiting'));
+      setTimeout(tick, 20);
+    };
+    tick();
+  });
+}
+
+const text = (t: string) => [{ type: 'text' as const, text: t }];
+const ready = (id: string, turns = 1) =>
+  waitFor(() => host.repos.sessions.require(id).state === 'ready' && host.repos.turns.list(id).filter((t) => t.endedAt).length >= turns);
+const start = async (prompt: string) => {
+  const ws = await host.handlers['workspace.open']({ path: repo });
+  const session = await host.sessions.create({ workspaceId: ws.id, agentId: 'fake', prompt: text(prompt), permissionProfile: 'ask' });
+  await ready(session.id);
+  return session;
+};
+type Progress = { files: { path: string; fingerprint: string; state: string }[] };
+const states = (p: Progress) => Object.fromEntries(p.files.map((f) => [f.path, f.state]));
+const entry = (p: Progress, path: string) => ({ path, fingerprint: p.files.find((x) => x.path === path)!.fingerprint });
+
+describe('RV-15 review progress', () => {
+  it('follows the reviewed content through later turns, undo and unmarking', async () => {
+    const { id } = await start('edit a.txt one');
+    const first = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    expect(first).toMatchObject({ reviewed: 0, total: 1, files: [{ path: 'a.txt', state: 'unreviewed', markedAt: null }] });
+
+    const marked = await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(first, 'a.txt')] });
+    expect(marked).toMatchObject({ reviewed: 1, total: 1 });
+    expect(marked.files[0]!.markedAt).not.toBeNull();
+
+    // A later turn changes the file: changed since review, with a diff of only that change.
+    await host.sessions.prompt(id, text('edit a.txt two'));
+    await ready(id, 2);
+    expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: id }))).toEqual({ 'a.txt': 'changed' });
+    expect(await host.handlers['sessions.diffSinceReviewed']({ sessionId: id, path: 'a.txt' })).toEqual({ path: 'a.txt', oldText: 'one', newText: 'two', binary: false });
+
+    // Undoing the turn brings back exactly the reviewed content.
+    await host.handlers['sessions.undoTurn']({ sessionId: id, turnIndex: 1 });
+    expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: id }))).toEqual({ 'a.txt': 'reviewed' });
+
+    // Unmarking, and marking a path outside the change set, which stores nothing.
+    expect(states(await host.handlers['sessions.unmarkReviewed']({ sessionId: id, paths: ['a.txt'] }))).toEqual({ 'a.txt': 'unreviewed' });
+    await host.handlers['sessions.markReviewed']({ sessionId: id, files: [{ path: 'nope.txt', fingerprint: first.files[0]!.fingerprint }] });
+    expect(host.repos.reviewMarks.list(id)).toEqual([]);
+    await expect(host.handlers['sessions.diffSinceReviewed']({ sessionId: id, path: 'a.txt' })).rejects.toMatchObject({ code: 'not_reviewed' });
+  }, 40_000);
+
+  it('records the content the user was shown, not the content at click time (AC5)', async () => {
+    const { id } = await start('edit a.txt one');
+    const shown = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    // The agent changes the file after the list loaded and before the click.
+    await host.sessions.prompt(id, text('edit a.txt two'));
+    await ready(id, 2);
+    const after = await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(shown, 'a.txt')] });
+    expect(states(after)).toEqual({ 'a.txt': 'changed' });
+  }, 40_000);
+
+  it('handles deletions, and says when the reviewed content is gone', async () => {
+    const { id } = await start('delete README.md\nedit b.txt new');
+    const p = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    expect(p.files.map((f) => f.path).sort()).toEqual(['README.md', 'b.txt']);
+    await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(p, 'README.md')] });
+    expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: id }))).toEqual({ 'README.md': 'reviewed', 'b.txt': 'unreviewed' });
+    // A deleted file's reviewed content is empty, not missing.
+    expect(await host.handlers['sessions.diffSinceReviewed']({ sessionId: id, path: 'README.md' })).toMatchObject({ oldText: '', newText: '' });
+    // A mark whose blob Git does not have.
+    host.repos.reviewMarks.set(id, 'b.txt', `000000 100644 ${'0'.repeat(40)} ${'e'.repeat(40)}`);
+    await expect(host.handlers['sessions.diffSinceReviewed']({ sessionId: id, path: 'b.txt' })).rejects.toMatchObject({ code: 'not_available' });
+  }, 40_000);
+
+  it('keeps marks across a restart', async () => {
+    const { id } = await start('edit a.txt one');
+    const p = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(p, 'a.txt')] });
+    await host.dispose();
+    host = makeHost();
+    expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: id }))).toEqual({ 'a.txt': 'reviewed' });
+  }, 40_000);
+
+  it('rejects malformed input', () => {
+    const input = hostApi['sessions.markReviewed'].input;
+    expect(input.safeParse({ sessionId: 's', files: [] }).success).toBe(false);
+    expect(input.safeParse({ sessionId: 's', files: [{ path: 'a', fingerprint: 'not a fingerprint' }] }).success).toBe(false);
+    expect(input.safeParse({ sessionId: 's', files: [{ path: '', fingerprint: fp('1') }] }).success).toBe(false);
+    expect(input.safeParse({ sessionId: 's', files: [{ path: 'a', fingerprint: fp('1') }] }).success).toBe(true);
+    expect(hostApi['sessions.unmarkReviewed'].input.safeParse({ sessionId: 's', paths: [] }).success).toBe(false);
   });
 });
