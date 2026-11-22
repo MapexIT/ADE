@@ -29,6 +29,7 @@ export function ReviewScreen() {
   const [active, setActive] = useState<string | null>(null);
   const [diff, setDiff] = useState<DiffText | null>(null);
   const [inline, setInline] = useState(false);
+  const [sinceReview, setSinceReview] = useState(false);
   const [comment, setComment] = useState<{ line: number; text: string } | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
   const [pending, setPending] = useState<ReviewComment[]>([]);
@@ -97,13 +98,30 @@ export function ReviewScreen() {
     setActive((a) => (a && changes.some((c) => c.path === a) ? a : (changes[0]?.path ?? null)));
   }, [changes]);
 
+  // RV-15 (AC6): "Since my review" applies to one file at a time, and only while it is changed since review.
+  useEffect(() => setSinceReview(false), [sessionId, active, turnIndex]);
+  const showingSince = sinceReview && progress?.files.find((f) => f.path === active)?.state === 'changed';
+
   useEffect(() => {
     if (!session || !active) {
       setDiff(null);
       return;
     }
-    void attempt(() => host.call('sessions.diff', { sessionId: session.id, path: active, turnIndex })).then((d) => setDiff(d ?? null));
-  }, [session, active, turnIndex]);
+    let live = true;
+    if (showingSince) {
+      // When the reviewed content is gone, the host's message says so and the full diff stays.
+      void attempt(() => host.call('sessions.diffSinceReviewed', { sessionId: session.id, path: active })).then((d) => {
+        if (!live) return;
+        if (d) setDiff(d);
+        else setSinceReview(false);
+      });
+    } else {
+      void attempt(() => host.call('sessions.diff', { sessionId: session.id, path: active, turnIndex })).then((d) => live && setDiff(d ?? null));
+    }
+    return () => {
+      live = false;
+    };
+  }, [session, active, turnIndex, showingSince]);
 
   if (!session) return <EmptyState icon={<GitCompareArrows className="size-5" />} title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
 
@@ -238,6 +256,17 @@ export function ReviewScreen() {
                     <Button size="dense" aria-pressed={inline} variant={inline ? 'primary' : 'secondary'} onClick={() => setInline(true)}>
                       Inline
                     </Button>
+                    {activeEntry?.state === 'changed' ? (
+                      <Button
+                        size="dense"
+                        aria-pressed={showingSince}
+                        variant={showingSince ? 'primary' : 'secondary'}
+                        title="Shows only what changed since you marked this file as reviewed"
+                        onClick={() => setSinceReview((v) => !v)}
+                      >
+                        Since my review
+                      </Button>
+                    ) : null}
                     <Button size="dense" onClick={() => session.worktreePath && openEditor(joinPath(session.worktreePath, active), session.id)} disabled={busy}>
                       Edit this file
                     </Button>
