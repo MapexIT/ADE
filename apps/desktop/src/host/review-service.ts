@@ -19,7 +19,7 @@ import {
   snapshot,
 } from '@ade/git';
 import type { Repositories } from './repositories.ts';
-import { classifyReview, reviewedBlob } from './review-progress.ts';
+import { classifyReview, reviewedBlob, unreviewedAmong } from './review-progress.ts';
 import { snapshotRefName, type HostPaths, type SessionService } from './session-service.ts';
 
 const PATCH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -128,16 +128,20 @@ export class ReviewService {
   async land(sessionId: string, mode: 'apply' | 'commit', files: string[], message?: string, base?: string): Promise<void> {
     const s = this.requireWorktree(sessionId);
     if (this.sessions.hasActiveTurn(sessionId)) throw new RpcError('busy', 'Wait for the turn to finish before landing.');
-    if (s.inPlace) return this.keepInPlace(s, mode, files);
+    // RV-15 (AC8): which landed files were not reviewed as they are now. Never allowed to fail a landing.
+    const unreviewed = await this.progress(sessionId)
+      .then((p) => unreviewedAmong(p, files))
+      .catch(() => files);
+    if (s.inPlace) return this.keepInPlace(s, mode, files, unreviewed);
     const workspace = this.repos.workspaces.get(s.workspaceId)!;
     const from = base ?? s.baseCommit;
     if (mode === 'apply') {
       const head = await snapshot(s.worktreePath, null, 'ADE land');
       const how = await applyToCheckout(s.worktreePath, workspace.rootPath, from, head, files);
-      await this.recordLanding(sessionId, 'apply', files, { how }, 'apply');
+      await this.recordLanding(sessionId, 'apply', files, { how, unreviewed }, 'apply');
     } else {
       const { commit } = await this.commitForLanding(sessionId, files, message, base);
-      await this.recordLanding(sessionId, 'commit', files, { commit, branch: s.branch }, 'commit');
+      await this.recordLanding(sessionId, 'commit', files, { commit, branch: s.branch, unreviewed }, 'commit');
     }
   }
 
@@ -170,7 +174,7 @@ export class ReviewService {
    * changed file back to the snapshot. Committing is left to the user, because the checkout may hold their
    * own uncommitted work too.
    */
-  private async keepInPlace(s: Session & { worktreePath: string; baseCommit: string }, mode: 'apply' | 'commit', files: string[]): Promise<void> {
+  private async keepInPlace(s: Session & { worktreePath: string; baseCommit: string }, mode: 'apply' | 'commit', files: string[], unreviewed: string[]): Promise<void> {
     if (mode === 'commit') {
       throw new RpcError('in_place', 'A session in your checkout keeps its changes where they are. Choose "Keep changes" and commit them yourself.');
     }
@@ -180,7 +184,7 @@ export class ReviewService {
     const reverted = changed.filter((f) => !keep.has(f));
     await restoreFiles(s.worktreePath, s.baseCommit, reverted);
     await this.dropSessionRefs(s);
-    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, agent: s.agentId } });
+    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, unreviewed, agent: s.agentId } });
     this.sessions.record(s.id, { type: 'session.landed', mode: 'apply', files });
     await this.sessions.finish(s.id, 'land');
     await this.onLanded?.(s, 'keep', { files }).catch(() => undefined);

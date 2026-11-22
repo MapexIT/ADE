@@ -186,6 +186,38 @@ describe('RV-15 review progress', () => {
     expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: id }))).toEqual({ 'a.txt': 'reviewed' });
   }, 40_000);
 
+  it('records the landed files that were not reviewed, and ends the review controls with the session (AC8, AC10)', async () => {
+    const { id } = await start('edit a.txt one\nedit b.txt two');
+    const p = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(p, 'a.txt')] });
+    await host.handlers['sessions.land']({ sessionId: id, mode: 'apply', files: ['a.txt', 'b.txt'] });
+    expect(host.repos.audit.forSession(id, 'session.land.apply')[0]!.detail).toMatchObject({ files: ['a.txt', 'b.txt'], unreviewed: ['b.txt'] });
+    await expect(host.handlers['sessions.reviewProgress']({ sessionId: id })).rejects.toMatchObject({ code: 'session_ended' });
+    await expect(host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(p, 'b.txt')] })).rejects.toMatchObject({ code: 'session_ended' });
+    await expect(host.handlers['sessions.unmarkReviewed']({ sessionId: id, paths: ['a.txt'] })).rejects.toMatchObject({ code: 'session_ended' });
+  }, 40_000);
+
+  it('records unreviewed files when committing', async () => {
+    const { id } = await start('edit a.txt one\nedit b.txt two');
+    const p = await host.handlers['sessions.reviewProgress']({ sessionId: id });
+    await host.handlers['sessions.markReviewed']({ sessionId: id, files: [entry(p, 'a.txt'), entry(p, 'b.txt')] });
+    await host.handlers['sessions.land']({ sessionId: id, mode: 'commit', files: ['a.txt', 'b.txt'], message: 'Land' });
+    expect(host.repos.audit.forSession(id, 'session.land.commit')[0]!.detail).toMatchObject({ unreviewed: [] });
+  }, 40_000);
+
+  it('works for a session in the checkout (CN-08)', async () => {
+    host.repos.settings.set('sessions.runInPlace', true);
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const session = await host.sessions.create({ workspaceId: ws.id, agentId: 'fake', prompt: text('edit README.md # Agent\nedit added.txt new'), permissionProfile: 'ask', inPlace: true });
+    await ready(session.id);
+    const p = await host.handlers['sessions.reviewProgress']({ sessionId: session.id });
+    expect(p.files.map((f) => f.path).sort()).toEqual(['README.md', 'added.txt']);
+    await host.handlers['sessions.markReviewed']({ sessionId: session.id, files: [entry(p, 'README.md')] });
+    expect(states(await host.handlers['sessions.reviewProgress']({ sessionId: session.id }))).toEqual({ 'README.md': 'reviewed', 'added.txt': 'unreviewed' });
+    await host.handlers['sessions.land']({ sessionId: session.id, mode: 'apply', files: ['README.md', 'added.txt'] });
+    expect(host.repos.audit.forSession(session.id, 'session.land.keep')[0]!.detail).toMatchObject({ unreviewed: ['added.txt'] });
+  }, 40_000);
+
   it('rejects malformed input', () => {
     const input = hostApi['sessions.markReviewed'].input;
     expect(input.safeParse({ sessionId: 's', files: [] }).success).toBe(false);
