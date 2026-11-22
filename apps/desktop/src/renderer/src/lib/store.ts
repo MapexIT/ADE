@@ -1,12 +1,12 @@
 import type { AgentStatus, NeedsYouItem, PromptBlock, Session, SessionEvent, Turn, WorkItem, Workspace } from '@ade/contracts';
-import { applyEvent, emptyView, projectSession, type SessionView } from '@ade/session-core';
+import { activityFrom, applyActivity, applyEvent, emptyActivity, emptyView, projectSession, type Activity, type SessionView } from '@ade/session-core';
 import { create } from 'zustand';
 import { host } from './bridge.ts';
 import { extractShellCommands } from './terminal-intel.ts';
 import type { ActiveRun } from './runs.ts';
 import { AGENT_LABELS } from '@ade/contracts';
 
-export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review';
+export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review' | 'observe';
 
 /** SM-09, SM-10: a command proposed by an agent, waiting for the user to run or dismiss it. */
 export interface Suggestion {
@@ -59,6 +59,8 @@ interface State {
   selectedSessionId: string | null;
   sessions: Record<string, Session>;
   views: Record<string, SessionView>;
+  /** WA-07: live activity per session, derived from the same events as `views`. */
+  activity: Record<string, Activity>;
   turns: Record<string, Turn[]>;
   queued: Record<string, { id: string; content: PromptBlock[] }[]>;
   inbox: NeedsYouItem[];
@@ -155,6 +157,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   selectedSessionId: null,
   sessions: {},
   views: {},
+  activity: {},
   turns: {},
   queued: {},
   inbox: [],
@@ -205,7 +208,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   async selectWorkspace(id) {
     const list = await host.call('sessions.list', { workspaceId: id });
     void host.call('settings.set', { key: 'lastWorkspaceId', value: id });
-    set({ workspaceId: id, sessions: Object.fromEntries(list.map((s) => [s.id, s])), selectedSessionId: list[0]?.id ?? null, views: {}, turns: {}, queued: {} });
+    set({ workspaceId: id, sessions: Object.fromEntries(list.map((s) => [s.id, s])), selectedSessionId: list[0]?.id ?? null, views: {}, activity: {}, turns: {}, queued: {} });
     const first = list[0];
     if (first) await get().loadSession(first.id);
   },
@@ -224,6 +227,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     set((s) => ({
       sessions: { ...s.sessions, [id]: detail.session },
       views: { ...s.views, [id]: projectSession(detail.events) },
+      activity: { ...s.activity, [id]: activityFrom(detail.events) },
       turns: { ...s.turns, [id]: detail.turns },
       queued: { ...s.queued, [id]: detail.queued },
     }));
@@ -232,7 +236,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   onEvent(e) {
     const view = get().views[e.sessionId];
     if (!view && !get().sessions[e.sessionId]) return;
-    set((s) => ({ views: { ...s.views, [e.sessionId]: applyEvent(s.views[e.sessionId] ?? emptyView(), e) } }));
+    set((s) => ({
+      views: { ...s.views, [e.sessionId]: applyEvent(s.views[e.sessionId] ?? emptyView(), e) },
+      activity: { ...s.activity, [e.sessionId]: applyActivity(s.activity[e.sessionId] ?? emptyActivity(), e) },
+    }));
     followAgent(e);
     if (e.type === 'agent.message') suggestFrom(e.sessionId, e.text);
     // Turn boundaries change the turn list and the queue; refresh them from the host.

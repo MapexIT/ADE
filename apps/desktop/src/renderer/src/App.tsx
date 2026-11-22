@@ -15,6 +15,7 @@ import { CompareDialog, HandOffDialog } from './components/ParallelDialogs.tsx';
 import { SessionSearchDialog } from './components/HistoryTools.tsx';
 import { ReviewScreen } from './components/ReviewScreen.tsx';
 import { RunScreen } from './components/RunScreen.tsx';
+import { ObserveScreen } from './components/observe/ObserveScreen.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { HelpCenter } from './components/HelpCenter.tsx';
 import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
@@ -97,7 +98,7 @@ function useShortcuts() {
         void buildCommands()
           .find((c) => c.id === 'workspace.open')
           ?.run();
-      else if (/^[1-7]$/.test(key)) s.setTab(PAGES[Number(key) - 1]!.tab);
+      else if (/^[1-8]$/.test(key)) s.setTab(PAGES[Number(key) - 1]!.tab);
       else return;
       e.preventDefault();
     };
@@ -137,6 +138,7 @@ export function App() {
               {tab === 'terminals' ? <TerminalsScreen /> : null}
               {tab === 'run' ? <RunScreen /> : null}
               {tab === 'review' ? <ReviewScreen /> : null}
+            {tab === 'observe' ? <ObserveScreen /> : null}
             </ErrorBoundary>
           </motion.div>
         ) : null}
