@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -106,6 +106,21 @@ describe('checkpoints and diffs', () => {
     ]);
     const all = await changedFiles(wt, base, end1);
     expect(all.map((c) => c.path).sort()).toEqual(['a.txt', 'b.txt', 'keep.txt']);
+  });
+
+  it('sees a same-size edit made in the same second as the index was written (racy clean)', async () => {
+    // Git re-reads a file whose size and times match its index entry only when the entry is at least as new
+    // as the index file. The snapshot works on a copy of the index, so the copy must keep the original's time.
+    await git(['config', 'core.trustctime', 'false'], { cwd: repo });
+    const past = new Date('2020-01-01T00:00:00Z');
+    const readme = join(repo, 'README.md');
+    utimesSync(readme, past, past);
+    await git(['update-index', '--refresh'], { cwd: repo });
+    writeFileSync(readme, '# Agnt\n');
+    utimesSync(readme, past, past);
+    utimesSync(join(repo, '.git', 'index'), past, past);
+    const c = await snapshot(repo, null);
+    expect((await fileAt(repo, c, 'README.md'))?.toString('utf8')).toBe('# Agnt\n');
   });
 
   it('ignores ignored files in snapshots', async () => {
