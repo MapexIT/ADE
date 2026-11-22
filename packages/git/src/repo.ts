@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { FileChange } from '@ade/contracts';
@@ -140,7 +140,7 @@ export async function snapshot(worktree: string, ref: string | null, message = '
   const index = join(dir, 'index');
   try {
     const realIndex = resolve(worktree, (await git(['rev-parse', '--git-path', 'index'], { cwd: worktree })).trim());
-    await copyFile(realIndex, index).catch(() => undefined);
+    await copyIndex(realIndex, index);
     const env = { GIT_INDEX_FILE: index, ...(raw ? await rawEnv(worktree) : {}) };
     await git([...(raw ? RAW_CONFIG : []), 'add', '-A', '--', '.'], { cwd: worktree, env });
     const tree = (await git(['write-tree'], { cwd: worktree, env })).trim();
@@ -152,6 +152,25 @@ export async function snapshot(worktree: string, ref: string | null, message = '
     return commit;
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Copies the index and keeps its times. Git trusts a matching size and mtime only for entries older than the
+ * index file ("racy clean" detection); a copy with a fresh mtime (Linux `copyFile`) would hide a same-size edit
+ * made in the same second as the index was written. Date has millisecond precision, so the copy is never newer.
+ */
+async function copyIndex(from: string, to: string): Promise<void> {
+  try {
+    await copyFile(from, to);
+  } catch {
+    return; // No index yet (an empty repository): `git add -A` builds one from scratch.
+  }
+  try {
+    const { atime, mtime } = await stat(from);
+    await utimes(to, atime, mtime);
+  } catch {
+    await rm(to, { force: true }); // Slower but exact: without an index every file is hashed.
   }
 }
 
