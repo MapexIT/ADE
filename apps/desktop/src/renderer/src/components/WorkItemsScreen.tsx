@@ -1,11 +1,12 @@
-import { FolderGit2, Inbox, ListTodo } from 'lucide-react';
+import { FolderGit2, Inbox } from 'lucide-react';
 import { Badge, Button, EmptyState, Tabs } from '@ade/ui';
 import type { WorkItem } from '@ade/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { inputClass } from './Modal.tsx';
 import { BoardView } from './BoardView.tsx';
+import { ConnectionGuide } from './ConnectionGuide.tsx';
 
 /** Screen 5: Shortcut stories and GitHub issues, start a session from one (CO-01 to CO-04). Read scope only. */
 export function WorkItemsScreen() {
@@ -18,15 +19,26 @@ export function WorkItemsScreen() {
   const sessions = useStore((s) => s.sessions);
   const set = useStore((s) => s.set);
 
-  useEffect(() => {
-    void host.call('workItems.sources', {}).then((s) => setConnected(s.filter((x) => x.connected).map((x) => x.source)), () => setConnected([]));
-  }, []);
+  const [checked, setChecked] = useState(false);
+  const [epoch, setEpoch] = useState(0);
+  const refresh = useCallback(() => setEpoch((n) => n + 1), []);
 
   useEffect(() => {
+    void host.call('workItems.sources', {}).then(
+      (s) => setConnected(s.filter((x) => x.connected).map((x) => x.source)),
+      () => setConnected([]),
+    ).finally(() => setChecked(true));
+  }, [epoch]);
+
+  const sourceConnected = connected.includes(source);
+  useEffect(() => {
     setItems(null);
+    if (!checked) return;
+    // An unconnected source shows the connection guide; asking it for items would only raise an error toast.
+    if (!sourceConnected) return setItems([]);
     const t = setTimeout(() => void attempt(() => host.call('workItems.list', { source, query })).then((i) => setItems(i ?? [])), 200);
     return () => clearTimeout(t);
-  }, [source, query]);
+  }, [source, query, epoch, checked, sourceConnected]);
 
   const linked = useMemo(() => {
     const m = new Map<string, number>();
@@ -69,12 +81,8 @@ export function WorkItemsScreen() {
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {view === 'board' ? (
           workspaceId ? <BoardView workspaceId={workspaceId} /> : <EmptyState icon={<FolderGit2 className="size-5" />} title="Open a repository" body="The board shows which items have sessions in this repository." />
-        ) : !connected.includes(source) && (items?.length ?? 0) === 0 ? (
-          <EmptyState icon={<ListTodo className="size-5" />}
-            title={`${source === 'shortcut' ? 'Shortcut' : 'GitHub'} is not connected`}
-            body="Connect it in settings to browse the stories and issues assigned to you. ADE asks for read scope only, and the token stays in your system's credential store."
-            action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>}
-          />
+        ) : checked && !sourceConnected ? (
+          <ConnectionGuide key={source} source={source} onChecked={refresh} />
         ) : items === null ? (
           <p className="text-ink-muted">Loading…</p>
         ) : items.length === 0 ? (
