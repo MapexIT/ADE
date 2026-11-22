@@ -1,6 +1,6 @@
 # Features
 
-145 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+146 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
