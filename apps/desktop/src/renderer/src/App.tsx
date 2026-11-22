@@ -25,7 +25,9 @@ import { SkillsScreen } from './components/SkillsScreen.tsx';
 import { WorkItemsScreen } from './components/WorkItemsScreen.tsx';
 import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
-import { useStore, type Tab } from './lib/store.ts';
+import { PAGES } from './lib/pages.ts';
+import { TooltipProvider } from './components/Tooltip.tsx';
+import { useStore } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
 import { wireRuns } from './lib/runs.ts';
 
@@ -43,7 +45,6 @@ onBlockFinished((terminal, block) => {
     .catch(() => undefined);
 });
 
-const TAB_ORDER: Tab[] = ['sessions', 'work-items', 'workflows', 'terminals', 'run', 'review'];
 
 function useWiring() {
   useEffect(() => {
@@ -96,7 +97,7 @@ function useShortcuts() {
         void buildCommands()
           .find((c) => c.id === 'workspace.open')
           ?.run();
-      else if (/^[1-6]$/.test(key)) s.setTab(TAB_ORDER[Number(key) - 1]!);
+      else if (/^[1-7]$/.test(key)) s.setTab(PAGES[Number(key) - 1]!.tab);
       else return;
       e.preventDefault();
     };
@@ -110,6 +111,7 @@ export function App() {
   useShortcuts();
   const tab = useStore((s) => s.tab);
   return (
+    <TooltipProvider delayDuration={300} skipDelayDuration={200}>
     <div className="flex h-full flex-col">
       <TopBar />
       <ReconnectBanner />
@@ -152,5 +154,6 @@ export function App() {
       <ConfirmDialog />
       <Toasts />
     </div>
+    </TooltipProvider>
   );
 }

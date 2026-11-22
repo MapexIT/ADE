@@ -4,16 +4,19 @@ import { Badge, Button, cx, Kbd, Logo } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
 import { currentWorkspace, useStore, type Tab } from '../lib/store.ts';
 import { PanelsMenu } from './PanelsMenu.tsx';
+import { Tooltip } from './Tooltip.tsx';
+import { PAGES, pageShortcut } from '../lib/pages.ts';
 
-const TABS: { tab: Tab; label: string; Icon: LucideIcon }[] = [
-  { tab: 'sessions', label: 'Sessions', Icon: MessagesSquare },
-  { tab: 'work-items', label: 'Work items', Icon: ListTodo },
-  { tab: 'workflows', label: 'Workflows', Icon: Workflow },
-  { tab: 'skills', label: 'Skills', Icon: Sparkles },
-  { tab: 'terminals', label: 'Terminals', Icon: SquareTerminal },
-  { tab: 'run', label: 'Run', Icon: Play },
-  { tab: 'review', label: 'Review', Icon: GitPullRequestArrow },
-];
+const PAGE_ICONS: Record<Tab, LucideIcon> = {
+  sessions: MessagesSquare,
+  'work-items': ListTodo,
+  workflows: Workflow,
+  skills: Sparkles,
+  terminals: SquareTerminal,
+  run: Play,
+  review: GitPullRequestArrow,
+};
+const TABS = PAGES.map((p) => ({ ...p, label: p.title, Icon: PAGE_ICONS[p.tab] }));
 
 export function TopBar() {
   const tab = useStore((s) => s.tab);
@@ -62,12 +65,11 @@ export function TopBar() {
 
       <nav aria-label="Main" className="flex min-w-0 shrink gap-1 overflow-x-auto rounded-[var(--radius)] border border-line bg-surface-sunken/70 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
+          <Tooltip key={t.tab} label={t.label} description={t.description} shortcut={pageShortcut(t.tab)}>
           <button
-            key={t.tab}
             type="button"
             aria-current={tab === t.tab ? 'page' : undefined}
             aria-label={t.label}
-            title={t.label}
             onClick={() => setTab(t.tab)}
             className={cx(
               'flex min-h-8 shrink-0 items-center gap-2 rounded-[var(--radius-small)] px-2.5 2xl:px-3',
@@ -79,6 +81,7 @@ export function TopBar() {
             <t.Icon className="size-4" aria-hidden="true" />
             <span className="hidden 2xl:inline">{t.label}</span>
           </button>
+          </Tooltip>
         ))}
       </nav>
 
@@ -87,9 +90,11 @@ export function TopBar() {
         <Button size="dense" variant={inboxCount ? 'attention' : 'secondary'} onClick={() => set({ inboxOpen: true })} aria-label={`Needs you: ${inboxCount}`} icon={<Bell className="size-4" aria-hidden="true" />}>
           <span className="hidden xl:inline">Needs you:</span> {inboxCount}
         </Button>
-        <Button size="dense" variant="ghost" className="w-9 px-0" onClick={() => set({ helpOpen: true })} aria-label="Help centre" title="Help centre (F1)">
-          <CircleHelp className="size-4" aria-hidden="true" />
-        </Button>
+        <Tooltip label="Help centre" description="Every feature, with search and shortcuts" shortcut="F1">
+          <Button size="dense" variant="ghost" className="w-9 px-0" onClick={() => set({ helpOpen: true })} aria-label="Help centre">
+            <CircleHelp className="size-4" aria-hidden="true" />
+          </Button>
+        </Tooltip>
         <Button size="dense" variant="secondary" className="text-ink-muted" onClick={() => set({ paletteOpen: true })} title="Search and commands (Ctrl K)" icon={<Search className="size-4" aria-hidden="true" />}>
           <span className="sr-only lg:not-sr-only">Search</span>
           <span className="sr-only"> and commands</span>
