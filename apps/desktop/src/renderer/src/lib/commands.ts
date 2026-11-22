@@ -1,7 +1,8 @@
 import { isLive } from '@ade/session-core';
 import { host, main } from './bridge.ts';
+import { PAGES } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
-import { attempt, useStore, type Tab } from './store.ts';
+import { attempt, useStore } from './store.ts';
 
 /** One action the user can take (Command pattern). Every action is reachable from the palette (UI rule). */
 export interface Command {
@@ -12,15 +13,6 @@ export interface Command {
   run: () => void | Promise<void>;
 }
 
-const TABS: { tab: Tab; title: string }[] = [
-  { tab: 'sessions', title: 'Sessions' },
-  { tab: 'work-items', title: 'Work items' },
-  { tab: 'workflows', title: 'Workflows' },
-  { tab: 'skills', title: 'Skills' },
-  { tab: 'terminals', title: 'Terminals' },
-  { tab: 'run', title: 'Run' },
-  { tab: 'review', title: 'Review' },
-];
 
 export async function pickAndOpenWorkspace() {
   const res = await attempt(() => main('main.pickDirectory', { title: 'Open a Git repository' }));
@@ -40,7 +32,7 @@ export function buildCommands(): Command[] {
     })),
     { id: 'session.new', title: 'New session', group: 'Session', shortcut: 'Ctrl N', run: () => s.set({ newSession: {} }) },
     { id: 'inbox.open', title: 'Open the Needs-you inbox', group: 'Navigate', shortcut: 'Ctrl I', run: () => s.set({ inboxOpen: true }) },
-    ...TABS.map((t, i) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: `Ctrl ${i + 1}`, run: () => s.setTab(t.tab) })),
+    ...PAGES.map((t, i) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: `Ctrl ${i + 1}`, run: () => s.setTab(t.tab) })),
     ...PANELS.map((p) => ({
       id: `panel.${p.id}`,
       title: `Show the ${p.title.toLowerCase()} panel`,

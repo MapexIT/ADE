@@ -2,6 +2,7 @@ import { Check, ChevronDown, PanelsTopLeft, RotateCcw } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Button } from '@ade/ui';
 import { useState, useSyncExternalStore } from 'react';
+import { Tooltip } from './Tooltip.tsx';
 import { closePanel, defaultLayout, PANELS, showPanel, workspaceLayout } from '../lib/layout.ts';
 
 const itemClass =
@@ -18,12 +19,14 @@ export function PanelsMenu() {
   const api = workspaceLayout.api;
   return (
     <Menu.Root open={open} onOpenChange={setOpen}>
+      <Tooltip label="Panels" description="Show, hide or reset the panels of this page">
       <Menu.Trigger asChild>
         <Button size="dense" variant="secondary" disabled={!api} aria-label="Panels" icon={<PanelsTopLeft className="size-4" aria-hidden="true" />}>
           <span className="hidden xl:inline">Panels</span>
           <ChevronDown className="size-3.5 text-ink-muted" aria-hidden="true" />
         </Button>
       </Menu.Trigger>
+      </Tooltip>
       <Menu.Portal>
         <Menu.Content
           sideOffset={6}

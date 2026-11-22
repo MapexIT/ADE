@@ -18,7 +18,7 @@ test('M4 gate: failed block, Fix with agent starts a turn with the block, a run 
   await expect(page.getByText('Ready.', { exact: true })).toBeVisible();
 
   // A smart terminal in the session worktree; run a command that fails.
-  await page.keyboard.press('Control+4');
+  await page.keyboard.press('Control+5');
   await page.getByRole('button', { name: 'New terminal' }).first().click();
   await page.getByRole('menuitem', { name: /^Smart · / }).first().click();
   await expect(page.locator('.xterm').last()).toBeVisible();
@@ -36,7 +36,7 @@ test('M4 gate: failed block, Fix with agent starts a turn with the block, a run 
   await expect(page.locator('main[aria-label="Session"]').getByText('Command: git definitely-not-a-command')).toBeVisible();
 
   // Running a configuration adds a history row.
-  await page.keyboard.press('Control+5');
+  await page.keyboard.press('Control+6');
   await page.getByLabel('Configuration', { exact: true }).selectOption({ label: 'npm test' });
   await page.getByLabel('Worktree', { exact: true }).selectOption({ label: 'Your checkout' });
   await page.getByRole('button', { name: 'Run the configuration' }).click();

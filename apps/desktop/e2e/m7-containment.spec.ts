@@ -37,7 +37,7 @@ test('M7-T01: a workspace rule answers a request, a session works in the checkou
   await expect(page.getByText('Turn 1 · finished')).toBeVisible();
   await expect.poll(() => readFileSync(join(repo, 'README.md'), 'utf8')).toBe('# Changed');
 
-  await page.keyboard.press('Control+6');
+  await page.keyboard.press('Control+7');
   await expect(page.getByRole('button', { name: 'Keep changes' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Commit to branch' })).toBeHidden();
   await page.getByRole('button', { name: 'Discard session' }).click();

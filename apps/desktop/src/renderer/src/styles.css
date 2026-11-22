@@ -220,6 +220,13 @@ textarea,
 .ade-toast {
   animation: ade-toast-in var(--motion-slow) var(--ease);
 }
+.ade-tip[data-state='delayed-open'],
+.ade-tip[data-state='instant-open'] {
+  animation: ade-pop-in var(--motion-fast) var(--ease);
+}
+.ade-tip[data-state='closed'] {
+  animation: ade-fade-out var(--motion-fast) var(--ease);
+}
 
 @keyframes ade-ring {
   0%,
@@ -241,6 +248,7 @@ textarea,
   .ade-overlay,
   .ade-dialog,
   .ade-pop,
+  .ade-tip,
   .ade-toast {
     animation: none !important;
   }

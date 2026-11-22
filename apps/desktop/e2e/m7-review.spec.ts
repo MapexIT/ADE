@@ -17,7 +17,7 @@ test('M7-T03: batch review comments go as one prompt; a failing check goes to th
   await expect(page.getByText('Turn 1 · finished')).toBeVisible();
 
   // RV-09: two comments collected, then sent together.
-  await page.keyboard.press('Control+6');
+  await page.keyboard.press('Control+7');
   for (const text of ['Use a heading', 'Fix the typo']) {
     await page.getByRole('button', { name: 'Comment on line' }).click();
     await page.getByLabel(/Comment on line \d+ for the agent/).fill(text);
