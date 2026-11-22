@@ -16,6 +16,7 @@ import { SessionSearchDialog } from './components/HistoryTools.tsx';
 import { ReviewScreen } from './components/ReviewScreen.tsx';
 import { RunScreen } from './components/RunScreen.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { HelpCenter } from './components/HelpCenter.tsx';
 import { SessionsWorkspace } from './components/SessionsWorkspace.tsx';
 import { TerminalsScreen } from './components/terminal/TerminalsScreen.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -79,6 +80,11 @@ function useWiring() {
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        useStore.getState().set({ helpOpen: true });
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
       const s = useStore.getState();
@@ -138,6 +144,7 @@ export function App() {
       <SessionSearchDialog />
       <HandOffDialog />
       <CommandPalette />
+      <HelpCenter />
       <InboxDialog />
       <SettingsDialog />
       <FirstRunDialog />

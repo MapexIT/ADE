@@ -59,6 +59,7 @@ export function buildCommands(): Command[] {
         if (workspaceLayout.api) defaultLayout(workspaceLayout.api);
       },
     },
+    { id: 'app.help', title: 'Open the help centre', group: 'App', shortcut: 'F1', run: () => s.set({ helpOpen: true }) },
     { id: 'app.settings', title: 'Settings', group: 'App', shortcut: 'Ctrl ,', run: () => s.set({ settingsOpen: true }) },
     { id: 'sessions.search', title: 'Search sessions', group: 'Session', run: () => s.set({ sessionSearchOpen: true }) },
     { id: 'app.setup', title: 'First-run setup', group: 'App', run: () => s.set({ firstRunOpen: true }) },
