@@ -1,3 +1,4 @@
+import { Plus, SquareTerminal } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, ShellKind, TerminalInfo } from '@ade/contracts';
@@ -31,7 +32,7 @@ export function StatusBar({ terminal }: { terminal: TerminalInfo }) {
   if (session) segments.push({ key: 'usage', text: usage?.inputTokens != null ? `${usage.inputTokens.toLocaleString('en-GB')} tokens` : 'usage not reported', tone: 'text-ink-muted' });
   if (session?.workItemRef) segments.push({ key: 'wi', text: session.workItemRef });
   return (
-    <div aria-label="Status bar" className="flex flex-wrap border-t border-line bg-[#131922] font-mono text-[12px]">
+    <div aria-label="Status bar" className="flex flex-wrap border-t border-line bg-surface font-mono text-[12px]">
       {segments.map((s) => (
         <span key={s.key} className={cx('border-r border-line px-3 py-1.5', s.tone)}>
           {s.text}
@@ -50,12 +51,12 @@ export function NewTerminalMenu({ cwd, sessionId, compact }: { cwd: string | nul
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <Button size="dense" variant={compact ? 'ghost' : 'primary'} aria-label="New terminal">
-          {compact ? '+' : 'New terminal'}
+        <Button size="dense" variant={compact ? 'ghost' : 'primary'} aria-label="New terminal" icon={<Plus className="size-4" aria-hidden="true" />}>
+          {compact ? null : 'New terminal'}
         </Button>
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Content sideOffset={6} className="z-50 min-w-56 rounded-[var(--radius)] border border-line bg-surface p-1 shadow-xl">
+        <Menu.Content sideOffset={6} className="z-50 min-w-56 rounded-[var(--radius)] ade-pop border border-line bg-[var(--surface-glass)] p-1 shadow-[var(--shadow-pop)] backdrop-blur-xl">
           {shells.map((s) => (
             <Menu.Item key={`smart-${s.id}`} onSelect={() => make('smart', s.id)} className="flex min-h-9 cursor-pointer items-center rounded px-3 outline-none data-[highlighted]:bg-accent-tint">
               Smart · {s.label}
@@ -194,7 +195,7 @@ export function TerminalsScreen() {
             </div>
           </>
         ) : (
-          <EmptyState title="No terminal open" body="Smart terminals turn every command into a block with its exit code. Plain terminals are just a shell." action={<NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />} />
+          <EmptyState icon={<SquareTerminal className="size-5" />} title="No terminal open" body="Smart terminals turn every command into a block with its exit code. Plain terminals are just a shell." action={<NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />} />
         )}
       </main>
       <HistoryDialog open={history} onClose={() => setHistory(false)} terminalId={current && !current.exited ? current.id : null} />

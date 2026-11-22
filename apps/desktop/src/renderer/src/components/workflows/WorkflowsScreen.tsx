@@ -1,6 +1,7 @@
+import { Workflow } from 'lucide-react';
 import { Background, Controls, ReactFlow, type OnNodesChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
+import { Badge, Button, cx, EmptyState, palette, SectionLabel } from '@ade/ui';
 import type { AgentId, WorkflowRunView, WorkflowSummary } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
@@ -169,7 +170,7 @@ export function WorkflowsScreen() {
 
   if (!workspaceId)
     return (
-      <EmptyState
+      <EmptyState icon={<Workflow className="size-5" />}
         title="Open a repository first"
         body="Workflows live in .ade/workflows/ inside a repository."
       />
@@ -345,11 +346,11 @@ export function WorkflowsScreen() {
                     deleteKeyCode={readOnly ? null : ['Delete', 'Backspace']}
                     proOptions={{ hideAttribution: true }}
                   >
-                    <Background color="#2A3441" gap={20} />
+                    <Background color={palette.lineStrong} gap={22} size={1.2} />
                     <Controls showInteractive={false} />
                   </ReactFlow>
                 ) : (
-                  <EmptyState
+                  <EmptyState icon={<Workflow className="size-5" />}
                     title="Nothing to draw"
                     body={errors[0]?.message ?? 'Pick a workflow on the left.'}
                   />

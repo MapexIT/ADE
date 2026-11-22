@@ -74,9 +74,9 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface-sunken font-mono text-[12.5px] text-[#D7DEE8]">
+    <div className="flex h-full min-h-0 flex-col bg-surface-sunken font-mono text-[12.5px] text-ink">
       {running ? (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-[#131922] px-3 py-2">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-3 py-2">
           <span className="text-ink-muted">Running</span>
           <span>{running.command}</span>
           <span className="text-ink-muted">since {clock(running.startedAt)}</span>
@@ -110,7 +110,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
               key={b.id}
               data-block={i}
               aria-label={`Command block, ${done ? (failed ? 'failed' : 'succeeded') : 'running'}`}
-              className={cx('flex flex-col gap-1.5 rounded-[var(--radius-small)] border border-l-[3px] border-line px-3 py-2', failed ? 'border-l-danger bg-[#1B1418]' : done ? 'border-l-accent' : 'border-l-attention', focus === i && 'outline outline-accent')}
+              className={cx('flex flex-col gap-1.5 rounded-[var(--radius-small)] border border-l-[3px] border-line px-3 py-2', failed ? 'border-l-danger bg-danger-tint' : done ? 'border-l-accent' : 'border-l-attention', focus === i && 'outline outline-accent')}
             >
               <div className="flex flex-wrap items-center gap-3">
                 <button type="button" className="text-left" aria-expanded={!isCollapsed} onClick={() => setCollapsed((c) => { const n = new Set(c); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}>

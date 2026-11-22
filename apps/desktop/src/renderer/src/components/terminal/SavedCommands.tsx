@@ -43,7 +43,7 @@ export function SavedCommands({ terminalId, disabled }: { terminalId: string; di
           </Button>
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Content sideOffset={6} className="z-50 min-w-64 rounded-[var(--radius)] border border-line bg-surface p-1 shadow-xl">
+          <Menu.Content sideOffset={6} className="z-50 min-w-64 rounded-[var(--radius)] ade-pop border border-line bg-[var(--surface-glass)] p-1 shadow-[var(--shadow-pop)] backdrop-blur-xl">
             {commands.length === 0 ? <div className="px-3 py-2 text-ink-muted">No saved commands yet.</div> : null}
             {commands.map((c) => (
               <Menu.Item key={c.id} onSelect={() => run(c)} className="flex min-h-9 cursor-pointer flex-col justify-center rounded px-3 py-1 outline-none data-[highlighted]:bg-accent-tint">

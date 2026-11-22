@@ -1,4 +1,5 @@
 import { MarkerType, Position, type Edge, type Node } from '@xyflow/react';
+import { palette } from '@ade/ui';
 import type { WorkflowRunView } from '@ade/contracts';
 
 export interface GraphNode {
@@ -120,10 +121,10 @@ export function buildGraph(
       target: e.to,
       label: e.when ? `on ${e.when}` : undefined,
       animated: fail,
-      markerEnd: { type: MarkerType.ArrowClosed, color: fail ? '#FF9B9B' : '#7FA6F5' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: fail ? palette.white : palette.accent },
       style: { stroke: colour },
-      labelStyle: { fill: '#E6EAF0', fontSize: 11 },
-      labelBgStyle: { fill: '#161B22' },
+      labelStyle: { fill: palette.ink, fontSize: 11 },
+      labelBgStyle: { fill: palette.surfaceRaised },
     };
   });
   return { nodes: out, edges: flowEdges };

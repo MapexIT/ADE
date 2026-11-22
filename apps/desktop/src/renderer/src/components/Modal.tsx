@@ -11,6 +11,7 @@ export function Modal({
   children,
   footer,
   wide,
+  icon,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,24 +20,29 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Shown before the title, e.g. the logo on the welcome screen. */
+  icon?: ReactNode;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in" />
+        <Dialog.Overlay className="ade-overlay fixed inset-0 z-40 bg-black/60 backdrop-blur-[3px]" />
         <Dialog.Content
           className={cx(
-            'fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col',
-            'rounded-[var(--radius-card)] border border-line bg-surface shadow-2xl',
+            'ade-dialog fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col',
+            'rounded-[var(--radius-card)] border border-line bg-surface shadow-[var(--shadow-pop)]',
             wide ? 'max-w-4xl' : 'max-w-xl',
           )}
         >
-          <div className="flex flex-col gap-1 border-b border-line px-5 py-4">
-            <Dialog.Title className="m-0 text-[16px] font-semibold">{title}</Dialog.Title>
+          <div className="flex items-center gap-4 border-b border-line p-5">
+            {icon}
+            <div className="flex min-w-0 flex-col gap-1">
+            <Dialog.Title className="m-0 text-[16px] font-semibold tracking-[-0.01em]">{title}</Dialog.Title>
             {description ? <Dialog.Description className="m-0 text-ink-muted">{description}</Dialog.Description> : <Dialog.Description className="sr-only">{title}</Dialog.Description>}
+            </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto px-5 py-4">{children}</div>
-          {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">{footer}</div> : null}
+          <div className="min-h-0 flex-1 overflow-auto p-5">{children}</div>
+          {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line p-5">{footer}</div> : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -87,4 +93,4 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
 }
 
 export const inputClass =
-  'min-h-11 rounded-[var(--radius)] border border-line bg-bg px-3 text-[13px] text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none';
+  'min-h-11 rounded-[var(--radius)] border border-line bg-surface-sunken px-3 text-[13px] text-ink placeholder:text-ink-muted transition-[border-color,box-shadow] duration-[var(--motion)] ease-[var(--ease)] hover:border-line-strong focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-glow)] focus:outline-none';

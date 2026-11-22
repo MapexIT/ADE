@@ -1,3 +1,4 @@
+import { ExternalLink, GitCompareArrows, History, PanelRight } from 'lucide-react';
 import { Button, cx, EmptyState, SectionLabel, Tabs } from '@ade/ui';
 import type { FileChange, FileEntry } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
@@ -97,7 +98,7 @@ export function Inspector() {
         <FileTree root={workspace.rootPath} sessionId={null} />
       </div>
     ) : (
-      <EmptyState title="Inspector" body="Details for the selected session appear here." />
+      <EmptyState icon={<PanelRight className="size-5" />} title="Inspector" body="Details for the selected session appear here." />
     );
   }
 
@@ -125,14 +126,17 @@ export function Inspector() {
               <div className="flex flex-col gap-1.5">
                 {changes.length ? changes.map((c) => <ChangeRow key={c.path} c={c} />) : <span className="text-ink-muted">No changes yet.</span>}
               </div>
-              <Button variant="secondary" className="border-accent font-semibold text-accent" onClick={() => setTab('review')} disabled={!changes.length}>
+              <Button variant="secondary" className="border-accent font-semibold text-accent" onClick={() => setTab('review')} disabled={!changes.length} icon={<GitCompareArrows className="size-4" aria-hidden="true" />}>
                 Review changes
               </Button>
               {session.worktreePath ? (
-                <Button onClick={() => void attempt(() => main('main.openInEditor', { path: session.worktreePath! }))}>Open worktree in my editor</Button>
+                <Button onClick={() => void attempt(() => main('main.openInEditor', { path: session.worktreePath! }))} icon={<ExternalLink className="size-4" aria-hidden="true" />}>Open worktree in my editor</Button>
               ) : null}
               <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-dashed border-line p-2.5 text-ink-muted">
-                <span className="font-semibold text-ink">Checkpoints</span>
+                <span className="flex items-center gap-2 font-semibold text-ink">
+                  <History className="size-4 text-accent-soft" aria-hidden="true" />
+                  Checkpoints
+                </span>
                 {turns.length === 0 ? <span>A snapshot is saved at the start and end of every turn.</span> : null}
                 {turns.map((t) => (
                   <div key={t.id} className="flex items-center gap-2">

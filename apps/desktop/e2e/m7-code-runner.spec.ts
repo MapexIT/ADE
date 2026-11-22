@@ -36,6 +36,8 @@ test('M7-T05: scratchpad snippet; an environment set with a masked secret; two r
   }
   await envDialog.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Environment sets saved.')).toBeVisible();
+  // Dialogs animate out (120 ms); wait until it has gone before using the form behind it.
+  await expect(envDialog).toBeHidden();
 
   await page.getByLabel('Name', { exact: true }).fill('Echo env');
   await page.getByLabel('Command').fill('node -e console.log(process.env.GREETING,process.env.TOKEN)');

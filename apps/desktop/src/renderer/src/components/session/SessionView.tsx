@@ -1,3 +1,4 @@
+import { ArrowRightLeft, CircleStop, Columns2, ListPlus, LoaderCircle, MessagesSquare, Paperclip, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
 import { isLive, STATE_LABELS } from '@ade/session-core';
@@ -66,15 +67,15 @@ export function SessionHeader({ session }: { session: Session }) {
         Turn {Math.max(1, view?.turnCount ?? 0)} · {elapsed(session.createdAt, session.endedAt)} · {usageText}
       </span>
       {session.compareGroup ? (
-        <Button size="dense" variant="ghost" onClick={() => set({ compareGroup: session.compareGroup })}>
+        <Button size="dense" variant="ghost" onClick={() => set({ compareGroup: session.compareGroup })} icon={<Columns2 className="size-4" aria-hidden="true" />}>
           Compare
         </Button>
       ) : null}
-      <Button size="dense" variant="ghost" disabled={ended || isLive(session.state)} title={isLive(session.state) ? 'Wait for the turn to finish' : undefined} onClick={() => set({ handOffSessionId: session.id })}>
+      <Button size="dense" variant="ghost" disabled={ended || isLive(session.state)} title={isLive(session.state) ? 'Wait for the turn to finish' : undefined} onClick={() => set({ handOffSessionId: session.id })} icon={<ArrowRightLeft className="size-4" aria-hidden="true" />}>
         Hand off
       </Button>
       <OpenInAgentUi session={session} ended={ended} />
-      <Button size="dense" variant="ghost" onClick={() => set({ protocolSessionId: session.id })}>
+      <Button size="dense" variant="ghost" onClick={() => set({ protocolSessionId: session.id })} icon={<ScrollText className="size-4" aria-hidden="true" />}>
         Protocol
       </Button>
     </div>
@@ -153,7 +154,7 @@ function Timeline({ sessionId }: { sessionId: string }) {
   if (!items.length) {
     return (
       <div className="flex-1">
-        <EmptyState title="Waiting for the agent" body="The worktree is being prepared. Messages, tool calls and approvals appear here." />
+        <EmptyState icon={<LoaderCircle className="size-5" />} title="Waiting for the agent" body="The worktree is being prepared. Messages, tool calls and approvals appear here." />
       </div>
     );
   }
@@ -230,7 +231,7 @@ export function Composer({ session }: { session: Session }) {
       {attachments.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="Attachments">
           {attachments.map((a, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded-full border border-accent bg-accent-tint py-0.5 pr-1 pl-2.5 text-[12px] text-accent-soft">
+            <span key={i} className="inline-flex items-center gap-1.5 rounded-[var(--radius-small)] border border-accent bg-accent-tint px-2 py-0.5 text-[12px] text-accent-soft">
               {a.type === 'resource' ? a.name : a.type === 'image' ? 'Image' : 'Text'}
               <button type="button" aria-label={`Remove ${a.type === 'resource' ? a.name : 'attachment'}`} onClick={() => detach(session.id, i)} className="min-h-6 min-w-6 rounded-full hover:bg-surface">
                 ×
@@ -250,7 +251,7 @@ export function Composer({ session }: { session: Session }) {
           className="w-full resize-y rounded-[var(--radius)] border border-line bg-bg p-2.5 text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none"
         />
         {slash.length ? (
-          <ul role="listbox" aria-label="Slash commands" className="absolute bottom-full left-0 z-10 mb-1 max-h-56 w-80 overflow-auto rounded-[var(--radius)] border border-line bg-surface p-1 shadow-xl">
+          <ul role="listbox" aria-label="Slash commands" className="absolute bottom-full left-0 z-10 mb-1 max-h-56 w-80 overflow-auto rounded-[var(--radius)] ade-pop border border-line bg-[var(--surface-glass)] p-1 shadow-[var(--shadow-pop)] backdrop-blur-xl">
             {slash.map((c) => (
               <li key={c.name} role="option" aria-selected={false}>
                 <button type="button" className="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-accent-tint" onClick={() => setText(`/${c.name} `)}>
@@ -263,7 +264,7 @@ export function Composer({ session }: { session: Session }) {
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="dense" onClick={() => setPicker(true)} disabled={!session.worktreePath}>
+        <Button size="dense" onClick={() => setPicker(true)} disabled={!session.worktreePath} icon={<Paperclip className="size-4" aria-hidden="true" />}>
           Attach file
         </Button>
         {view?.modes.length ? (
@@ -275,7 +276,7 @@ export function Composer({ session }: { session: Session }) {
               id={`mode-${session.id}`}
               value={view.modeId ?? ''}
               onChange={(e) => void attempt(() => host.call('sessions.setMode', { sessionId: session.id, modeId: e.target.value }))}
-              className="min-h-9 rounded-[var(--radius)] border border-line bg-surface px-2 text-ink"
+              className="min-h-9 rounded-[var(--radius)] border border-line bg-surface px-3 text-ink"
             >
               {view.modes.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -290,18 +291,18 @@ export function Composer({ session }: { session: Session }) {
         <div className="ml-auto flex flex-wrap gap-2">
           {busy ? (
             <>
-              <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.cancel', { sessionId: session.id }))}>
+              <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.cancel', { sessionId: session.id }))} icon={<CircleStop className="size-4" aria-hidden="true" />}>
                 Cancel turn
               </Button>
-              <Button size="dense" onClick={() => void send('interrupt')} disabled={!text.trim() && !attachments.length}>
+              <Button size="dense" onClick={() => void send('interrupt')} disabled={!text.trim() && !attachments.length} icon={<Zap className="size-4" aria-hidden="true" />}>
                 Interrupt and send
               </Button>
-              <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length}>
+              <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length} icon={<ListPlus className="size-4" aria-hidden="true" />}>
                 Queue message
               </Button>
             </>
           ) : (
-            <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length}>
+            <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length} icon={<SendHorizontal className="size-4" aria-hidden="true" />}>
               Send
             </Button>
           )}
@@ -329,7 +330,7 @@ export function SessionView() {
   const memoSession = useMemo(() => session, [session]);
   if (!memoSession) {
     return (
-      <EmptyState
+      <EmptyState icon={<MessagesSquare className="size-5" />}
         title={hasWorkspace ? 'No session selected' : 'Open a repository to begin'}
         body={hasWorkspace ? 'A session is one conversation with one agent in its own Git worktree.' : 'ADE works on Git repositories. Each session gets its own worktree, so your checkout is never touched.'}
         action={hasWorkspace ? <Button variant="primary" onClick={() => set({ newSession: {} })}>New session</Button> : undefined}

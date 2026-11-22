@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit';
+import { palette } from '@ade/ui';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
@@ -9,28 +10,29 @@ import { useStore } from '../../lib/store.ts';
 import { destructiveReason, isMultiLinePaste } from '../../lib/terminal-intel.ts';
 import { scrollback, subscribeData } from '../../lib/terminals.ts';
 
+// Terminal output stays inside black, white and violet: every ANSI hue maps onto them.
 const THEME = {
-  background: '#0B0E13',
-  foreground: '#D7DEE8',
-  cursor: '#7FA6F5',
-  selectionBackground: '#1E2A40',
-  black: '#0B0E13',
-  brightBlack: '#5C6878',
-  blue: '#7FA6F5',
-  brightBlue: '#B7CDFB',
-  red: '#FF9B9B',
-  brightRed: '#FF9B9B',
-  yellow: '#FFB86B',
-  brightYellow: '#FFB86B',
-  // Keep terminal output inside the three-hue palette: green maps to the accent.
-  green: '#B7CDFB',
-  brightGreen: '#B7CDFB',
-  cyan: '#9AA7B6',
-  brightCyan: '#E6EAF0',
-  magenta: '#B7CDFB',
-  brightMagenta: '#B7CDFB',
-  white: '#D7DEE8',
-  brightWhite: '#FFFFFF',
+  background: palette.surfaceSunken,
+  foreground: '#e4e4e7',
+  cursor: palette.accent,
+  cursorAccent: palette.surfaceSunken,
+  selectionBackground: '#3b2a63',
+  black: palette.surfaceSunken,
+  brightBlack: palette.inkFaint,
+  red: palette.white,
+  brightRed: palette.white,
+  green: palette.accentSoft,
+  brightGreen: palette.accentSoft,
+  yellow: palette.attention,
+  brightYellow: palette.attention,
+  blue: palette.accent,
+  brightBlue: palette.accentSoft,
+  magenta: palette.accent,
+  brightMagenta: palette.accentSoft,
+  cyan: palette.inkMuted,
+  brightCyan: palette.ink,
+  white: '#e4e4e7',
+  brightWhite: palette.white,
 };
 
 /** TM-01: one xterm per pty, WebGL when available, with search and resize. */

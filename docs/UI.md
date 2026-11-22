@@ -5,26 +5,33 @@ detail on demand, soft borders, short motion.
 
 ## Tokens (CSS custom properties in `packages/ui/tokens.css`)
 
+Three colours only: black, white and violet. Greys are mixes of black and white. "Needs you" is the violet at
+its brightest on a filled tint; danger is white, bold and outlined. Canvas libraries (xterm.js, Monaco, React
+Flow) read the same values from `packages/ui/src/palette.ts`.
+
 | Token | Value | Use |
 | --- | --- | --- |
-| `--bg` | `#0F1318` | App ground |
-| `--surface` | `#161B22` | Panels, bars, cards |
-| `--surface-sunken` | `#0B0E13` | Terminals, code, canvas |
-| `--line` | `#2A3441` | Hairlines and borders |
-| `--ink` | `#E6EAF0` | Primary text |
-| `--ink-muted` | `#9AA7B6` | Secondary text |
-| `--accent` | `#7FA6F5` | Primary actions, selection, focus ring |
-| `--accent-ink` | `#0E1420` | Text on accent fills |
-| `--accent-tint` | `#1E2A40` | Selected backgrounds |
-| `--accent-soft` | `#B7CDFB` | Text on accent tint |
-| `--attention` | `#FFB86B` | Needs you, waiting |
-| `--attention-tint` | `#33240F` | Attention backgrounds |
-| `--attention-line` | `#D9882B` | Attention borders and rings |
-| `--ok` | `#7BD88F` | Success text |
-| `--ok-tint` | `#14301F` | Success backgrounds |
-| `--danger` | `#FF9B9B` | Failure text |
-| `--danger-tint` | `#3A1A1A` | Failure backgrounds |
-| `--radius` | `10px` (cards 12px) | Corners |
+| `--bg` | `#09090B` | App ground |
+| `--surface` | `#111114` | Panels, bars, cards |
+| `--surface-raised` | `#1A1A1F` | Hover, raised controls |
+| `--surface-sunken` | `#050506` | Terminals, code, canvas, inputs |
+| `--line` | `#24242A` | Hairlines and borders |
+| `--line-strong` | `#3A3A42` | Hovered borders |
+| `--ink` | `#FAFAFA` | Primary text |
+| `--ink-muted` | `#A1A1AA` | Secondary text |
+| `--accent` | `#8B5CF6` | Selection, focus ring, indicators |
+| `--accent-strong` | `#7C3AED` | Primary button fill (white text, 5.7:1) |
+| `--accent-tint` | `#1D1530` | Selected backgrounds |
+| `--accent-soft` | `#C4B5FD` | Text on accent tint, success |
+| `--attention` | `#DDD6FE` | Needs you, waiting |
+| `--attention-tint` | `#261B44` | Attention backgrounds |
+| `--attention-line` | `#A78BFA` | Attention borders and rings |
+| `--danger` | `#FFFFFF` | Failure text (bold) |
+| `--danger-tint` | `#1F1F24` | Failure backgrounds |
+| `--danger-line` | `#E4E4E7` | Failure borders |
+| `--radius` | `6px` (cards 8px, small 4px) | Corners |
+
+Icons: lucide-react, 16px, next to the words of a control (never instead of them, except a labelled icon button).
 
 Type: Inter for UI (13px base, 16px section titles), JetBrains Mono for code and terminals (12 to 12.5px).
 Spacing in steps of 4px. Controls are at least 36px tall in dense toolbars and 44px elsewhere.

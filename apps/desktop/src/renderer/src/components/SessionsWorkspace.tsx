@@ -1,3 +1,4 @@
+import { LayoutDashboard, Plus, RotateCcw } from 'lucide-react';
 import { DockviewReact, themeDark, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelProps, type IWatermarkPanelProps } from 'dockview-react';
 import 'dockview-react/dist/styles/dockview.css';
 import { Button } from '@ade/ui';
@@ -27,14 +28,15 @@ const theme = { ...themeDark, name: 'ade', className: `${themeDark.className} do
 function EmptyDock({ containerApi }: IWatermarkPanelProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-ink-muted">All panels are closed.</p>
+      <LayoutDashboard className="size-8 text-accent-soft" aria-hidden="true" />
+      <p className="m-0 text-ink-muted">All panels are closed.</p>
       <div className="flex flex-wrap justify-center gap-2">
         {PANELS.map((p) => (
-          <Button key={p.id} size="dense" variant="secondary" onClick={() => showPanel(containerApi, p.id)}>
+          <Button key={p.id} size="dense" variant="secondary" onClick={() => showPanel(containerApi, p.id)} icon={<Plus className="size-4" aria-hidden="true" />}>
             Show {p.title.toLowerCase()}
           </Button>
         ))}
-        <Button size="dense" variant="primary" onClick={() => defaultLayout(containerApi)}>
+        <Button size="dense" variant="primary" onClick={() => defaultLayout(containerApi)} icon={<RotateCcw className="size-4" aria-hidden="true" />}>
           Reset layout
         </Button>
       </div>

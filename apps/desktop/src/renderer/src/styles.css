@@ -16,6 +16,7 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-ink: var(--accent-ink);
   --color-accent-tint: var(--accent-tint);
   --color-accent-soft: var(--accent-soft);
@@ -43,23 +44,59 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
+}
+
+/* Every interactive element eases between states instead of snapping. */
+a,
+button,
+input,
+select,
+textarea,
+[role='tab'],
+[role='menuitem'],
+[role='menuitemcheckbox'],
+[role='option'] {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--motion);
+  transition-timing-function: var(--ease);
 }
 
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+  border-radius: var(--radius-small);
 }
 
 ::selection {
-  background: var(--accent-tint);
+  background: rgb(139 92 246 / 0.35);
+  color: var(--ink);
 }
 
 * {
   scrollbar-color: var(--line-strong) transparent;
   scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #52525b;
 }
 
 /* Dockview themed with ADE tokens. */
@@ -68,36 +105,129 @@ body {
   --dv-paneview-header-border-color: var(--line);
   --dv-tabs-and-actions-container-background-color: var(--surface);
   --dv-activegroup-visiblepanel-tab-background-color: var(--bg);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
   --dv-activegroup-visiblepanel-tab-color: var(--ink);
   --dv-activegroup-hiddenpanel-tab-color: var(--ink-muted);
   --dv-inactivegroup-visiblepanel-tab-color: var(--ink-muted);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--ink-muted);
   --dv-separator-border: var(--line);
   --dv-paneview-active-outline-color: var(--accent);
-  --dv-tab-divider-color: var(--line);
+  --dv-tab-divider-color: transparent;
   --dv-group-view-background-color: var(--bg);
-  --dv-tabs-and-actions-container-height: 36px;
+  --dv-tabs-and-actions-container-height: 38px;
   --dv-tabs-and-actions-container-font-size: 13px;
-  --dv-drag-over-background-color: rgba(127, 166, 245, 0.12);
+  --dv-drag-over-background-color: rgb(139 92 246 / 0.12);
   --dv-drag-over-border-color: var(--accent);
   --dv-sash-color: transparent;
   --dv-active-sash-color: var(--accent);
+}
+
+.dockview-theme-ade .dv-tab {
+  position: relative;
+  padding: 0 14px;
+  transition:
+    color var(--motion) var(--ease),
+    background-color var(--motion) var(--ease);
+}
+.dockview-theme-ade .dv-tab:hover {
+  color: var(--ink);
+}
+/* The active tab of the focused group gets a violet underline that grows in. */
+.dockview-theme-ade .dv-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--motion-slow) var(--ease);
+}
+.dockview-theme-ade .dv-active-group .dv-tab.dv-active-tab::after {
+  transform: scaleX(1);
+}
+.dockview-theme-ade .dv-inactive-group .dv-tab.dv-active-tab::after {
+  transform: scaleX(1);
+  background: var(--line-strong);
+}
+.dockview-theme-ade .dv-sash {
+  transition: background-color var(--motion) var(--ease);
 }
 
 .xterm {
   padding: 6px 8px;
 }
 
+/* Radix surfaces open with a short fade and lift (120 to 200 ms, ease-out). */
+@keyframes ade-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ade-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ade-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+@keyframes ade-dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+@keyframes ade-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes ade-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.ade-overlay[data-state='open'] {
+  animation: ade-fade-in var(--motion-slow) var(--ease);
+}
+.ade-overlay[data-state='closed'] {
+  animation: ade-fade-out var(--motion-fast) var(--ease);
+}
+.ade-dialog[data-state='open'] {
+  animation: ade-dialog-in var(--motion-slow) var(--ease);
+}
+.ade-dialog[data-state='closed'] {
+  animation: ade-dialog-out var(--motion-fast) var(--ease);
+}
+.ade-pop[data-state='open'] {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, top);
+  animation: ade-pop-in var(--motion) var(--ease);
+}
+.ade-pop[data-state='closed'] {
+  animation: ade-fade-out var(--motion-fast) var(--ease);
+}
+.ade-toast {
+  animation: ade-toast-in var(--motion-slow) var(--ease);
+}
+
 @keyframes ade-ring {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(217, 136, 43, 0.6);
+    box-shadow: 0 0 0 0 rgb(167 139 250 / 0.55);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(217, 136, 43, 0);
+    box-shadow: 0 0 0 5px rgb(167 139 250 / 0);
   }
 }
 
@@ -107,7 +237,31 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .attention-ring {
-    animation: none;
+  .attention-ring,
+  .ade-overlay,
+  .ade-dialog,
+  .ade-pop,
+  .ade-toast {
+    animation: none !important;
   }
+}
+
+/* React Flow on the ADE palette. */
+.react-flow {
+  --xy-background-color: var(--surface-sunken);
+  --xy-edge-stroke: var(--line-strong);
+  --xy-node-border-radius: var(--radius);
+  --xy-controls-button-background-color: var(--surface-raised);
+  --xy-controls-button-background-color-hover: var(--accent-tint);
+  --xy-controls-button-color: var(--ink);
+  --xy-controls-button-color-hover: var(--ink);
+  --xy-controls-button-border-color: var(--line);
+  --xy-controls-box-shadow: var(--shadow-soft);
+  --xy-selection-background-color: rgb(139 92 246 / 0.12);
+  --xy-selection-border: 1px solid var(--accent);
+}
+.react-flow__controls {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
 }

@@ -19,6 +19,7 @@
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.109.0",
     "@agentclientprotocol/codex-acp": "^2.8.0",
+    "lucide-react": "1.70.0",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
