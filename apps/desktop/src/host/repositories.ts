@@ -274,6 +274,37 @@ export class QueueRepo {
   }
 }
 
+/** RV-15: files the user marked as reviewed, with the fingerprint of the content they were shown. */
+export interface ReviewMark {
+  path: string;
+  fingerprint: string;
+  markedAt: string;
+}
+
+export class ReviewMarkRepo {
+  constructor(private readonly db: Database) {}
+
+  list(sessionId: string): ReviewMark[] {
+    return this.db
+      .all<R>('SELECT path, fingerprint, marked_at FROM review_marks WHERE session_id = ? ORDER BY path', sessionId)
+      .map((r) => ({ path: String(r.path), fingerprint: String(r.fingerprint), markedAt: String(r.marked_at) }));
+  }
+
+  set(sessionId: string, path: string, fingerprint: string): void {
+    this.db.run(
+      'INSERT INTO review_marks (session_id, path, fingerprint, marked_at) VALUES (?, ?, ?, ?) ON CONFLICT(session_id, path) DO UPDATE SET fingerprint = excluded.fingerprint, marked_at = excluded.marked_at',
+      sessionId,
+      path,
+      fingerprint,
+      now(),
+    );
+  }
+
+  remove(sessionId: string, path: string): boolean {
+    return this.db.run('DELETE FROM review_marks WHERE session_id = ? AND path = ?', sessionId, path).changes > 0;
+  }
+}
+
 export class SettingsRepo {
   constructor(private readonly db: Database) {}
 
@@ -531,6 +562,7 @@ export class Repositories {
   readonly events: EventStore;
   readonly permissions: PermissionRepo;
   readonly queue: QueueRepo;
+  readonly reviewMarks: ReviewMarkRepo;
   readonly settings: SettingsRepo;
   readonly audit: AuditRepo;
   readonly runs: RunRepo;
@@ -544,6 +576,7 @@ export class Repositories {
     this.events = new EventStore(db);
     this.permissions = new PermissionRepo(db);
     this.queue = new QueueRepo(db);
+    this.reviewMarks = new ReviewMarkRepo(db);
     this.settings = new SettingsRepo(db);
     this.audit = new AuditRepo(db);
     this.history = new CommandHistoryRepo(db);

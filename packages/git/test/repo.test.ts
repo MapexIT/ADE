@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   applyToCheckout,
+  blobContent,
   bringChanges,
+  changedBlobs,
   changedFiles,
   checkpointRef,
   commitFiles,
@@ -134,6 +136,73 @@ describe('checkpoints and diffs', () => {
     expect(readFileSync(join(wt, 'crlf.txt'), 'utf8')).toBe('line one\r\nline two\r\n');
     expect(existsSync(join(wt, 'added-later.txt'))).toBe(false);
     expect(readFileSync(join(wt, 'keep.txt'), 'utf8')).toBe('keep\n');
+  });
+});
+
+describe('review fingerprints', () => {
+  const FINGERPRINT = /^[0-7]{6} [0-7]{6} [0-9a-f]{40,64} [0-9a-f]{40,64}$/;
+
+  it('identifies added, modified, deleted, renamed and binary files by both sides of their diff', async () => {
+    const base = await newWorktree();
+    writeFileSync(join(wt, 'added.txt'), 'new\n');
+    writeFileSync(join(wt, 'keep.txt'), 'changed\n');
+    rmSync(join(wt, 'crlf.txt'));
+    await git(['mv', 'README.md', 'DOCS.md'], { cwd: wt });
+    writeFileSync(join(wt, 'image.bin'), Buffer.from([0, 9, 9, 9, 0]));
+    const c = await snapshot(wt, null);
+    const blobs = await changedBlobs(wt, base, c);
+    // Keys match changedFiles exactly, including the new path of a rename.
+    expect([...blobs.keys()].sort()).toEqual((await changedFiles(wt, base, c)).map((f) => f.path).sort());
+    expect(blobs.has('DOCS.md')).toBe(true);
+    expect(blobs.has('README.md')).toBe(false);
+    for (const value of blobs.values()) expect(value).toMatch(FINGERPRINT);
+
+    const [, , addedOld, addedNew] = blobs.get('added.txt')!.split(' ');
+    expect(addedOld).toMatch(/^0+$/);
+    expect((await blobContent(wt, addedNew!))?.toString('utf8')).toBe('new\n');
+    const [, , deletedOld, deletedNew] = blobs.get('crlf.txt')!.split(' ');
+    expect(deletedNew).toMatch(/^0+$/);
+    expect((await blobContent(wt, deletedOld!))?.toString('utf8')).toBe('line one\r\nline two\r\n');
+    const [, , renameOld, renameNew] = blobs.get('DOCS.md')!.split(' ');
+    expect(renameOld).toBe(renameNew);
+    expect((await blobContent(wt, blobs.get('keep.txt')!.split(' ')[3]!))?.toString('utf8')).toBe('changed\n');
+  });
+
+  it('is stable for unchanged content and changes when either side changes', async () => {
+    const base = await newWorktree();
+    writeFileSync(join(wt, 'keep.txt'), 'one\n');
+    const first = await changedBlobs(wt, base, await snapshot(wt, null));
+    const again = await changedBlobs(wt, base, await snapshot(wt, null));
+    expect(again.get('keep.txt')).toBe(first.get('keep.txt'));
+    writeFileSync(join(wt, 'keep.txt'), 'two\n');
+    const second = await changedBlobs(wt, base, await snapshot(wt, null));
+    expect(second.get('keep.txt')).not.toBe(first.get('keep.txt'));
+    writeFileSync(join(wt, 'keep.txt'), 'one\n');
+    const back = await snapshot(wt, null);
+    expect((await changedBlobs(wt, base, back)).get('keep.txt')).toBe(first.get('keep.txt'));
+    // A moved base (as after a rebase) changes the old side.
+    const otherBase = await snapshot(repo, null);
+    writeFileSync(join(repo, 'keep.txt'), 'moved\n');
+    const movedBase = await snapshot(repo, null);
+    expect(otherBase).not.toBe(movedBase);
+    expect((await changedBlobs(wt, movedBase, back)).get('keep.txt')).not.toBe(first.get('keep.txt'));
+  });
+
+  it('notices a mode-only change', async () => {
+    const base = await newWorktree();
+    // Linux trusts the file's own permission bits (core.fileMode); Windows only has the index bit.
+    chmodSync(join(wt, 'keep.txt'), 0o755);
+    await git(['update-index', '--chmod=+x', 'keep.txt'], { cwd: wt });
+    const blobs = await changedBlobs(wt, base, await snapshot(wt, null));
+    expect(blobs.get('keep.txt')?.split(' ').slice(0, 2)).toEqual(['100644', '100755']);
+  });
+
+  it('reads blobs, and returns null for the zero id or an unknown blob', async () => {
+    await newWorktree();
+    const sha = (await git(['rev-parse', 'HEAD:keep.txt'], { cwd: wt })).trim();
+    expect((await blobContent(wt, sha))?.toString('utf8')).toBe('keep\n');
+    expect(await blobContent(wt, '0'.repeat(40))).toBeNull();
+    expect(await blobContent(wt, 'f'.repeat(40))).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 # Features
 
-145 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+146 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -84,6 +84,7 @@ Linux.
 | RV-12 | Pull request | v1 | Push the branch and open a pull request. |
 | RV-13 | Commit message draft | v1 | Ask the session's agent for a commit message. |
 | RV-14 | Review assistant | v1 | A second agent pre-reviews the diff read-only and ranks files by risk. |
+| RV-15 | Review progress | v1 | Mark files as reviewed; a file that changes afterwards shows as changed since review, with a diff of only what changed. Landing unreviewed files warns first and is recorded in the audit log. |
 
 ## Parallel (PL)
 

@@ -117,6 +117,19 @@ export const ReviewAssessment = z.object({
 });
 export type ReviewAssessment = z.infer<typeof ReviewAssessment>;
 
+/** RV-15: one file's diff against the base, as `git diff --raw` identifies it: "<oldMode> <newMode> <oldSha> <newSha>". */
+export const ReviewFingerprint = z.string().regex(/^[0-7]{6} [0-7]{6} [0-9a-f]{40,64} [0-9a-f]{40,64}$/);
+/** RV-15: not reviewed, reviewed as it is now, or changed since it was reviewed. */
+export const ReviewState = z.enum(['unreviewed', 'reviewed', 'changed']);
+export type ReviewState = z.infer<typeof ReviewState>;
+/** RV-15: the review state of every file in a session's change set (all turns). */
+export const ReviewProgress = z.object({
+  files: z.array(z.object({ path: z.string(), fingerprint: ReviewFingerprint, state: ReviewState, markedAt: z.string().nullable() })),
+  reviewed: z.number().int(),
+  total: z.number().int(),
+});
+export type ReviewProgress = z.infer<typeof ReviewProgress>;
+
 /** CO-05 and CO-08: what ADE does to a session's work item. Shortcut moves name workflow state ids. Off by default. */
 export const SyncSettings = z.object({
   moveOnStart: z.number().int().nullable(),
@@ -446,6 +459,13 @@ export const hostApi = defineApi({
   /** RV-14: another agent pre-reviews the diff read-only and ranks files by risk. */
   'sessions.reviewAssist': method(z.object({ sessionId: Id, agentId: AgentId, focus: z.string().max(2000).optional() }), ReviewAssessment),
   'sessions.reviewAssessment': method(z.object({ sessionId: Id }), ReviewAssessment.nullable()),
+  'sessions.reviewProgress': method(z.object({ sessionId: Id }), ReviewProgress),
+  'sessions.markReviewed': method(
+    z.object({ sessionId: Id, files: z.array(z.object({ path: z.string().min(1).max(4096), fingerprint: ReviewFingerprint })).min(1).max(5000) }),
+    ReviewProgress,
+  ),
+  'sessions.unmarkReviewed': method(z.object({ sessionId: Id, paths: z.array(z.string().min(1).max(4096)).min(1).max(5000) }), ReviewProgress),
+  'sessions.diffSinceReviewed': method(z.object({ sessionId: Id, path: z.string().min(1).max(4096) }), DiffText),
   'sessions.pullRequestStatus': method(z.object({ sessionId: Id }), PullRequestStatus.nullable()),
   /** RV-12: commits what changed since and pushes it to the open pull request's branch. */
   'sessions.pushUpdate': method(z.object({ sessionId: Id, message: z.string().trim().min(1).max(10_000) }), Ok),
