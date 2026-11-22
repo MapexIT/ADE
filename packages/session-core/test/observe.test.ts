@@ -151,6 +151,17 @@ describe('WA-07 activity', () => {
     expect(a.plan).toEqual({ done: 1, total: 2 });
   });
 
+  it('counts a file once when the update repeats the diff of its tool call', () => {
+    const a = activityFrom([
+      ev(0, { sessionId: 's1', type: 'tool.call', toolCallId: 'e1', title: 'Edit x', kind: 'edit', status: 'pending', content: [{ type: 'diff', path: 'x.ts', oldText: null, newText: 'a' }], locations: ['x.ts'] }),
+      ev(1, { sessionId: 's1', type: 'tool.update', toolCallId: 'e1', title: null, status: 'completed', content: [{ type: 'diff', path: 'x.ts', oldText: null, newText: 'a' }] }),
+      ev(2, { sessionId: 's1', type: 'tool.update', toolCallId: 'e9', title: null, status: 'completed', content: [{ type: 'diff', path: 'y.ts', oldText: null, newText: 'b' }] }),
+    ]);
+    expect(a.files['x.ts']).toEqual({ reads: 0, edits: 1 });
+    // A diff that arrives only in an update still counts.
+    expect(a.files['y.ts']).toEqual({ reads: 0, edits: 1 });
+  });
+
   it('records the result of a turn', () => {
     const a = activityFrom(turn);
     expect(a.outcome).toEqual({ stopReason: 'end_turn', at: T0 + 24_000, durationMs: 23_000 });

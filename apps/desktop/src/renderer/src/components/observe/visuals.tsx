@@ -28,6 +28,13 @@ const ORB_MODE: Record<ActivityPhase, 'busy' | 'waiting' | 'idle' | 'stopped'> =
   stopped: 'stopped',
 };
 
+/** Busy agents glow violet (the specific phase colour when it has one); idle and stopped stay grey. */
+function orbColor(phase: ActivityPhase) {
+  if (phase === 'working' || phase === 'starting') return '#8b5cf6';
+  if (phase === 'idle' || phase === 'stopped') return '#71717a';
+  return PHASE_STYLE[phase].color;
+}
+
 /** A status light: rings ripple out while the agent works, it breathes while it waits for you. */
 export function Orb({ phase, size = 14 }: { phase: ActivityPhase; size?: number }) {
   const mode = ORB_MODE[phase];
@@ -38,8 +45,7 @@ export function Orb({ phase, size = 14 }: { phase: ActivityPhase; size?: number 
       style={{
         width: size,
         height: size,
-        ['--orb-color' as string]:
-          PHASE_STYLE[phase].color === '#24242a' ? '#52525b' : PHASE_STYLE[phase].color,
+        ['--orb-color' as string]: orbColor(phase),
       }}
     />
   );

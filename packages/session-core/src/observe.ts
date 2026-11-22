@@ -71,6 +71,8 @@ export interface Activity {
   feed: FeedEntry[];
   /** Internal: open tool calls and commands, so the phase falls back correctly when one finishes. */
   open: { tools: Record<string, { title: string; kind: ToolKind }>; commands: Record<string, string> };
+  /** Internal: paths already counted per tool call, so an update carrying the same diff is not counted twice. */
+  toolPaths: Record<string, string[]>;
   turnStartedAt: number | null;
   nextFeedId: number;
 }
@@ -108,6 +110,7 @@ export const emptyActivity = (): Activity => ({
   lastMessage: null,
   feed: [],
   open: { tools: {}, commands: {} },
+  toolPaths: {},
   turnStartedAt: null,
   nextFeedId: 1,
 });
@@ -239,7 +242,11 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
       else if (e.kind === 'edit' || e.kind === 'delete' || e.kind === 'move') a.counts.edits++;
       else if (e.kind === 'search') a.counts.searches++;
       const diffPaths = e.content.flatMap((c) => (c.type === 'diff' ? [c.path] : []));
-      touch(a, [...new Set([...e.locations, ...diffPaths])], e.kind);
+      const paths = [...new Set([...e.locations, ...diffPaths])];
+      touch(a, paths, e.kind);
+      a.toolPaths[e.toolCallId] = paths;
+      const ids = Object.keys(a.toolPaths);
+      if (ids.length > 200) delete a.toolPaths[ids[0]!];
       const where = e.locations[0] ?? diffPaths[0];
       const title = VERB[e.kind] && where ? `${VERB[e.kind]} ${fileName(where)}` : e.title;
       if (e.status === 'pending' || e.status === 'in_progress') {
@@ -253,7 +260,12 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
     case 'tool.update': {
       const diffPaths = (e.content ?? []).flatMap((c) => (c.type === 'diff' ? [c.path] : []));
       const open = a.open.tools[e.toolCallId];
-      if (diffPaths.length) touch(a, diffPaths, open?.kind ?? 'edit');
+      const seen = (a.toolPaths[e.toolCallId] ??= []);
+      const fresh = diffPaths.filter((p) => !seen.includes(p));
+      if (fresh.length) {
+        touch(a, fresh, open?.kind ?? 'edit');
+        seen.push(...fresh);
+      }
       if (e.status === 'completed' || e.status === 'failed') {
         delete a.open.tools[e.toolCallId];
         if (e.status === 'failed') {
