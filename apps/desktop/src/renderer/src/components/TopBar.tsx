@@ -1,4 +1,4 @@
-import { Activity, Bell, Bot, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, Kbd, Logo } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -107,15 +107,17 @@ export function TopBar() {
           // Below 2xl one summary keeps the bar on a single row; the full list is in its tooltip.
           const real = agents.filter((a) => a.id !== 'fake');
           const ready = real.filter((a) => a.health === 'ready').length;
-          const detail = real.map((a) => `${a.label}: ${a.health === 'ready' ? 'ready' : a.health === 'needs-sign-in' ? 'needs sign-in' : 'not installed'}`).join('\n');
+          const detail = real.map((a) => `${a.label}: ${a.health === 'ready' ? 'ready' : a.health === 'needs-sign-in' ? 'needs sign-in' : 'not installed'}`).join(' · ');
           return real.length ? (
-            <Badge tone={ready ? 'ok' : 'neutral'} className="hidden lg:inline-flex 2xl:hidden" title={detail} aria-label={detail}>
-              <Bot className="size-3.5" aria-hidden="true" />
-              {ready}/{real.length} agents ready
-            </Badge>
+            <Tooltip label="Coding CLIs" description={detail}>
+              <Badge tone={ready ? 'ok' : 'neutral'} className="hidden lg:inline-flex 2xl:hidden" tabIndex={0} aria-label={`${ready} of ${real.length} coding CLIs ready. ${detail}`}>
+                <SquareTerminal className="size-3.5" aria-hidden="true" />
+                {ready}/{real.length} CLIs ready
+              </Badge>
+            </Tooltip>
           ) : null;
         })()}
-        <div className="hidden flex-wrap gap-1.5 2xl:flex" aria-label="Agents">
+        <div className="hidden flex-wrap gap-1.5 2xl:flex" aria-label="Coding CLIs">
           {agents
             .filter((a) => a.id !== 'fake')
             .map((a) => (
