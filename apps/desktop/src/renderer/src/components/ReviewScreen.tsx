@@ -11,7 +11,8 @@ import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, selectedSession, useStore } from '../lib/store.ts';
 import { TurnPicker, useChanges } from './Inspector.tsx';
 import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton, PullRequestPanel } from './ReviewExtras.tsx';
-import type { ReviewComment } from '../lib/review.ts';
+import type { ReviewComment, ReviewStates } from '../lib/review.ts';
+import { ReviewBadge, useReviewProgress } from './ReviewProgress.tsx';
 
 const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
 const RISK_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -35,6 +36,9 @@ export function ReviewScreen() {
   const [assessment, setAssessment] = useState<ReviewAssessment | null>(null);
   const [pr, setPr] = useState<PullRequestStatus | null>(null);
   const sessionId = session?.id ?? null;
+  // RV-15: review state across all turns, reloaded with the changes list.
+  const { progress } = useReviewProgress(sessionId, changes);
+  const reviewStates: ReviewStates = useMemo(() => new Map((progress?.files ?? []).map((f) => [f.path, f.state])), [progress]);
   const loadPr = useCallback(() => {
     if (!sessionId) return;
     void host.call('sessions.pullRequestStatus', { sessionId }).then(setPr).catch(() => setPr(null));
@@ -132,7 +136,9 @@ export function ReviewScreen() {
       ) : (
         <div className="flex min-h-0 flex-1 flex-wrap">
           <aside aria-label="Changed files" className="flex min-h-0 w-72 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
-            <SectionLabel>{changes.length} files · computed from Git</SectionLabel>
+            <SectionLabel>
+              {changes.length} files · {changes.filter((c) => reviewStates.get(c.path) === 'reviewed').length} reviewed · computed from Git
+            </SectionLabel>
             {changes.length ? <AssistantPanel session={session} onResult={onAssessment} /> : null}
             {ordered.map((c) => (
               <div key={c.path} className={cx('flex flex-col gap-1.5 rounded-[var(--radius)] border p-2.5', active === c.path ? 'border-2 border-accent bg-accent-tint' : 'border-line')}>
@@ -158,6 +164,7 @@ export function ReviewScreen() {
                   <span className="text-accent-soft">+{c.additions}</span>
                   <span className="text-danger">-{c.deletions}</span>
                   <Badge>{c.status}</Badge>
+                  <ReviewBadge state={reviewStates.get(c.path)} />
                   <Badge tone={c.editedByUser ? 'accent' : 'neutral'}>{c.editedByUser ? 'You edited' : 'Agent'}</Badge>
                   {risk.get(c.path) ? (
                     <Badge tone={RISK_TONE[risk.get(c.path)!.risk]} title={risk.get(c.path)!.reason}>
