@@ -1,6 +1,6 @@
 # Features
 
-146 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+147 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -164,6 +164,7 @@ Linux.
 | CO-08 | Progress notes | v1 | Summary and pull-request link posted to the work item on landing. |
 | CO-09 | Board view | v1 | A GitHub Projects board or Shortcut iteration with session badges. |
 | CO-10 | More connectors | v1 | Any MCP server can be added. |
+| CO-11 | Connection guides | v1 | An unconnected Shortcut or GitHub source (work items or board) shows numbered steps instead of an empty list, each ticked when this machine shows it done: `gh` installed (with its version), the account `gh` signs in as, the Git identity (with `git config` commands prefilled from the GitHub account), the Shortcut token stored. Commands copy in one click; "Check again" re-reads. Read locally; no token value is ever shown. |
 | CO-11 | Work item triggers | Later | Start a workflow from a story state or issue label. |
 
 ## Agent workflows (WF) and skills (SK)
