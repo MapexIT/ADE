@@ -1,4 +1,4 @@
-import { Archive, FileQuestion, GitCompareArrows, MousePointerClick } from 'lucide-react';
+import { Archive, Check, FileQuestion, GitCompareArrows, MousePointerClick, Undo2 } from 'lucide-react';
 import { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
@@ -11,7 +11,7 @@ import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, selectedSession, useStore } from '../lib/store.ts';
 import { TurnPicker, useChanges } from './Inspector.tsx';
 import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton, PullRequestPanel } from './ReviewExtras.tsx';
-import type { ReviewComment, ReviewStates } from '../lib/review.ts';
+import { landWarning, nextUnreviewed, reviewActions, type ReviewComment, type ReviewStates } from '../lib/review.ts';
 import { ReviewBadge, useReviewProgress } from './ReviewProgress.tsx';
 
 const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
@@ -37,7 +37,7 @@ export function ReviewScreen() {
   const [pr, setPr] = useState<PullRequestStatus | null>(null);
   const sessionId = session?.id ?? null;
   // RV-15: review state across all turns, reloaded with the changes list.
-  const { progress } = useReviewProgress(sessionId, changes);
+  const { progress, setProgress } = useReviewProgress(sessionId, changes);
   const reviewStates: ReviewStates = useMemo(() => new Map((progress?.files ?? []).map((f) => [f.path, f.state])), [progress]);
   const loadPr = useCallback(() => {
     if (!sessionId) return;
@@ -57,6 +57,41 @@ export function ReviewScreen() {
   }, [session?.id]);
   const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
 
+  // RV-15: mark the active file with the fingerprint shown (AC5), then move to the next file not reviewed.
+  const activeEntry = active ? progress?.files.find((f) => f.path === active) : undefined;
+  const order = useMemo(() => ordered.map((c) => c.path), [ordered]);
+  const markActive = useCallback(
+    async (toggle: boolean) => {
+      if (!sessionId || !activeEntry) return;
+      const { path, fingerprint, state } = activeEntry;
+      if (state === 'reviewed' && toggle) {
+        const p = await attempt(() => host.call('sessions.unmarkReviewed', { sessionId, paths: [path] }));
+        if (p) setProgress(p);
+        return;
+      }
+      const p = state === 'reviewed' ? progress : await attempt(() => host.call('sessions.markReviewed', { sessionId, files: [{ path, fingerprint }] }));
+      if (!p) return;
+      setProgress(p);
+      setActive(nextUnreviewed(order, new Map(p.files.map((f) => [f.path, f.state])), path) ?? path);
+    },
+    [sessionId, activeEntry, progress, order, setProgress],
+  );
+  const goToNextUnreviewed = useCallback(() => {
+    const next = nextUnreviewed(order, reviewStates, active);
+    if (next) setActive(next);
+    else useStore.getState().toast('Every file is marked as reviewed.');
+  }, [order, reviewStates, active]);
+  const sessionLive = !!session && session.state !== 'landed' && session.state !== 'discarded';
+  useEffect(() => {
+    if (!sessionLive) return;
+    reviewActions.mark = () => void markActive(false);
+    reviewActions.next = goToNextUnreviewed;
+    return () => {
+      reviewActions.mark = null;
+      reviewActions.next = null;
+    };
+  }, [sessionLive, markActive, goToNextUnreviewed]);
+
   useEffect(() => {
     setSelected(new Set(changes.map((c) => c.path)));
     setActive((a) => (a && changes.some((c) => c.path === a) ? a : (changes[0]?.path ?? null)));
@@ -75,6 +110,8 @@ export function ReviewScreen() {
   const busy = isLive(session.state);
   const ended = session.state === 'landed' || session.state === 'discarded';
   const files = [...selected];
+  const warning = landWarning(files, reviewStates);
+  const withWarning = (body: string) => (warning ? `${body} ${warning}` : body);
 
   const addToReview = () => {
     if (!comment || !active || !comment.text.trim()) return;
@@ -104,17 +141,18 @@ export function ReviewScreen() {
     session.inPlace
       ? ask({
           title: `Keep ${files.length} file(s) in your checkout?`,
-          body: 'The selected changes stay where they are, uncommitted. Every other file the session changed goes back to the snapshot taken when it started. The session then ends.',
+          body: withWarning('The selected changes stay where they are, uncommitted. Every other file the session changed goes back to the snapshot taken when it started. The session then ends.'),
           confirmLabel: 'Keep changes',
           onConfirm: () =>
             void attempt(() => host.call('sessions.land', { sessionId: session.id, mode: 'apply', files })).then((ok) => ok && useStore.getState().toast('Kept.')),
         })
       : ask({
       title: mode === 'apply' ? `Apply ${files.length} file(s) to your checkout?` : `Commit ${files.length} file(s) on ${session.branch}?`,
-      body:
+      body: withWarning(
         mode === 'apply'
           ? 'The selected changes are written into your checkout as uncommitted changes. The session then ends and its worktree stays until you discard it.'
           : 'The selected files are committed on the session branch with your Git identity. The session then ends.',
+      ),
       confirmLabel: mode === 'apply' ? 'Apply to my checkout' : 'Commit to branch',
       onConfirm: () =>
         void attempt(() => host.call('sessions.land', { sessionId: session.id, mode, files, ...(commitMessage.trim() ? { message: commitMessage.trim() } : {}) })).then((ok) => ok && useStore.getState().toast('Landed.')),
@@ -183,7 +221,17 @@ export function ReviewScreen() {
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono font-medium">{active}</span>
-                  <div className="ml-auto flex gap-1.5">
+                  <div className="ml-auto flex flex-wrap gap-1.5">
+                    <Button
+                      size="dense"
+                      variant={activeEntry?.state === 'reviewed' ? 'secondary' : 'primary'}
+                      icon={activeEntry?.state === 'reviewed' ? <Undo2 aria-hidden="true" className="size-4" /> : <Check aria-hidden="true" className="size-4" />}
+                      disabled={!activeEntry}
+                      title="Marks the file as it is now, across all turns"
+                      onClick={() => void markActive(true)}
+                    >
+                      {activeEntry?.state === 'reviewed' ? 'Mark as not reviewed' : 'Mark as reviewed'}
+                    </Button>
                     <Button size="dense" aria-pressed={!inline} variant={!inline ? 'primary' : 'secondary'} onClick={() => setInline(false)}>
                       Side by side
                     </Button>

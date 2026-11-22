@@ -2,6 +2,7 @@ import { isLive } from '@ade/session-core';
 import { host, main } from './bridge.ts';
 import { PAGES } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
+import { reviewActions } from './review.ts';
 import { attempt, useStore } from './store.ts';
 
 /** One action the user can take (Command pattern). Every action is reachable from the palette (UI rule). */
@@ -67,6 +68,14 @@ export function buildCommands(): Command[] {
       { id: 'session.review', title: 'Review changes', group: 'Session', run: () => s.setTab('review') },
       { id: 'session.protocol', title: 'Show protocol messages', group: 'Session', run: () => s.set({ protocolSessionId: session.id }) },
     );
+    // RV-15: only while the Review screen shows a live session (it registers these actions).
+    const { mark, next } = reviewActions;
+    if (s.tab === 'review' && mark && next) {
+      cmds.push(
+        { id: 'review.mark', title: 'Mark file as reviewed', group: 'Session', run: mark },
+        { id: 'review.next', title: 'Go to the next unreviewed file', group: 'Session', run: next },
+      );
+    }
     if (session.worktreePath) {
       const path = session.worktreePath;
       cmds.push({ id: 'session.editor', title: 'Open worktree in my editor', group: 'Session', run: () => void attempt(() => main('main.openInEditor', { path })) });
