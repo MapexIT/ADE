@@ -1,6 +1,6 @@
 # Features
 
-144 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+145 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -25,6 +25,7 @@ Linux.
 | WA-04 | Session header | MVP | State, agent and version, branch, sandbox badge, elapsed time, and tokens and cost or "not reported". |
 | WA-05 | Protocol inspector | MVP | Lists raw ACP messages for a session with search. Credentials in `env` or headers are redacted. |
 | WA-06 | Follow mode | v1 | The editor follows the file the agent is working on. |
+| WA-07 | Live observability | v1 | The Observe page shows every session as it works: what the agent is doing now, a phase timeline, event rate, tool calls, edits, commands, approvals, files touched, plan progress and usage, and the result when a turn ends. Built only from ACP events, so it is the same for every agent. |
 
 ## Steer (SR)
 

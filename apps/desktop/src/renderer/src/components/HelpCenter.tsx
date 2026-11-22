@@ -52,6 +52,7 @@ const TAB_LABELS: Record<Tab, string> = {
   terminals: 'Terminals',
   run: 'Run',
   review: 'Review',
+  observe: 'Observe',
 };
 
 const START_STEPS = [

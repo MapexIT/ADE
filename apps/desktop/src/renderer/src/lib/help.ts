@@ -85,4 +85,7 @@ export function searchFeatures(areas: HelpArea[], query: string): HelpFeature[] 
   });
 }
 
-export const tabFor = (id: string): Tab | undefined => PREFIX_TAB[id.slice(0, 2)];
+/** Features that live on a different page from the rest of their area. */
+const ID_TAB: Record<string, Tab> = { 'WA-07': 'observe' };
+
+export const tabFor = (id: string): Tab | undefined => ID_TAB[id] ?? PREFIX_TAB[id.slice(0, 2)];
