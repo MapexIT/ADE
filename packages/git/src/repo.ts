@@ -224,7 +224,37 @@ export async function fileAt(cwd: string, commit: string, path: string): Promise
   }
 }
 
-export const looksBinary = (buf: Buffer | null) => !!buf && buf.subarray(0, 8000).includes(0);
+/**
+ * RV-15: each changed file's `git diff --raw` metadata between two commits, keyed by path (the new path of a
+ * rename, with the same `-M` detection as `changedFiles`). The value is "<oldMode> <newMode> <oldSha> <newSha>";
+ * it changes whenever either side of the file's diff changes.
+ */
+export async function changedBlobs(cwd: string, from: string, to: string): Promise<Map<string, string>> {
+  // -z: ":<oldMode> <newMode> <oldSha> <newSha> <status>" NUL <path> NUL, or two paths for renames and copies.
+  const tokens = (await git(['diff', '--raw', '--no-abbrev', '-z', '-M', from, to], { cwd })).split('\0');
+  const out = new Map<string, string>();
+  for (let i = 0; i < tokens.length; i++) {
+    const meta = tokens[i]!;
+    if (!meta.startsWith(':')) continue;
+    const [oldMode = '', newMode = '', oldSha = '', newSha = '', status = ''] = meta.slice(1).split(' ');
+    if (status.startsWith('R') || status.startsWith('C')) i++;
+    const path = tokens[++i];
+    if (path) out.set(path, `${oldMode} ${newMode} ${oldSha} ${newSha}`);
+  }
+  return out;
+}
+
+/** RV-15: the content of a blob, or null for the all-zero id (no file on that side) or a blob Git no longer has. */
+export async function blobContent(cwd: string, sha: string): Promise<Buffer | null> {
+  if (/^0+$/.test(sha)) return null;
+  try {
+    return await git(['cat-file', 'blob', sha], { cwd, binary: true });
+  } catch {
+    return null;
+  }
+}
+
+export const looksBinary =(buf: Buffer | null) => !!buf && buf.subarray(0, 8000).includes(0);
 
 export async function diffPatch(cwd: string, from: string, to: string, files?: string[]): Promise<Buffer> {
   return git(['diff', '--binary', '-M', from, to, ...(files?.length ? ['--', ...files] : [])], { cwd, binary: true });
