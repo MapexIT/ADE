@@ -17,7 +17,7 @@ test('M7-T05: suggested and drafted commands run from pending blocks; guard rail
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(page.getByText('Turn 1 · finished')).toBeVisible();
 
-  await page.keyboard.press('Control+4');
+  await page.keyboard.press('Control+5');
   await page.getByRole('button', { name: 'New terminal' }).first().click();
   await page.getByRole('menuitem', { name: /^Smart · / }).first().click();
   await expect(page.locator('.xterm').last()).toBeVisible();
@@ -41,7 +41,7 @@ test('M7-T05: suggested and drafted commands run from pending blocks; guard rail
   await page.getByLabel('Message Fake agent').fill('say ```sh\\ngit reset --hard HEAD\\n```');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText('Turn 2 · finished')).toBeVisible();
-  await page.keyboard.press('Control+4');
+  await page.keyboard.press('Control+5');
   await suggestions.getByRole('button', { name: 'Run' }).click();
   await expect(page.getByRole('dialog', { name: 'Run a destructive command?' })).toBeVisible();
   await page.getByRole('button', { name: 'Keep it' }).click();

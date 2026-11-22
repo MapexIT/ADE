@@ -11,7 +11,7 @@ test('M7-T05: scratchpad snippet; an environment set with a masked secret; two r
   await stubDirectoryPicker(app, repo);
   await page.keyboard.press('Control+o');
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
-  await page.keyboard.press('Control+5');
+  await page.keyboard.press('Control+6');
 
   // CR-07: the sample JavaScript snippet runs in a temporary folder.
   await page.getByRole('tab', { name: 'Scratchpad' }).click();

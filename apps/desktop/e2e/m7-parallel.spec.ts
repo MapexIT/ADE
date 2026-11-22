@@ -35,7 +35,7 @@ test('M7-T02: fork from a checkpoint, and run a saved command in a terminal', as
   expect(existsSync(join(wsDir, fork, 'two.txt'))).toBe(true);
 
   // TM-07: save a command and run it in a smart terminal.
-  await page.keyboard.press('Control+4');
+  await page.keyboard.press('Control+5');
   await page.getByRole('button', { name: 'New terminal' }).first().click();
   await page.getByRole('menuitem', { name: /^Smart · / }).first().click();
   await expect(page.locator('.xterm').last()).toBeVisible();

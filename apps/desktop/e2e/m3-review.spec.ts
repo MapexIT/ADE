@@ -40,7 +40,7 @@ test('M3 gate: per-turn diff, undo turn 2, land one file, discard keeps the patc
   await expect(page.getByText('Turn 2 · finished')).toBeVisible();
 
   // Per-turn diff in the review screen.
-  await page.keyboard.press('Control+6');
+  await page.keyboard.press('Control+7');
   const files = page.getByRole('complementary', { name: 'Changed files' });
   await page.getByRole('group', { name: 'Turn' }).getByRole('button', { name: 'Turn 2' }).click();
   await expect(files.getByRole('button', { name: 'two.txt' })).toBeVisible();
@@ -54,7 +54,7 @@ test('M3 gate: per-turn diff, undo turn 2, land one file, discard keeps the patc
   await expect(page.getByText('Undid turn 2 and every change after it.')).toBeVisible();
 
   // Land the remaining file into the checkout.
-  await page.keyboard.press('Control+6');
+  await page.keyboard.press('Control+7');
   await expect(files.getByRole('button', { name: 'one.txt' })).toBeVisible();
   await expect(files.getByRole('button', { name: 'two.txt' })).toBeHidden();
   await page.getByRole('button', { name: 'Apply to my checkout' }).click();
@@ -66,7 +66,7 @@ test('M3 gate: per-turn diff, undo turn 2, land one file, discard keeps the patc
   await page.keyboard.press('Control+1');
   await startSession(page, 'Throwaway', 'edit three.txt third');
   await expect(page.getByText('Turn 1 · finished')).toBeVisible();
-  await page.keyboard.press('Control+6');
+  await page.keyboard.press('Control+7');
   await page.getByRole('button', { name: 'Discard session' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard session' }).click();
   await expect(page.getByText('This session has been discarded', { exact: true })).toBeVisible();
