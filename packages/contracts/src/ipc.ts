@@ -22,6 +22,28 @@ export const SkillName = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'use lower
 const AbsPath = z.string().min(1).max(4096);
 const Ok = z.object({ ok: z.literal(true) });
 
+/** GN-02: one text box on the prompt board. Position and size are in board pixels. */
+export const PromptBox = z.object({
+  id: z.string().min(1).max(64),
+  title: z.string().max(200),
+  text: z.string().max(100_000),
+  x: z.number().min(0).max(20_000),
+  y: z.number().min(0).max(20_000),
+  w: z.number().min(160).max(4000),
+  h: z.number().min(96).max(4000),
+  /** Selected boxes are the prompt's input, in reading order (top to bottom, then left to right). */
+  selected: z.boolean(),
+});
+export type PromptBox = z.infer<typeof PromptBox>;
+
+/** GN-01 / GN-02: a session's composer, kept across restarts: chat or board, the reasoning method and the board. */
+export const ComposerState = z.object({
+  mode: z.enum(['chat', 'board']),
+  reasoning: ReasoningSettings,
+  boxes: z.array(PromptBox).max(100),
+});
+export type ComposerState = z.infer<typeof ComposerState>;
+
 export const NeedsYouItem = z.object({
   id: z.string(),
   /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
@@ -522,6 +544,8 @@ export const hostApi = defineApi({
     z.object({ command: z.string().nullable(), reply: z.string() }),
   ),
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
+  'composer.get': method(z.object({ sessionId: Id }), ComposerState.nullable()),
+  'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
   'layout.get': method(z.object({ workspaceId: Id }), TerminalLayout.nullable()),
   'layout.save': method(z.object({ workspaceId: Id, layout: TerminalLayout }), Ok),
   /** CR-07: writes a snippet into a fresh scratch folder and says how to run it (and whether that is sandboxed). */

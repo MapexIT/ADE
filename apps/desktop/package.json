@@ -27,6 +27,7 @@
     "@ade/contracts": "workspace:*",
     "@ade/fake-agent": "workspace:*",
     "@ade/git": "workspace:*",
+    "@ade/reasoning": "workspace:*",
     "@ade/session-core": "workspace:*",
     "@ade/shell-integration": "workspace:*",
     "@ade/ui": "workspace:*",

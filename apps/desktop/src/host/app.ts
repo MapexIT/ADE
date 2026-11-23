@@ -23,6 +23,7 @@ import { findOnPath } from '@ade/acp-client';
 import { parse as parseYaml } from 'yaml';
 import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
+import { ReasoningService } from './reasoning-service.ts';
 import { askOnce } from './one-shot.ts';
 import { ScratchService } from './scratch.ts';
 import { instructionStatus } from './instruction-files.ts';
@@ -32,7 +33,7 @@ import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { TerminalLayout } from '@ade/contracts';
+import { ComposerState, TerminalLayout } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -196,6 +197,8 @@ export function createHost(config: HostConfig) {
   };
   mkdirSync(join(config.userData, 'review-tmp'), { recursive: true });
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
+  const reasoning = new ReasoningService(repos, sessions, runtimes, join(config.userData, 'reasoning-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
+  reasoning.recover();
   const skills = new SkillService(join(config.userData, 'skills'), config.homeDir ?? homedir());
   sessions.installSkills = async (repoRoot, worktree, agentId, names) =>
     skills.install(worktree, agentId, await skills.resolve(repoRoot, names));
@@ -247,6 +250,7 @@ export function createHost(config: HostConfig) {
       await sessions.prompt(sessionId, content);
       return { ok: true };
     },
+    'sessions.promptReasoned': ({ sessionId, content, settings }) => reasoning.prompt(sessionId, content, settings),
     'sessions.queue': async ({ sessionId, content }) => ({
       id: (await sessions.prompt(sessionId, content)).id,
     }),
@@ -260,6 +264,8 @@ export function createHost(config: HostConfig) {
     },
     'sessions.killCommand': async ({ sessionId, terminalId }) => ({ killed: await sessions.killCommand(sessionId, terminalId) }),
     'sessions.cancel': async ({ sessionId }) => {
+      // Cancelling stops a reasoning run too; nothing it was preparing is sent.
+      reasoning.cancel(sessionId);
       await sessions.cancel(sessionId);
       return { ok: true };
     },
@@ -434,6 +440,16 @@ export function createHost(config: HostConfig) {
       return { command: draftedCommand(reply), reply: reply.trim() };
     },
     'files.readImage': ({ path }) => files.readImage(path),
+    'composer.get': ({ sessionId }) => {
+      repos.sessions.require(sessionId);
+      const parsed = ComposerState.safeParse(repos.settings.raw(`composer.${sessionId}`));
+      return parsed.success ? parsed.data : null;
+    },
+    'composer.save': ({ sessionId, state }) => {
+      repos.sessions.require(sessionId);
+      repos.settings.set(`composer.${sessionId}`, state);
+      return { ok: true };
+    },
     'layout.get': async ({ workspaceId }) => {
       workspaceRoot(workspaceId);
       try {
