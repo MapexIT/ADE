@@ -87,6 +87,6 @@ export function searchFeatures(areas: HelpArea[], query: string): HelpFeature[] 
 }
 
 /** Features that live on a different page from the rest of their area. */
-const ID_TAB: Record<string, Tab> = { 'WA-07': 'observe' };
+const ID_TAB: Record<string, Tab> = { 'WA-07': 'observe', 'HI-09': 'git' };
 
 export const tabFor = (id: string): Tab | undefined => ID_TAB[id] ?? PREFIX_TAB[id.slice(0, 2)];

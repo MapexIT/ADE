@@ -1,4 +1,4 @@
-import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Send, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitFork, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Send, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, Kbd, Logo } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -18,6 +18,7 @@ const PAGE_ICONS: Record<Tab, LucideIcon> = {
   run: Play,
   review: GitPullRequestArrow,
   observe: Activity,
+  git: GitFork,
 };
 const TABS = PAGES.map((p) => ({ ...p, label: p.title, Icon: PAGE_ICONS[p.tab] }));
 

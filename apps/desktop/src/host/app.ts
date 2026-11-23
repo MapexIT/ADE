@@ -21,6 +21,7 @@ import { McpShortcutActions, type ShortcutActions } from './shortcut-actions.ts'
 import { WorkItemSync } from './work-item-sync.ts';
 import { findOnPath } from '@ade/acp-client';
 import { McpManager } from './mcp-manager.ts';
+import { commitDetail, commitDiff, gitGraph } from './git-graph.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { ReasoningService } from './reasoning-service.ts';
 import { TelegramNotifier, type FetchLike } from './telegram.ts';
@@ -494,6 +495,9 @@ export function createHost(config: HostConfig) {
       repos.settings.set(`composer.${sessionId}`, state);
       return { ok: true };
     },
+    'git.graph': ({ workspaceId, limit, remotes }) => gitGraph(workspaceRoot(workspaceId), repos.sessions.list(workspaceId), { limit, remotes }),
+    'git.commit': ({ workspaceId, hash }) => commitDetail(workspaceRoot(workspaceId), hash),
+    'git.commitDiff': ({ workspaceId, hash, path, oldPath }) => commitDiff(workspaceRoot(workspaceId), hash, path, oldPath),
     'telegram.status': () => telegram.status(),
     'telegram.setEnabled': ({ enabled }) => {
       const st = telegram.status();

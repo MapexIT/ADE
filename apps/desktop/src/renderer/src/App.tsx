@@ -1,3 +1,4 @@
+import { GitScreen } from './components/GitScreen.tsx';
 import { McpDialog } from './components/McpDialog.tsx';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
@@ -99,7 +100,7 @@ function useShortcuts() {
         void buildCommands()
           .find((c) => c.id === 'workspace.open')
           ?.run();
-      else if (/^[1-8]$/.test(key)) s.setTab(PAGES[Number(key) - 1]!.tab);
+      else if (/^[1-9]$/.test(key) && PAGES[Number(key) - 1]) s.setTab(PAGES[Number(key) - 1]!.tab);
       else return;
       e.preventDefault();
     };
@@ -140,6 +141,7 @@ export function App() {
               {tab === 'run' ? <RunScreen /> : null}
               {tab === 'review' ? <ReviewScreen /> : null}
             {tab === 'observe' ? <ObserveScreen /> : null}
+              {tab === 'git' ? <GitScreen /> : null}
             </ErrorBoundary>
           </motion.div>
         ) : null}

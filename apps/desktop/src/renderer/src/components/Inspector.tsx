@@ -1,3 +1,4 @@
+import { BranchGraph } from './BranchGraph.tsx';
 import { ExternalLink, GitCompareArrows, History, PanelRight } from 'lucide-react';
 import { Button, cx, EmptyState, SectionLabel, Tabs } from '@ade/ui';
 import type { FileChange } from '@ade/contracts';
@@ -60,15 +61,32 @@ export function Inspector() {
   const setTab = useStore((s) => s.setTab);
   const ask = useStore((s) => s.ask);
   const set = useStore((s) => s.set);
-  const [tab, setInspectorTab] = useState<'changes' | 'files'>('changes');
+  const [tab, setInspectorTab] = useState<'changes' | 'files' | 'branches'>('changes');
+  const [repoTab, setRepoTab] = useState<'files' | 'branches'>('files');
   const [turnIndex, setTurnIndex] = useState<number | null>(null);
   const changes = useChanges(session?.id ?? null, turnIndex);
 
   if (!session) {
     return workspace ? (
       <div className="flex h-full flex-col gap-2 bg-surface p-3">
-        <SectionLabel>Files · {workspace.name}</SectionLabel>
-        <FileTree root={workspace.rootPath} sessionId={null} />
+        <Tabs
+          label="Inspector"
+          value={repoTab}
+          onChange={setRepoTab}
+          size="dense"
+          items={[
+            { value: 'files', label: 'Files' },
+            { value: 'branches', label: 'Branches' },
+          ]}
+        />
+        {repoTab === 'files' ? (
+          <>
+            <SectionLabel>Files · {workspace.name}</SectionLabel>
+            <FileTree root={workspace.rootPath} sessionId={null} />
+          </>
+        ) : (
+          <BranchGraph workspaceId={workspace.id} />
+        )}
       </div>
     ) : (
       <EmptyState icon={<PanelRight className="size-5" />} title="Inspector" body="Details for the selected session appear here." />
@@ -87,8 +105,10 @@ export function Inspector() {
         items={[
           { value: 'changes', label: 'Changes' },
           { value: 'files', label: 'Files' },
+          { value: 'branches', label: 'Branches' },
         ]}
       />
+      {tab === 'branches' ? <BranchGraph workspaceId={session.workspaceId} highlight={session.branch} /> : null}
       {tab === 'changes' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
           {ended ? (
@@ -149,7 +169,7 @@ export function Inspector() {
             </>
           )}
         </div>
-      ) : root ? (
+      ) : tab === 'files' && root ? (
         <FileTree root={root} sessionId={session.worktreePath ? session.id : null} changes={changes} />
       ) : null}
     </aside>

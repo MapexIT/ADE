@@ -8,6 +8,7 @@ import {
   Run,
   RunConfig,
   Session,
+  SessionState,
   Turn,
   WorkItem,
   Workspace,
@@ -66,6 +67,57 @@ export const McpCheck = z.object({
   checkedAt: z.string(),
 });
 export type McpCheck = z.infer<typeof McpCheck>;
+
+/** HI-09: a branch in the branch graph. `ahead` and `behind` count commits against the checkout's HEAD. */
+export const GitBranch = z.object({
+  name: z.string(),
+  kind: z.enum(['local', 'remote']),
+  head: z.string(),
+  current: z.boolean(),
+  upstream: z.string().nullable(),
+  ahead: z.number().int().nullable(),
+  behind: z.number().int().nullable(),
+  /** The worktree this branch is checked out in, if any. */
+  worktree: z.string().nullable(),
+  session: z.object({ id: z.string(), title: z.string(), state: SessionState, agentId: z.string() }).nullable(),
+});
+export type GitBranch = z.infer<typeof GitBranch>;
+
+export const GitCommit = z.object({
+  hash: z.string(),
+  parents: z.array(z.string()),
+  author: z.string(),
+  /** Unix seconds. */
+  time: z.number(),
+  subject: z.string(),
+  /** Branch, remote and tag names pointing here; `HEAD` marks the checkout. */
+  refs: z.array(z.object({ name: z.string(), kind: z.enum(['head', 'local', 'remote', 'tag']) })),
+});
+export type GitCommit = z.infer<typeof GitCommit>;
+
+export const GitGraph = z.object({
+  head: z.string().nullable(),
+  currentBranch: z.string().nullable(),
+  branches: z.array(GitBranch),
+  commits: z.array(GitCommit),
+  truncated: z.boolean(),
+});
+export type GitGraph = z.infer<typeof GitGraph>;
+
+/** HI-09: one commit in full, with the files it changed against its first parent (or against nothing, for a root). */
+export const GitCommitDetail = z.object({
+  hash: z.string(),
+  parents: z.array(z.string()),
+  author: z.string(),
+  time: z.number(),
+  committer: z.string(),
+  committerTime: z.number(),
+  message: z.string(),
+  files: z.array(FileChange),
+});
+export type GitCommitDetail = z.infer<typeof GitCommitDetail>;
+
+const CommitHash = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit hash');
 
 /** Secrets main keeps in the OS credential store and hands to the host in memory (rule 7). */
 export const ConnectorSecret = z.enum(['shortcut', 'github', 'telegram', 'telegram-password']);
@@ -623,6 +675,11 @@ export const hostApi = defineApi({
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
   'composer.get': method(z.object({ sessionId: Id }), ComposerState.nullable()),
   'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
+  /** HI-09: the repository's branches and their commits, newest first in topological order. Read-only. */
+  'git.graph': method(z.object({ workspaceId: Id, limit: z.number().int().min(20).max(2000).default(400), remotes: z.boolean().default(false) }), GitGraph),
+  'git.commit': method(z.object({ workspaceId: Id, hash: CommitHash }), GitCommitDetail),
+  /** One file of a commit, before and after (the first parent's version on the left). */
+  'git.commitDiff': method(z.object({ workspaceId: Id, hash: CommitHash, path: z.string().min(1).max(4096), oldPath: z.string().max(4096).nullable() }), DiffText),
   'telegram.status': method(z.object({}), TelegramStatus),
   'telegram.setEnabled': method(z.object({ enabled: z.boolean() }), TelegramStatus),
   /** Sends a test message to every signed-in chat. */
