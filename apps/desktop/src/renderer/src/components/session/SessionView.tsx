@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CircleStop, Columns2, ListPlus, LoaderCircle, MessagesSquare, Paperclip, ScrollText, SendHorizontal, Zap } from 'lucide-react';
+import { ArrowRightLeft, CircleStop, Columns2, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
 import { isLive, STATE_LABELS } from '@ade/session-core';
@@ -11,6 +11,10 @@ import { agentUiCommand } from '../../lib/agent-ui.ts';
 import { useTerminals } from '../../lib/terminals.ts';
 import { sendChecked } from '../../lib/guards.ts';
 import { FilePicker } from '../FilePicker.tsx';
+import { defaultComposer, useComposer } from '../../lib/composer.ts';
+import { boardPrompt } from '../../lib/prompt-board.ts';
+import { PromptBoard } from './PromptBoard.tsx';
+import { ReasoningPicker } from './ReasoningPicker.tsx';
 import { QueuedMessages, TimelineRow } from './TimelineItems.tsx';
 
 function stateTone(s: Session['state']) {
@@ -181,30 +185,50 @@ function Timeline({ sessionId }: { sessionId: string }) {
   );
 }
 
-/** ST-03 chips, ST-04 slash commands, SR-01..SR-05 steering. */
+/** ST-03 chips, ST-04 slash commands, SR-01..SR-05 steering, GN-01 generation method, GN-02 prompt board. */
 export function Composer({ session }: { session: Session }) {
   const view = useStore((s) => s.views[session.id]);
   const attachments = useStore((s) => s.attachments[session.id] ?? EMPTY);
   const detach = useStore((s) => s.detach);
   const attach = useStore((s) => s.attach);
   const takeAttachments = useStore((s) => s.takeAttachments);
+  const stored = useComposer((c) => c.states[session.id]);
+  const composer = stored ?? defaultComposer();
+  const loadComposer = useComposer((c) => c.load);
+  const updateComposer = useComposer((c) => c.update);
   const [text, setText] = useState('');
   const [picker, setPicker] = useState(false);
   const busy = isLive(session.state) || session.state === 'queued';
   const ended = session.state === 'landed' || session.state === 'discarded';
-  const slash = text.startsWith('/') && !text.includes(' ') ? (view?.commands ?? []).filter((c) => `/${c.name}`.startsWith(text)) : [];
+  const board = composer.mode === 'board';
+  const reasoning = !!view?.reasoningRunId;
+  const method = composer.reasoning.method;
+  const slash = !board && text.startsWith('/') && !text.includes(' ') ? (view?.commands ?? []).filter((c) => `/${c.name}`.startsWith(text)) : [];
   const label = `Message ${agentLabel(session.agentId)}`;
+  const draft = board ? boardPrompt(composer.boxes) : text;
+  const empty = !draft.trim() && !attachments.length;
+  const waitForReasoning = reasoning && method !== 'io';
+
+  useEffect(() => {
+    void loadComposer(session.id);
+  }, [session.id, loadComposer]);
 
   const send = async (mode: 'send' | 'interrupt') => {
-    const content: PromptBlock[] = textPrompt(text, attachments);
+    const content: PromptBlock[] = textPrompt(draft, attachments);
     if (!content.length) return;
     const all = content.map((b) => ('text' in b ? b.text : '')).join('\n');
     sendChecked(all, async () => {
-      const ok = await attempt(() =>
-        mode === 'interrupt' ? host.call('sessions.interrupt', { sessionId: session.id, content }) : host.call('sessions.prompt', { sessionId: session.id, content }),
+      // Interrupting sends the words as written: reasoning first would leave the agent idle meanwhile.
+      const ok = await attempt<unknown>(() =>
+        mode === 'interrupt'
+          ? host.call('sessions.interrupt', { sessionId: session.id, content })
+          : method === 'io'
+            ? host.call('sessions.prompt', { sessionId: session.id, content })
+            : host.call('sessions.promptReasoned', { sessionId: session.id, content, settings: composer.reasoning }),
       );
       if (ok) {
-        setText('');
+        // The board stays as it is so it can be reused; the chat box is cleared.
+        if (!board) setText('');
         takeAttachments(session.id);
       }
     });
@@ -225,9 +249,38 @@ export function Composer({ session }: { session: Session }) {
 
   return (
     <div className="flex flex-col gap-2 border-t border-line bg-surface px-4 py-3">
-      <label htmlFor={`composer-${session.id}`} className="text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
-        {label}
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        {board ? (
+          <span className="text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">{label}</span>
+        ) : (
+          <label htmlFor={`composer-${session.id}`} className="text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+            {label}
+          </label>
+        )}
+        <div role="radiogroup" aria-label="Prompt style" className="ml-auto flex gap-0.5 rounded-[var(--radius)] border border-line bg-surface-sunken p-0.5">
+          {(
+            [
+              ['chat', 'Chat', MessageSquareText],
+              ['board', 'Board', LayoutGrid],
+            ] as const
+          ).map(([mode, name, Icon]) => (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={composer.mode === mode}
+              onClick={() => updateComposer(session.id, (s) => ({ ...s, mode }))}
+              className={cx(
+                'flex min-h-7 items-center gap-1.5 rounded-[var(--radius-small)] px-2.5 text-[12px]',
+                composer.mode === mode ? 'bg-accent-tint font-semibold text-ink' : 'text-ink-muted hover:text-ink',
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden="true" />
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
       {attachments.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="Attachments">
           {attachments.map((a, i) => (
@@ -240,6 +293,18 @@ export function Composer({ session }: { session: Session }) {
           ))}
         </div>
       ) : null}
+      {board ? (
+        <div
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              if (!empty && !waitForReasoning) void send('send');
+            }
+          }}
+        >
+          <PromptBoard sessionId={session.id} />
+        </div>
+      ) : (
       <div className="relative">
         <textarea
           id={`composer-${session.id}`}
@@ -263,6 +328,7 @@ export function Composer({ session }: { session: Session }) {
           </ul>
         ) : null}
       </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="dense" onClick={() => setPicker(true)} disabled={!session.worktreePath} icon={<Paperclip className="size-4" aria-hidden="true" />}>
           Attach file
@@ -288,21 +354,34 @@ export function Composer({ session }: { session: Session }) {
         ) : (
           <span className="text-[12px] text-ink-muted">Modes: not supported</span>
         )}
+        <ReasoningPicker sessionId={session.id} agent={agentLabel(session.agentId)} />
         <div className="ml-auto flex flex-wrap gap-2">
+          {reasoning ? (
+            <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.cancel', { sessionId: session.id }))} icon={<CircleStop className="size-4" aria-hidden="true" />}>
+              Cancel reasoning
+            </Button>
+          ) : null}
           {busy ? (
             <>
               <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.cancel', { sessionId: session.id }))} icon={<CircleStop className="size-4" aria-hidden="true" />}>
                 Cancel turn
               </Button>
-              <Button size="dense" onClick={() => void send('interrupt')} disabled={!text.trim() && !attachments.length} icon={<Zap className="size-4" aria-hidden="true" />}>
+              <Button size="dense" onClick={() => void send('interrupt')} disabled={empty} title={method !== 'io' ? 'Sends your words as written, without reasoning first' : undefined} icon={<Zap className="size-4" aria-hidden="true" />}>
                 Interrupt and send
               </Button>
-              <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length} icon={<ListPlus className="size-4" aria-hidden="true" />}>
+              <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={empty || waitForReasoning} icon={<ListPlus className="size-4" aria-hidden="true" />}>
                 Queue message
               </Button>
             </>
           ) : (
-            <Button size="dense" variant="primary" onClick={() => void send('send')} disabled={!text.trim() && !attachments.length} icon={<SendHorizontal className="size-4" aria-hidden="true" />}>
+            <Button
+              size="dense"
+              variant="primary"
+              onClick={() => void send('send')}
+              disabled={empty || waitForReasoning}
+              title={waitForReasoning ? 'Wait for reasoning to finish, or cancel it' : board ? 'Send the selected boxes (Ctrl Enter)' : undefined}
+              icon={<SendHorizontal className="size-4" aria-hidden="true" />}
+            >
               Send
             </Button>
           )}
