@@ -9,6 +9,7 @@ import { host, main, pty } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { useTerminals } from '../lib/terminals.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
+import { TelegramSettings } from './TelegramSettings.tsx';
 import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
 import { WorkspaceRules } from './WorkspaceRules.tsx';
 import { PersonalMcpSettings, WorkItemSyncSettings } from './ConnectorSettings.tsx';
@@ -255,6 +256,7 @@ export function SettingsDialog() {
             </span>
           </label>
         </section>
+        <TelegramSettings available={!!creds?.available} stored={creds?.stored ?? []} onStoredChange={async () => setCreds(await main('main.credentials.status', {}))} />
         <section className="flex flex-col gap-2" aria-label="Workflows">
           <SectionLabel>Workflows</SectionLabel>
           <label className="flex min-h-11 items-start gap-2">

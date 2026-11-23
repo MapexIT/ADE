@@ -1,4 +1,4 @@
-import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Send, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, Kbd, Logo } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -6,6 +6,8 @@ import { currentWorkspace, useStore, type Tab } from '../lib/store.ts';
 import { PanelsMenu } from './PanelsMenu.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { PAGES, pageShortcut } from '../lib/pages.ts';
+import { followTelegram, telegramSummary, useTelegram } from '../lib/telegram.ts';
+import { useEffect } from 'react';
 
 const PAGE_ICONS: Record<Tab, LucideIcon> = {
   sessions: MessagesSquare,
@@ -28,6 +30,10 @@ export function TopBar() {
   const inboxCount = useStore((s) => s.inbox.length);
   const agents = useStore((s) => s.agents);
   const set = useStore((s) => s.set);
+  const telegram = useTelegram((t) => t.status);
+  useEffect(() => followTelegram(), []);
+  const telegramOn = !!telegram?.enabled && telegram.tokenStored && telegram.passwordSet;
+  const telegramText = telegramSummary(telegram);
 
   return (
     <header className="relative z-10 flex h-13 shrink-0 flex-nowrap items-center gap-3 border-b border-line bg-[var(--surface-glass)] px-4 backdrop-blur-xl">
@@ -91,6 +97,23 @@ export function TopBar() {
         <Button size="dense" variant={inboxCount ? 'attention' : 'secondary'} onClick={() => set({ inboxOpen: true })} aria-label={`Needs you: ${inboxCount}`} icon={<Bell className="size-4" aria-hidden="true" />}>
           <span className="hidden xl:inline">Needs you:</span> {inboxCount}
         </Button>
+        {telegram?.tokenStored ? (
+          <Tooltip label="Telegram notifications" description={`${telegramText}. Click to change it in Settings.`}>
+            <Button
+              size="dense"
+              variant={telegramOn ? 'secondary' : 'ghost'}
+              className={cx('relative w-9 px-0', telegramOn ? 'text-accent-soft' : 'text-ink-muted')}
+              onClick={() => set({ settingsOpen: true })}
+              aria-label={`Telegram notifications: ${telegramText}`}
+            >
+              <Send className="size-4" aria-hidden="true" />
+              <span
+                aria-hidden="true"
+                className={cx('absolute top-1.5 right-1.5 size-2 rounded-full border', telegramOn ? (telegram?.lastError ? 'border-accent bg-transparent' : 'border-accent bg-accent') : 'border-line-strong bg-transparent')}
+              />
+            </Button>
+          </Tooltip>
+        ) : null}
         <Tooltip label="Help centre" description="Every feature, with search and shortcuts" shortcut="F1">
           <Button size="dense" variant="ghost" className="w-9 px-0" onClick={() => set({ helpOpen: true })} aria-label="Help centre">
             <CircleHelp className="size-4" aria-hidden="true" />

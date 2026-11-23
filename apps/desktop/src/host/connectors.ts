@@ -2,16 +2,16 @@ import { execFile } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { findOnPath } from '@ade/acp-client';
-import type { WorkItem } from '@ade/contracts';
+import type { ConnectorSecret, WorkItem } from '@ade/contracts';
 import type { WorkItemProvider } from './work-items.ts';
 
 /** Connector tokens, held in memory only. Main decrypts them from safeStorage and hands them over (rule 7). */
 export class CredentialCache {
-  private values: Partial<Record<'shortcut' | 'github', string>> = {};
-  set(values: Partial<Record<'shortcut' | 'github', string>>) {
+  private values: Partial<Record<ConnectorSecret, string>> = {};
+  set(values: Partial<Record<ConnectorSecret, string>>) {
     this.values = { ...values };
   }
-  get(key: 'shortcut' | 'github'): string | null {
+  get(key: ConnectorSecret): string | null {
     return this.values[key] ?? null;
   }
 }

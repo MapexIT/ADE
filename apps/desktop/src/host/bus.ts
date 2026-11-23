@@ -1,4 +1,4 @@
-import type { NeedsYouItem, Session, SessionEvent, WorkflowRunView } from '@ade/contracts';
+import type { NeedsYouItem, Session, SessionEvent, TelegramStatus, WorkflowRunView } from '@ade/contracts';
 
 export interface HostEvents {
   'session.event': SessionEvent;
@@ -6,6 +6,7 @@ export interface HostEvents {
   'inbox.changed': NeedsYouItem[];
   'workflow.run': WorkflowRunView;
   notify: { sessionId: string; title: string; body: string };
+  'telegram.status': TelegramStatus;
 }
 
 type Listener<T> = (payload: T) => void;

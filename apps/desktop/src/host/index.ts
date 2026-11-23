@@ -3,7 +3,7 @@
  * port directly (they bypass main). Notifications go to main through the parent port.
  */
 import type { MessagePortMain } from 'electron';
-import { createPublisher, emitterPort, hostApi, hostTopics, serveApi } from '@ade/contracts';
+import { createPublisher, emitterPort, hostApi, hostTopics, serveApi, type ConnectorSecret } from '@ade/contracts';
 import { join } from 'node:path';
 import { createHost, defaultAdapterEntry } from './app.ts';
 import { runSmokeChecks } from './smoke.ts';
@@ -46,6 +46,7 @@ function reportBackground() {
 }
 host.bus.on('inbox.changed', (e) => broadcast('inbox.changed', e));
 host.bus.on('workflow.run', (e) => broadcast('workflow.run', e));
+host.bus.on('telegram.status', (e) => broadcast('telegram.status', e));
 host.bus.on('notify', (e) => {
   broadcast('notify', e);
   parent.postMessage({ type: 'notify', ...e });
@@ -98,7 +99,7 @@ parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
   } else if (msg?.type === 'background-query') {
     reportBackground();
   } else if (msg?.type === 'credentials') {
-    host.setCredentials((msg as { values?: Partial<Record<'shortcut' | 'github', string>> }).values ?? {});
+    host.setCredentials((msg as { values?: Partial<Record<ConnectorSecret, string>> }).values ?? {});
   } else if (msg?.type === 'smoke') {
     // M5-T07: main asks for the install checks when ADE runs as a smoke test.
     void runSmokeChecks(host, { adapterEntry: defaultAdapterEntry, scratch: join(userData, 'smoke') })

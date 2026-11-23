@@ -1,6 +1,6 @@
 # Features
 
-149 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+150 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -172,6 +172,7 @@ Linux.
 | CO-09 | Board view | v1 | A GitHub Projects board or Shortcut iteration with session badges. |
 | CO-10 | More connectors | v1 | Any MCP server can be added. |
 | CO-11 | Connection guides | v1 | An unconnected Shortcut or GitHub source (work items or board) shows numbered steps instead of an empty list, each ticked when this machine shows it done: `gh` installed (with its version), the account `gh` signs in as, the Git identity (with `git config` commands prefilled from the GitHub account), the Shortcut token stored. Commands copy in one click; "Check again" re-reads. Read locally; no token value is ever shown. |
+| CO-12 | Telegram notifications | v1 | Settings take a bot token (from @BotFather) and a sign-in password, both in the OS credential store, and an on/off switch that stays disabled until both are saved. The top bar shows whether Telegram notifications are on or off, and how many chats are signed in. A private chat signs in by sending `/auth <password>` to the bot; ADE deletes every `/auth` message straight away, right or wrong. A chat stays signed in for 3 hours and is told when that ends; sign-ins are kept in memory only, so a restart signs every chat out, as do a new token or password. Five wrong passwords lock a chat out for 15 minutes; group chats and `/auth` messages sent while ADE was not listening never sign in. Signed-in chats get every notification (finished, failed, needs you, workflows) with the workspace name. `/status` and `/logout` work in the chat; Settings can send a test message. |
 | CO-11 | Work item triggers | Later | Start a workflow from a story state or issue label. |
 
 ## Agent workflows (WF) and skills (SK)

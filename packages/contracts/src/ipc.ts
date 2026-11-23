@@ -22,6 +22,25 @@ export const SkillName = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'use lower
 const AbsPath = z.string().min(1).max(4096);
 const Ok = z.object({ ok: z.literal(true) });
 
+/** Secrets main keeps in the OS credential store and hands to the host in memory (rule 7). */
+export const ConnectorSecret = z.enum(['shortcut', 'github', 'telegram', 'telegram-password']);
+export type ConnectorSecret = z.infer<typeof ConnectorSecret>;
+
+/**
+ * CO-12: the Telegram notifier. `active` is true while ADE is listening to the bot; `chats` counts the chats signed
+ * in with /auth (in memory only, for at most three hours each). Never carries the token or the password.
+ */
+export const TelegramStatus = z.object({
+  tokenStored: z.boolean(),
+  passwordSet: z.boolean(),
+  enabled: z.boolean(),
+  active: z.boolean(),
+  bot: z.string().nullable(),
+  chats: z.number().int().nonnegative(),
+  lastError: z.string().nullable(),
+});
+export type TelegramStatus = z.infer<typeof TelegramStatus>;
+
 /** GN-02: one text box on the prompt board. Position and size are in board pixels. */
 export const PromptBox = z.object({
   id: z.string().min(1).max(64),
@@ -548,6 +567,10 @@ export const hostApi = defineApi({
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
   'composer.get': method(z.object({ sessionId: Id }), ComposerState.nullable()),
   'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
+  'telegram.status': method(z.object({}), TelegramStatus),
+  'telegram.setEnabled': method(z.object({ enabled: z.boolean() }), TelegramStatus),
+  /** Sends a test message to every signed-in chat. */
+  'telegram.test': method(z.object({}), z.object({ sent: z.number().int() })),
   'promptBoard.get': method(z.object({ workspaceId: Id }), PromptBoxes),
   'promptBoard.save': method(z.object({ workspaceId: Id, boxes: PromptBoxes }), Ok),
   'layout.get': method(z.object({ workspaceId: Id }), TerminalLayout.nullable()),
@@ -648,6 +671,7 @@ export const hostTopics = defineTopics({
   'inbox.changed': z.array(NeedsYouItem),
   'workflow.run': WorkflowRunView,
   'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string() }),
+  'telegram.status': TelegramStatus,
 });
 export type HostTopics = typeof hostTopics;
 
@@ -731,8 +755,8 @@ export const mainApi = defineApi({
     z.object({}),
     z.object({ available: z.boolean(), backend: z.string(), stored: z.array(z.string()) }),
   ),
-  'main.credentials.set': method(z.object({ key: z.enum(['shortcut', 'github']), secret: z.string().min(1).max(10_000) }), Ok),
-  'main.credentials.delete': method(z.object({ key: z.enum(['shortcut', 'github']) }), Ok),
+  'main.credentials.set': method(z.object({ key: ConnectorSecret, secret: z.string().min(1).max(10_000) }), Ok),
+  'main.credentials.delete': method(z.object({ key: ConnectorSecret }), Ok),
   'main.info': method(
     z.object({}),
     z.object({ version: z.string(), platform: z.string(), userData: z.string(), isPackaged: z.boolean() }),
