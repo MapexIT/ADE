@@ -33,7 +33,7 @@ import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { ComposerState, TerminalLayout } from '@ade/contracts';
+import { ComposerState, PromptBoxes, TerminalLayout } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -448,6 +448,22 @@ export function createHost(config: HostConfig) {
     'composer.save': ({ sessionId, state }) => {
       repos.sessions.require(sessionId);
       repos.settings.set(`composer.${sessionId}`, state);
+      return { ok: true };
+    },
+    'promptBoard.get': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      const stored = PromptBoxes.safeParse(repos.settings.raw(`promptBoard.${workspaceId}`));
+      if (stored.success) return stored.data;
+      // Boards used to belong to one session: the newest session that had boxes seeds the workspace's board.
+      for (const s of [...repos.sessions.list(workspaceId)].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+        const old = PromptBoxes.safeParse((repos.settings.raw(`composer.${s.id}`) as { boxes?: unknown } | null)?.boxes);
+        if (old.success && old.data.length) return old.data;
+      }
+      return [];
+    },
+    'promptBoard.save': ({ workspaceId, boxes }) => {
+      workspaceRoot(workspaceId);
+      repos.settings.set(`promptBoard.${workspaceId}`, boxes);
       return { ok: true };
     },
     'layout.get': async ({ workspaceId }) => {

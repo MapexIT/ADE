@@ -113,18 +113,27 @@ describe('GN-01 reasoning methods', () => {
   });
 });
 
-describe('GN-02 composer state', () => {
-  it('is saved per session and read back; anything invalid reads as nothing', async () => {
+describe('GN-02 composer state and the shared prompt board', () => {
+  it('keeps mode and method per session; anything invalid reads as nothing', async () => {
     const s = await start();
     expect(await host.handlers['composer.get']({ sessionId: s.id })).toBeNull();
-    const state = {
-      mode: 'board' as const,
-      reasoning: { ...DEFAULT_SETTINGS, method: 'foa' as const, agents: 4 },
-      boxes: [{ id: 'b1', title: 'Goal', text: 'Fix the parser', x: 16, y: 16, w: 280, h: 168, selected: true }],
-    };
+    const state = { mode: 'board' as const, reasoning: { ...DEFAULT_SETTINGS, method: 'foa' as const, agents: 4 } };
     await host.handlers['composer.save']({ sessionId: s.id, state });
     expect(await host.handlers['composer.get']({ sessionId: s.id })).toEqual(state);
     host.repos.settings.set(`composer.${s.id}`, { mode: 'nope' });
     expect(await host.handlers['composer.get']({ sessionId: s.id })).toBeNull();
+  });
+
+  it('keeps one board per workspace, seeded from a session board saved before boards were shared', async () => {
+    const s = await start();
+    const box = { id: 'b1', title: 'Goal', text: 'Fix the parser', x: 16, y: 16, w: 280, h: 168, selected: true };
+    expect(await host.handlers['promptBoard.get']({ workspaceId: s.workspaceId })).toEqual([]);
+    // An older per-session composer state that still carries boxes.
+    host.repos.settings.set(`composer.${s.id}`, { mode: 'board', reasoning: DEFAULT_SETTINGS, boxes: [box] });
+    expect(await host.handlers['promptBoard.get']({ workspaceId: s.workspaceId })).toEqual([box]);
+    const moved = { ...box, x: 64, selected: false };
+    await host.handlers['promptBoard.save']({ workspaceId: s.workspaceId, boxes: [moved] });
+    expect(await host.handlers['promptBoard.get']({ workspaceId: s.workspaceId })).toEqual([moved]);
+    await expect((async () => host.handlers['promptBoard.get']({ workspaceId: '00000000-0000-4000-8000-000000000000' }))()).rejects.toThrow('Unknown workspace');
   });
 });
