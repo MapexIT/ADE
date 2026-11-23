@@ -22,6 +22,7 @@ export const PREFIX_TAB: Record<string, Tab | undefined> = {
   ST: 'sessions',
   WA: 'sessions',
   SR: 'sessions',
+  GN: 'sessions',
   CN: 'sessions',
   AP: 'sessions',
   RV: 'review',

@@ -1,6 +1,6 @@
 # Features
 
-147 features in 16 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+149 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -40,6 +40,13 @@ Linux.
 | SR-07 | Hand-off | v1 | Continue in the same worktree with another agent, given the summary and diff. |
 | SR-08 | Open in the agent's terminal UI | v1 | Resume the same session in the agent's own interface where possible. |
 | SR-09 | Mid-turn steering | Later | Add input to a running turn; needs a native adapter. |
+
+## Generate (GN)
+
+| ID | Feature | Phase | Acceptance criteria / description |
+| --- | --- | --- | --- |
+| GN-01 | Generation method (reasoning trajectories) | v1 | A per-session dropdown picks how a prompt is generated: IO (as written, the default), Chain of Thought, CoT self-consistency, Graph of Thought or Fleet of Agents. Switching to anything but IO first shows a dialog that explains the change and the number of extra agent calls, with the method's settings (paths, thoughts, agents, generations); back to IO needs no dialog. Extra calls go to the session's own agent, read-only, in a temporary detached worktree with every permission refused. Each run is a timeline card with every step of the graph, its scores and the chosen approach; Cancel reasoning stops it and sends nothing. The user's words are always sent first, unchanged. Interrupt and send skips reasoning. |
+| GN-02 | Prompt board | v1 | Besides the chat box, a Board mode where the prompt is built from text boxes that can be added, titled, written, moved and resized (mouse or arrow keys) and deleted. Selected boxes, read top to bottom and left to right, are the prompt; titled boxes become headings. Positions, sizes, content, selection, the mode and the generation method are saved per session and kept across restarts. |
 
 ## Contain (CN)
 

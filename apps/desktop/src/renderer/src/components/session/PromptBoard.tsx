@@ -1,7 +1,7 @@
 import { GripVertical, Plus, SquareCheck, SquareDashed, Trash2 } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { PromptBox } from '@ade/contracts';
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { defaultComposer, useComposer } from '../../lib/composer.ts';
 import { boardExtent, boardPrompt, GRID, moveBox, newBox, readingOrder, resizeBox } from '../../lib/prompt-board.ts';
 
@@ -17,24 +17,13 @@ export function PromptBoard({ sessionId }: { sessionId: string }) {
   const boxes = useComposer((c) => c.states[sessionId]?.boxes ?? EMPTY_BOXES);
   const update = useComposer((c) => c.update);
   const viewport = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 600, h: 260 });
   const [drag, setDrag] = useState<Drag | null>(null);
-
-  useLayoutEffect(() => {
-    const el = viewport.current;
-    if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const setBoxes = (change: (b: PromptBox[]) => PromptBox[]) => update(sessionId, (s) => ({ ...(s ?? defaultComposer()), boxes: change(s.boxes) }));
   const patch = (id: string, change: (b: PromptBox) => PromptBox) => setBoxes((all) => all.map((b) => (b.id === id ? change(b) : b)));
 
   const add = () => {
-    const box = newBox(boxes, size.w, crypto.randomUUID());
+    const box = newBox(boxes, viewport.current?.clientWidth ?? 600, crypto.randomUUID());
     setBoxes((all) => [...all, box]);
     // Focus the new box's text once it is rendered, and bring it into view.
     requestAnimationFrame(() => {
@@ -71,7 +60,8 @@ export function PromptBoard({ sessionId }: { sessionId: string }) {
 
   const selected = boxes.filter((b) => b.selected);
   const chars = boardPrompt(boxes).length;
-  const extent = boardExtent(boxes, size.w, size.h);
+  // The board fills the view (CSS) and grows to fit the boxes; it is never measured, so it cannot feed back.
+  const extent = boardExtent(boxes, 0, 0);
   const allSelected = boxes.length > 0 && selected.length === boxes.length;
   const order = new Map(readingOrder(selected).map((b, i) => [b.id, i + 1]));
 
@@ -98,9 +88,9 @@ export function PromptBoard({ sessionId }: { sessionId: string }) {
         ref={viewport}
         role="region"
         aria-label="Prompt board"
-        className="relative h-64 min-h-40 resize-y overflow-auto rounded-[var(--radius)] border border-line bg-bg [background-image:radial-gradient(var(--color-line)_1px,transparent_1px)] [background-size:16px_16px]"
+        className="relative h-56 min-h-40 resize-y overflow-auto rounded-[var(--radius)] border border-line bg-bg [background-image:radial-gradient(var(--color-line)_1px,transparent_1px)] [background-size:16px_16px]"
       >
-        <div className="relative" style={{ width: extent.w, height: extent.h }}>
+        <div className="relative min-h-full min-w-full" style={{ width: extent.w, height: extent.h }}>
           {boxes.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-ink-muted">
               Add text boxes for the parts of your prompt, such as the goal, the context and the constraints. Selected boxes are sent together, read top to bottom and left to right.

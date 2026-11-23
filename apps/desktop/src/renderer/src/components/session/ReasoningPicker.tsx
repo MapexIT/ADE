@@ -1,9 +1,9 @@
 import { BrainCircuit, SlidersHorizontal } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { ReasoningMethod, ReasoningSettings } from '@ade/contracts';
-import { METHODS, strategyFor } from '@ade/reasoning';
+import { DEFAULT_SETTINGS, METHODS, strategyFor } from '@ade/reasoning';
 import { useState } from 'react';
-import { defaultComposer, useComposer } from '../../lib/composer.ts';
+import { useComposer } from '../../lib/composer.ts';
 import { Field, inputClass, Modal } from '../Modal.tsx';
 
 type NumberKey = 'samples' | 'branches' | 'agents' | 'generations';
@@ -22,7 +22,8 @@ const PARAMS: Partial<Record<ReasoningMethod, { key: NumberKey; label: string; m
  * for confirmation, because it changes what the agent receives and may make extra agent calls.
  */
 export function ReasoningPicker({ sessionId, agent, disabled }: { sessionId: string; agent: string; disabled?: boolean }) {
-  const settings = useComposer((c) => c.states[sessionId]?.reasoning ?? defaultComposer().reasoning);
+  // A stable fallback: a new object here would re-render forever before the state has loaded.
+  const settings = useComposer((c) => c.states[sessionId]?.reasoning ?? DEFAULT_SETTINGS);
   const update = useComposer((c) => c.update);
   const [pending, setPending] = useState<ReasoningSettings | null>(null);
   const apply = (next: ReasoningSettings) => update(sessionId, (s) => ({ ...s, reasoning: next }));
@@ -116,7 +117,7 @@ function ReasoningDialog({
                 <li>
                   Before each message, <span className="font-semibold text-ink">{calls} extra calls</span> go to {agent}. They use your {agent} quota and the message takes longer to start.
                 </li>
-                <li>These calls are read-only and run in a temporary copy of the worktree. Cancel turn stops them, and nothing is sent.</li>
+                <li>These calls are read-only and run in a temporary copy of the worktree. Cancel reasoning stops them, and nothing is sent.</li>
               </>
             ) : (
               <li>No extra agent calls are made.</li>
