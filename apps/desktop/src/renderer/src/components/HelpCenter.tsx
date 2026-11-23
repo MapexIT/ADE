@@ -53,6 +53,7 @@ const TAB_LABELS: Record<Tab, string> = {
   run: 'Run',
   review: 'Review',
   observe: 'Observe',
+  git: 'Git',
 };
 
 const START_STEPS = [

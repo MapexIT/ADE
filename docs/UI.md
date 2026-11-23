@@ -63,6 +63,7 @@ Default to three visible regions at most. Everything else opens on demand and re
 | 6 | First-run setup | Git, shells, agents, connectors, sandbox state per agent |
 | 7 | Skill builder | Form, `SKILL.md` preview, save location, trial run |
 | 8 | Code runner | Run bar, configurations, test results, raw output, history, scratchpad |
+| 9 | Git | Branch graph in the middle (lanes, refs, branch list with sessions and ahead/behind); the selected commit's message, parents and files on the left; the file diff on the right |
 
 ## Component rules
 

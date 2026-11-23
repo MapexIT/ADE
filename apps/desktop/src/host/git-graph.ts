@@ -1,5 +1,5 @@
-import type { GitBranch, GitCommit, GitGraph, Session } from '@ade/contracts';
-import { git } from '@ade/git';
+import type { DiffText, GitBranch, GitCommit, GitCommitDetail, GitGraph, Session } from '@ade/contracts';
+import { changedFiles, fileAt, git, looksBinary } from '@ade/git';
 import { resolve } from 'node:path';
 
 const SEP = '\u001f';
@@ -117,4 +117,26 @@ export async function gitGraph(root: string, sessions: Session[], opts: { limit:
   }
   const truncated = commits.length > opts.limit;
   return { head, currentBranch, branches, commits: commits.slice(0, opts.limit), truncated };
+}
+
+/** Git's empty tree: what a root commit is compared with. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+const MAX_DIFF_BYTES = 2_000_000;
+
+/** HI-09: a commit in full. Read-only. */
+export async function commitDetail(root: string, hash: string): Promise<GitCommitDetail> {
+  const out = await git(['show', '-s', `--format=%H${SEP}%P${SEP}%an${SEP}%at${SEP}%cn${SEP}%ct${SEP}%B`, hash, '--'], { cwd: root });
+  const [full = '', parents = '', author = '', time = '0', committer = '', committerTime = '0', ...message] = out.split(SEP);
+  const parentList = parents.split(' ').filter(Boolean);
+  const files = await changedFiles(root, parentList[0] ?? EMPTY_TREE, full);
+  return { hash: full, parents: parentList, author, time: Number(time) || 0, committer, committerTime: Number(committerTime) || 0, message: message.join(SEP).trim(), files };
+}
+
+/** HI-09: one file of a commit against the commit's first parent. Large or binary files are not sent as text. */
+export async function commitDiff(root: string, hash: string, path: string, oldPath: string | null): Promise<DiffText> {
+  const parent = (await git(['rev-parse', '--verify', '-q', `${hash}^1`], { cwd: root, okCodes: [1] })).trim();
+  const before = parent ? await fileAt(root, parent, oldPath ?? path) : null;
+  const after = await fileAt(root, hash, path);
+  const binary = looksBinary(before) || looksBinary(after) || (before?.length ?? 0) > MAX_DIFF_BYTES || (after?.length ?? 0) > MAX_DIFF_BYTES;
+  return { path, oldText: binary ? '' : (before?.toString('utf8') ?? ''), newText: binary ? '' : (after?.toString('utf8') ?? ''), binary };
 }

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { git } from '@ade/git';
 import type { GitCommit, Session } from '@ade/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { gitGraph, parseDecorations, parseWorktrees } from '../src/host/git-graph.ts';
+import { commitDetail, commitDiff, gitGraph, parseDecorations, parseWorktrees } from '../src/host/git-graph.ts';
 import { layoutGraph, relativeTime } from '../src/renderer/src/lib/git-graph.ts';
 
 const c = (hash: string, parents: string[] = []): GitCommit => ({ hash, parents, author: 'a', time: 0, subject: hash, refs: [] });
@@ -118,6 +118,24 @@ describe('HI-09 branch graph from a repository', () => {
     const small = await gitGraph(repo, [], { limit: 2, remotes: false });
     expect(small).toMatchObject({ truncated: true });
     expect(small.commits).toHaveLength(2);
+  });
+
+  it('reads one commit in full and the diff of each file against its first parent', async () => {
+    const g = await gitGraph(repo, [], { limit: 100, remotes: false });
+    const fix = g.commits.find((x) => x.subject === 'fix the parser')!;
+    const d = await commitDetail(repo, fix.hash.slice(0, 10));
+    expect(d).toMatchObject({ hash: fix.hash, author: 'T', committer: 'T', message: 'fix the parser' });
+    expect(d.files.map((f) => [f.path, f.status, f.additions])).toEqual([['p.txt', 'added', 1]]);
+    expect(await commitDiff(repo, fix.hash, 'p.txt', null)).toEqual({ path: 'p.txt', oldText: '', newText: 'fix the parser', binary: false });
+    // A merge is compared with its first parent: only what the feature brought in.
+    const merge = await commitDetail(repo, g.commits.find((x) => x.subject === 'Merge feature')!.hash);
+    expect(merge.parents).toHaveLength(2);
+    expect(merge.files.map((f) => f.path)).toEqual(['f.txt']);
+    // The root commit is compared with nothing.
+    const root = await commitDetail(repo, g.commits.at(-1)!.hash);
+    expect(root.parents).toEqual([]);
+    expect(root.files.map((f) => f.path)).toEqual(['a.txt']);
+    expect(await commitDiff(repo, root.hash, 'a.txt', null)).toMatchObject({ oldText: '', newText: 'base' });
   });
 
   it('handles a repository without commits', async () => {

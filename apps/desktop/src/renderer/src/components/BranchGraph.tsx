@@ -48,11 +48,35 @@ function RefChip({ r, sessionTitle }: { r: GitCommit['refs'][number]; sessionTit
  * HI-09: the repository's branches as a commit graph: lanes and merges, branch, remote and tag labels, which session
  * owns a branch and how far each is ahead of or behind the checkout. Read-only.
  */
-export function BranchGraph({ workspaceId, highlight, expandable = true }: { workspaceId: string; highlight?: string | null | undefined; expandable?: boolean }) {
+export function BranchGraph({
+  workspaceId,
+  highlight,
+  expandable = true,
+  details = true,
+  selected: controlled,
+  onSelect,
+}: {
+  workspaceId: string;
+  highlight?: string | null | undefined;
+  expandable?: boolean;
+  /** Show the small details box under the graph (off where a page shows details beside it). */
+  details?: boolean;
+  /** Controlled selection, for pages that show the selected commit elsewhere. */
+  selected?: string | null;
+  onSelect?: (hash: string | null) => void;
+}) {
   const [remotes, setRemotes] = useState(false);
   const [graph, setGraph] = useState<GitGraph | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [own, setOwn] = useState<string | null>(null);
+  const selected = controlled !== undefined ? controlled : own;
+  const setSelected = useCallback(
+    (hash: string | null) => {
+      setOwn(hash);
+      onSelect?.(hash);
+    },
+    [onSelect],
+  );
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -93,6 +117,30 @@ export function BranchGraph({ workspaceId, highlight, expandable = true }: { wor
     if (highlightHead) jump(highlightHead);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightHead]);
+  // With nothing selected yet (or the selection gone after a reload), a controlled graph starts at HEAD.
+  useEffect(() => {
+    if (!onSelect || !graph?.commits.length) return;
+    if (selected && index.has(selected)) return;
+    if (highlightHead && index.has(highlightHead)) return;
+    setSelected(graph.head && index.has(graph.head) ? graph.head : graph.commits[0]!.hash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph]);
+
+  // Keyboard: arrows move the selection, Page Up and Down by ten, Home and End to the ends.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!rows.length) return;
+    const at = selected ? (index.get(selected) ?? -1) : -1;
+    const step = { ArrowDown: 1, ArrowUp: -1, PageDown: 10, PageUp: -10 }[e.key];
+    let next: number | null = null;
+    if (step !== undefined) next = at === -1 ? 0 : Math.min(rows.length - 1, Math.max(0, at + step));
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = rows.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const hash = rows[next]!.commit.hash;
+    setSelected(hash);
+    virtualizer.scrollToIndex(next, { align: 'auto' });
+  };
 
   const commit = selected ? graph?.commits.find((c) => c.hash === selected) : undefined;
   const branchesHere = (b: GitBranch) => (b.ahead === null ? null : b.ahead === 0 && b.behind === 0 ? 'same as HEAD' : [b.ahead ? `${b.ahead} ahead` : '', b.behind ? `${b.behind} behind` : ''].filter(Boolean).join(' · '));
@@ -142,7 +190,15 @@ export function BranchGraph({ workspaceId, highlight, expandable = true }: { wor
         </ul>
       </details>
 
-      <div ref={parentRef} role="list" aria-label="Commit graph" className="min-h-32 flex-1 overflow-auto rounded-[var(--radius)] border border-line bg-bg">
+      <div
+        ref={parentRef}
+        role="listbox"
+        aria-label="Commit graph"
+        tabIndex={0}
+        aria-activedescendant={selected && index.has(selected) ? `commit-${selected}` : undefined}
+        onKeyDown={onKeyDown}
+        className="min-h-32 flex-1 overflow-auto rounded-[var(--radius)] border border-line bg-bg outline-none focus-visible:border-accent"
+      >
         {graph && !rows.length ? <p className="m-3 text-ink-muted">This repository has no commits yet.</p> : null}
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((v) => {
@@ -151,11 +207,12 @@ export function BranchGraph({ workspaceId, highlight, expandable = true }: { wor
             return (
               <div
                 key={v.key}
-                role="listitem"
+                id={`commit-${c.hash}`}
+                role="option"
                 aria-label={`${c.subject}, ${c.hash.slice(0, 7)}`}
                 aria-selected={selected === c.hash}
                 onClick={() => setSelected(c.hash)}
-                className={cx('absolute left-0 flex w-full cursor-pointer items-center gap-2 pr-2 text-[12px] hover:bg-surface-raised', selected === c.hash && 'bg-accent-tint')}
+                className={cx('absolute left-0 flex w-full cursor-pointer items-center gap-2 pr-2 text-[12px] hover:bg-surface-raised', selected === c.hash && 'bg-accent-tint shadow-[inset_3px_0_0_var(--accent)]')}
                 style={{ height: ROW, transform: `translateY(${v.start}px)` }}
               >
                 <Lanes row={row} width={width} />
@@ -173,7 +230,7 @@ export function BranchGraph({ workspaceId, highlight, expandable = true }: { wor
         {graph?.truncated ? <p className="m-2 text-[12px] text-ink-muted">Showing the newest {graph.commits.length} commits.</p> : null}
       </div>
 
-      {commit ? (
+      {details && commit ? (
         <section aria-label="Commit details" className="flex shrink-0 flex-col gap-1 rounded-[var(--radius)] border border-line bg-surface-sunken p-2 text-[12px]">
           <span className="font-semibold">{commit.subject}</span>
           <span className="text-ink-muted">

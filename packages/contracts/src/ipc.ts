@@ -104,6 +104,21 @@ export const GitGraph = z.object({
 });
 export type GitGraph = z.infer<typeof GitGraph>;
 
+/** HI-09: one commit in full, with the files it changed against its first parent (or against nothing, for a root). */
+export const GitCommitDetail = z.object({
+  hash: z.string(),
+  parents: z.array(z.string()),
+  author: z.string(),
+  time: z.number(),
+  committer: z.string(),
+  committerTime: z.number(),
+  message: z.string(),
+  files: z.array(FileChange),
+});
+export type GitCommitDetail = z.infer<typeof GitCommitDetail>;
+
+const CommitHash = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit hash');
+
 /** Secrets main keeps in the OS credential store and hands to the host in memory (rule 7). */
 export const ConnectorSecret = z.enum(['shortcut', 'github', 'telegram', 'telegram-password']);
 export type ConnectorSecret = z.infer<typeof ConnectorSecret>;
@@ -662,6 +677,9 @@ export const hostApi = defineApi({
   'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
   /** HI-09: the repository's branches and their commits, newest first in topological order. Read-only. */
   'git.graph': method(z.object({ workspaceId: Id, limit: z.number().int().min(20).max(2000).default(400), remotes: z.boolean().default(false) }), GitGraph),
+  'git.commit': method(z.object({ workspaceId: Id, hash: CommitHash }), GitCommitDetail),
+  /** One file of a commit, before and after (the first parent's version on the left). */
+  'git.commitDiff': method(z.object({ workspaceId: Id, hash: CommitHash, path: z.string().min(1).max(4096), oldPath: z.string().max(4096).nullable() }), DiffText),
   'telegram.status': method(z.object({}), TelegramStatus),
   'telegram.setEnabled': method(z.object({ enabled: z.boolean() }), TelegramStatus),
   /** Sends a test message to every signed-in chat. */
