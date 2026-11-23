@@ -89,6 +89,8 @@ interface State {
   helpOpen: boolean;
   inboxOpen: boolean;
   settingsOpen: boolean;
+  /** CO-13: the MCP servers dialog. */
+  mcpOpen: boolean;
   firstRunOpen: boolean;
   protocolSessionId: string | null;
   confirm: ConfirmSpec | null;
@@ -177,6 +179,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   helpOpen: false,
   inboxOpen: false,
   settingsOpen: false,
+  mcpOpen: false,
   firstRunOpen: false,
   protocolSessionId: null,
   confirm: null,

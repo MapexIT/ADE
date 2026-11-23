@@ -22,6 +22,51 @@ export const SkillName = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'use lower
 const AbsPath = z.string().min(1).max(4096);
 const Ok = z.object({ ok: z.literal(true) });
 
+const McpName = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'use letters, digits, dashes and underscores');
+const McpValues = z.record(z.string(), z.string()).default({});
+
+/**
+ * ST-05 / CO-10: an MCP server: a command (stdio) or a URL (streamable HTTP). Values may name environment variables
+ * (`$NAME` or `${NAME}`), read from ADE's environment at launch, so no secret has to be written down.
+ */
+export const McpServerConfig = z.union([
+  z.object({ name: McpName, command: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]), env: McpValues }),
+  z.object({ name: McpName, url: z.url({ protocol: /^https?$/ }), headers: McpValues }),
+]);
+export type McpServerConfig = z.infer<typeof McpServerConfig>;
+
+/** CO-13: where a server comes from: the user's own list, the repository's .ade/workspace.yaml, or ADE itself. */
+export const McpSource = z.enum(['personal', 'workspace', 'built-in']);
+export type McpSource = z.infer<typeof McpSource>;
+
+/** CO-13: one server as the MCP manager lists it. Values of env and headers are never included, only their names. */
+export const McpServerEntry = z.object({
+  source: McpSource,
+  name: z.string(),
+  kind: z.enum(['stdio', 'http']),
+  /** The command line or the URL. */
+  target: z.string(),
+  enabled: z.boolean(),
+  editable: z.boolean(),
+  checkable: z.boolean(),
+  /** Variables or connections it needs that are missing; a server with any is not passed to agents. */
+  missing: z.array(z.string()),
+  keys: z.array(z.string()),
+  note: z.string().nullable(),
+  /** The full definition, for editing (personal servers only). */
+  config: McpServerConfig.nullable(),
+});
+export type McpServerEntry = z.infer<typeof McpServerEntry>;
+
+export const McpCheck = z.object({
+  ok: z.boolean(),
+  tools: z.array(z.object({ name: z.string(), description: z.string().nullable() })),
+  error: z.string().nullable(),
+  ms: z.number(),
+  checkedAt: z.string(),
+});
+export type McpCheck = z.infer<typeof McpCheck>;
+
 /** Secrets main keeps in the OS credential store and hands to the host in memory (rule 7). */
 export const ConnectorSecret = z.enum(['shortcut', 'github', 'telegram', 'telegram-password']);
 export type ConnectorSecret = z.infer<typeof ConnectorSecret>;
@@ -554,6 +599,17 @@ export const hostApi = defineApi({
   /** CO-10: personal MCP servers (YAML, the same shape as `mcpServers` in .ade/workspace.yaml) for every session. */
   'mcp.personal': method(z.object({}), z.object({ yaml: z.string() })),
   'mcp.savePersonal': method(z.object({ yaml: z.string().max(20_000) }), Ok),
+  /** CO-13: every server a session in this workspace would receive, with its status. */
+  'mcp.list': method(
+    z.object({ workspaceId: Id.nullable() }),
+    z.object({ servers: z.array(McpServerEntry), workspaceFile: z.object({ path: z.string(), exists: z.boolean(), error: z.string().nullable() }).nullable() }),
+  ),
+  /** Adds a personal server, or replaces the one called `original`. */
+  'mcp.save': method(z.object({ original: McpName.nullable(), server: McpServerConfig }), Ok),
+  'mcp.remove': method(z.object({ name: McpName }), Ok),
+  'mcp.setEnabled': method(z.object({ workspaceId: Id.nullable(), source: McpSource, name: z.string().min(1).max(64), enabled: z.boolean() }), Ok),
+  /** Connects to the server, lists its tools and disconnects. A command runs on this machine for the check. */
+  'mcp.check': method(z.object({ workspaceId: Id.nullable(), source: McpSource, name: z.string().min(1).max(64) }), McpCheck),
   'history.record': method(
     z.object({ workspaceId: Id.nullable(), sessionId: Id.nullable(), command: z.string().min(1).max(10_000), cwd: z.string().max(4096).nullable(), exitCode: z.number().int().nullable() }),
     Ok,

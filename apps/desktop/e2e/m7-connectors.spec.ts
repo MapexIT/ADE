@@ -12,8 +12,12 @@ test('M7-T04: a personal MCP server reaches the agent; the board explains what i
   await page.keyboard.press('Control+,');
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog.getByRole('region', { name: 'Work item sync' })).toBeVisible();
-  await dialog.getByLabel('Personal MCP servers (YAML)').fill('- name: notes\n  command: ["node", "notes.js"]\n');
-  await dialog.getByRole('button', { name: 'Save servers' }).click();
+  // Settings leads to the MCP servers dialog, where personal servers can still be edited as YAML.
+  await dialog.getByRole('button', { name: 'Manage MCP servers' }).click();
+  const mcp = page.getByRole('dialog', { name: 'MCP servers' });
+  await mcp.getByRole('button', { name: 'Edit personal as YAML' }).click();
+  await mcp.getByLabel('Personal MCP servers (YAML)').fill('- name: notes\n  command: ["node", "notes.js"]\n');
+  await mcp.getByRole('button', { name: 'Save servers' }).click();
   await expect(page.getByText('Personal MCP servers saved.')).toBeVisible();
   await page.keyboard.press('Escape');
 

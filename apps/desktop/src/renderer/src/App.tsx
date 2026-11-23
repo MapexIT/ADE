@@ -1,3 +1,4 @@
+import { McpDialog } from './components/McpDialog.tsx';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { ConfirmDialog } from './components/Modal.tsx';
@@ -151,6 +152,7 @@ export function App() {
       <HelpCenter />
       <InboxDialog />
       <SettingsDialog />
+      <McpDialog />
       <FirstRunDialog />
       <ProtocolDialog />
       <ConfirmDialog />
