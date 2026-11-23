@@ -19,10 +19,10 @@ export function makeRepo(): string {
   return repo;
 }
 
-export async function launch(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
+export async function launch(userData: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [resolve(__dirname, '../out/main/index.js')],
-    env: { ...process.env, ADE_USER_DATA_DIR: userData, ADE_ENABLE_FAKE_AGENT: '1', ADE_FAKE_CHUNK_DELAY_MS: '0' },
+    env: { ...process.env, ADE_USER_DATA_DIR: userData, ADE_ENABLE_FAKE_AGENT: '1', ADE_FAKE_CHUNK_DELAY_MS: '0', ...env },
   });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');

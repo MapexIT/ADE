@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { safeStorage } from 'electron';
 
 /** Connector tokens, and environment-set secrets as `env:<set>:<NAME>` (CR-11). */
-export type CredentialKey = 'shortcut' | 'github' | `env:${string}`;
+export type CredentialKey = 'shortcut' | 'github' | 'telegram' | 'telegram-password' | `env:${string}`;
 
 /**
  * Connector tokens, encrypted with Electron safeStorage (rule 7). The file only ever holds ciphertext.

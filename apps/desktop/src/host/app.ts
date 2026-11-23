@@ -24,6 +24,7 @@ import { parse as parseYaml } from 'yaml';
 import { McpServerConfig } from './workspace-config.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { ReasoningService } from './reasoning-service.ts';
+import { TelegramNotifier, type FetchLike } from './telegram.ts';
 import { askOnce } from './one-shot.ts';
 import { ScratchService } from './scratch.ts';
 import { instructionStatus } from './instruction-files.ts';
@@ -33,7 +34,7 @@ import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { ComposerState, PromptBoxes, TerminalLayout } from '@ade/contracts';
+import { ComposerState, PromptBoxes, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -199,6 +200,20 @@ export function createHost(config: HostConfig) {
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const reasoning = new ReasoningService(repos, sessions, runtimes, join(config.userData, 'reasoning-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   reasoning.recover();
+  const telegram = new TelegramNotifier({
+    fetch: ((url, init) => fetch(url, init)) as FetchLike,
+    // Tests point this at a local stand-in for the Bot API.
+    ...(process.env.ADE_TELEGRAM_API ? { base: process.env.ADE_TELEGRAM_API } : {}),
+    secret: (key) => credentials.get(key),
+    enabled: () => repos.settings.get<boolean>('telegram.enabled', false),
+    setEnabled: (on) => repos.settings.set('telegram.enabled', on),
+    onStatus: (status) => bus.emit('telegram.status', status),
+  });
+  bus.on('notify', ({ sessionId, title, body }) => {
+    const session = repos.sessions.get(sessionId);
+    const ws = session ? repos.workspaces.get(session.workspaceId) : null;
+    void telegram.notify(title, [body, ws ? `Workspace: ${ws.name}` : ''].filter(Boolean).join('\n'));
+  });
   const skills = new SkillService(join(config.userData, 'skills'), config.homeDir ?? homedir());
   sessions.installSkills = async (repoRoot, worktree, agentId, names) =>
     skills.install(worktree, agentId, await skills.resolve(repoRoot, names));
@@ -450,6 +465,18 @@ export function createHost(config: HostConfig) {
       repos.settings.set(`composer.${sessionId}`, state);
       return { ok: true };
     },
+    'telegram.status': () => telegram.status(),
+    'telegram.setEnabled': ({ enabled }) => {
+      const st = telegram.status();
+      if (enabled && (!st.tokenStored || !st.passwordSet)) throw new RpcError('not_configured', 'Save the bot token and a password first.');
+      return telegram.setEnabled(enabled);
+    },
+    'telegram.test': async () => {
+      const st = telegram.status();
+      if (!st.enabled) throw new RpcError('disabled', 'Turn Telegram notifications on first.');
+      if (!st.chats) throw new RpcError('no_chats', 'No chat is signed in. Send /auth and the password to the bot first.');
+      return { sent: await telegram.notify('Test notification', 'Telegram notifications from ADE work.') };
+    },
     'promptBoard.get': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
       const stored = PromptBoxes.safeParse(repos.settings.raw(`promptBoard.${workspaceId}`));
@@ -628,9 +655,10 @@ export function createHost(config: HostConfig) {
     skills,
     paths,
     /** Main hands over decrypted connector tokens; they stay in memory only. */
-    setCredentials(values: Partial<Record<'shortcut' | 'github', string>>) {
+    setCredentials(values: Partial<Record<ConnectorSecret, string>>) {
       credentials.set(values);
       void shortcut.reset();
+      telegram.configure();
     },
     /** HI-08: main hands over the preview driver once its window code is ready. */
     setPreviewDriver(driver: PreviewDriver | null) {
@@ -638,6 +666,7 @@ export function createHost(config: HostConfig) {
     },
     async dispose() {
       clearInterval(mergeTimer);
+      telegram.dispose();
       await lsp.dispose();
       await preview.dispose();
       await workflows.dispose();

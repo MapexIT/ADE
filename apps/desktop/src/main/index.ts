@@ -78,7 +78,7 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
 /** Connector tokens go to the host in memory on every (re)start and after every change; never to disk unencrypted. */
 function sendCredentials() {
   const values: Record<string, string> = {};
-  for (const key of ['shortcut', 'github'] as const) {
+  for (const key of ['shortcut', 'github', 'telegram', 'telegram-password'] as const) {
     try {
       const v = credentials.get(key);
       if (v) values[key] = v;
