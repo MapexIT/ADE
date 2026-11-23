@@ -205,7 +205,8 @@ export function Composer({ session }: { session: Session }) {
   const method = composer.reasoning.method;
   const slash = !board && text.startsWith('/') && !text.includes(' ') ? (view?.commands ?? []).filter((c) => `/${c.name}`.startsWith(text)) : [];
   const label = `Message ${agentLabel(session.agentId)}`;
-  const draft = board ? boardPrompt(composer.boxes) : text;
+  const boxes = useComposer((c) => c.boards[session.workspaceId]);
+  const draft = board ? boardPrompt(boxes ?? []) : text;
   const empty = !draft.trim() && !attachments.length;
   const waitForReasoning = reasoning && method !== 'io';
 
@@ -302,7 +303,7 @@ export function Composer({ session }: { session: Session }) {
             }
           }}
         >
-          <PromptBoard sessionId={session.id} />
+          <PromptBoard workspaceId={session.workspaceId} />
         </div>
       ) : (
       <div className="relative">

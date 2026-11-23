@@ -1,8 +1,8 @@
 import { GripVertical, Plus, SquareCheck, SquareDashed, Trash2 } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { PromptBox } from '@ade/contracts';
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { defaultComposer, useComposer } from '../../lib/composer.ts';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useComposer } from '../../lib/composer.ts';
 import { boardExtent, boardPrompt, GRID, moveBox, newBox, readingOrder, resizeBox } from '../../lib/prompt-board.ts';
 
 const EMPTY_BOXES: PromptBox[] = [];
@@ -11,15 +11,21 @@ type Drag = { id: string; kind: 'move' | 'resize'; startX: number; startY: numbe
 
 /**
  * GN-02: the prompt as a board of text boxes. Boxes can be placed and sized freely; the selected ones, read top to
- * bottom and left to right, are the prompt's input. Placement, size, content and selection are saved per session.
+ * bottom and left to right, are the prompt's input. The board belongs to the workspace: every session there shares
+ * it, and placement, size, content and selection are saved across restarts.
  */
-export function PromptBoard({ sessionId }: { sessionId: string }) {
-  const boxes = useComposer((c) => c.states[sessionId]?.boxes ?? EMPTY_BOXES);
-  const update = useComposer((c) => c.update);
+export function PromptBoard({ workspaceId }: { workspaceId: string }) {
+  const boxes = useComposer((c) => c.boards[workspaceId] ?? EMPTY_BOXES);
+  const updateBoard = useComposer((c) => c.updateBoard);
+  const loadBoard = useComposer((c) => c.loadBoard);
   const viewport = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
-  const setBoxes = (change: (b: PromptBox[]) => PromptBox[]) => update(sessionId, (s) => ({ ...(s ?? defaultComposer()), boxes: change(s.boxes) }));
+  useEffect(() => {
+    void loadBoard(workspaceId);
+  }, [workspaceId, loadBoard]);
+
+  const setBoxes = (change: (b: PromptBox[]) => PromptBox[]) => updateBoard(workspaceId, change);
   const patch = (id: string, change: (b: PromptBox) => PromptBox) => setBoxes((all) => all.map((b) => (b.id === id ? change(b) : b)));
 
   const add = () => {
@@ -81,7 +87,7 @@ export function PromptBoard({ sessionId }: { sessionId: string }) {
           {allSelected ? 'Clear selection' : 'Select all'}
         </Button>
         <span className="ml-auto text-[12px] text-ink-muted" aria-live="polite">
-          {selected.length} of {boxes.length} box{boxes.length === 1 ? '' : 'es'} in the prompt · {chars.toLocaleString('en-GB')} characters
+          Shared by this workspace&apos;s sessions · {selected.length} of {boxes.length} box{boxes.length === 1 ? '' : 'es'} in the prompt · {chars.toLocaleString('en-GB')} characters
         </span>
       </div>
       <div

@@ -63,6 +63,21 @@ test('generation methods need confirmation away from IO; the prompt board sends 
   await expect(session.getByText('left out', { exact: true })).toHaveCount(0);
   const goal = page.getByRole('region', { name: 'Text box: Goal' });
   const top = await goal.evaluate((el) => (el as HTMLElement).style.top);
+
+  // The board belongs to the workspace: a second session starts in Chat but its board has the same boxes.
+  await page.keyboard.press('Control+n');
+  await page.getByLabel('What should the agent do?').fill('say second');
+  await page.getByRole('radio', { name: /Fake agent/ }).check();
+  await page.getByRole('button', { name: 'Start session' }).click();
+  await expect(session.getByRole('heading', { name: 'say second' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('radio', { name: 'Board' }).click();
+  await expect(page.getByLabel('Text of Goal')).toHaveValue('say from the goal box');
+  await expect(page.getByText('Shared by this workspace')).toBeVisible();
+  // Editing it here shows in the first session too.
+  await page.getByLabel('Text of Untitled box').fill('say edited in the second session');
+  await page.getByRole('button', { name: /^say ready/ }).first().click();
+  await expect(page.getByLabel('Text of Untitled box')).toHaveValue('say edited in the second session');
   // Give the debounced save time to land before quitting.
   await page.waitForTimeout(800);
   await app.close();

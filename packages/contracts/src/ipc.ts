@@ -36,13 +36,15 @@ export const PromptBox = z.object({
 });
 export type PromptBox = z.infer<typeof PromptBox>;
 
-/** GN-01 / GN-02: a session's composer, kept across restarts: chat or board, the reasoning method and the board. */
+/** GN-01 / GN-02: a session's composer, kept across restarts: chat or board, and the generation method. */
 export const ComposerState = z.object({
   mode: z.enum(['chat', 'board']),
   reasoning: ReasoningSettings,
-  boxes: z.array(PromptBox).max(100),
 });
 export type ComposerState = z.infer<typeof ComposerState>;
+
+/** GN-02: the prompt board, shared by every session of a workspace and kept across restarts. */
+export const PromptBoxes = z.array(PromptBox).max(100);
 
 export const NeedsYouItem = z.object({
   id: z.string(),
@@ -546,6 +548,8 @@ export const hostApi = defineApi({
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
   'composer.get': method(z.object({ sessionId: Id }), ComposerState.nullable()),
   'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
+  'promptBoard.get': method(z.object({ workspaceId: Id }), PromptBoxes),
+  'promptBoard.save': method(z.object({ workspaceId: Id, boxes: PromptBoxes }), Ok),
   'layout.get': method(z.object({ workspaceId: Id }), TerminalLayout.nullable()),
   'layout.save': method(z.object({ workspaceId: Id, layout: TerminalLayout }), Ok),
   /** CR-07: writes a snippet into a fresh scratch folder and says how to run it (and whether that is sandboxed). */
