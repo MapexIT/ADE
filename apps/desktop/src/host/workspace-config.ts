@@ -3,18 +3,10 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
 
-const McpName = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'use letters, digits, dashes and underscores');
-const Values = z.record(z.string(), z.string()).default({});
+import { McpServerConfig } from '@ade/contracts';
 
-/**
- * ST-05: an MCP server every session in the workspace receives. Values may name environment variables
- * (`$NAME` or `${NAME}`), read from ADE's environment at launch, so no secret has to live in the file.
- */
-export const McpServerConfig = z.union([
-  z.object({ name: McpName, command: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]), env: Values }),
-  z.object({ name: McpName, url: z.url({ protocol: /^https?$/ }), headers: Values }),
-]);
-export type McpServerConfig = z.infer<typeof McpServerConfig>;
+/** ST-05: an MCP server every session in the workspace receives (the schema lives in the contracts). */
+export { McpServerConfig };
 
 /** `.ade/workspace.yaml`: setup commands run after a worktree is created, and untracked files to copy (CN-02). */
 export const WorkspaceConfig = z.object({

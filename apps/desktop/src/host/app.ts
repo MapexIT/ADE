@@ -9,7 +9,7 @@ import { Repositories } from './repositories.ts';
 import { ReviewService } from './review-service.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
-import { readWorkspaceConfig, resolveMcpServers } from './workspace-config.ts';
+import { readWorkspaceConfig } from './workspace-config.ts';
 import type { McpServerSpec } from '@ade/acp-client';
 import { listWorkflows } from './workflows.ts';
 import { ConnectionStatusService } from './connection-status.ts';
@@ -20,8 +20,7 @@ import { PullRequestService } from './pull-requests.ts';
 import { McpShortcutActions, type ShortcutActions } from './shortcut-actions.ts';
 import { WorkItemSync } from './work-item-sync.ts';
 import { findOnPath } from '@ade/acp-client';
-import { parse as parseYaml } from 'yaml';
-import { McpServerConfig } from './workspace-config.ts';
+import { McpManager } from './mcp-manager.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { ReasoningService } from './reasoning-service.ts';
 import { TelegramNotifier, type FetchLike } from './telegram.ts';
@@ -190,12 +189,36 @@ export function createHost(config: HostConfig) {
   // CO-05: a merged pull request lands its session. Checked every five minutes and whenever its status is shown.
   const mergeTimer = setInterval(() => void pullRequests.pollMerges().catch(() => undefined), 5 * 60_000);
   mergeTimer.unref();
-  const personalMcp = (): McpServerConfig[] => {
-    const raw = repos.settings.get<string>('mcp.personal', '');
-    if (!raw.trim()) return [];
-    const parsed = McpServerConfig.array().safeParse(parseYaml(raw) ?? []);
-    return parsed.success ? parsed.data : [];
-  };
+  // CO-13: personal, repository and built-in MCP servers in one place.
+  const mcp = new McpManager(repos, () => [
+    {
+      name: 'ade-runner',
+      kind: 'stdio',
+      target: 'Built into ADE',
+      setting: 'runner.forAgents',
+      defaultOn: true,
+      note: "Runs this workspace's code runner configurations inside the session's worktree.",
+      missing: () => (config.runnerMcpEntry ? [] : ['a build that includes it']),
+    },
+    {
+      name: 'ade-preview',
+      kind: 'http',
+      target: 'Built into ADE (local only)',
+      setting: 'preview.forAgents',
+      defaultOn: true,
+      note: 'Lets agents open, click, read and screenshot the preview window. Only agents that support HTTP MCP receive it.',
+      missing: () => (previewDriver ? [] : ['the preview window']),
+    },
+    {
+      name: 'shortcut',
+      kind: 'http',
+      target: ShortcutMcpProvider.URL,
+      setting: 'connectors.shareWithAgents',
+      defaultOn: false,
+      note: 'Hands your Shortcut token to the agent, so it can read and change stories.',
+      missing: () => (credentials.get('shortcut') ? [] : ['a Shortcut token']),
+    },
+  ]);
   mkdirSync(join(config.userData, 'review-tmp'), { recursive: true });
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const reasoning = new ReasoningService(repos, sessions, runtimes, join(config.userData, 'reasoning-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
@@ -349,19 +372,25 @@ export function createHost(config: HostConfig) {
       workspaceRoot(workspaceId);
       return sync.board(workspaceId);
     },
-    'mcp.personal': () => ({ yaml: repos.settings.get<string>('mcp.personal', '') }),
+    'mcp.personal': () => ({ yaml: mcp.personalYaml() }),
     'mcp.savePersonal': async ({ yaml }) => {
-      let data: unknown;
-      try {
-        data = parseYaml(yaml) ?? [];
-      } catch (err) {
-        throw new RpcError('invalid', `This is not valid YAML: ${(err as Error).message}`);
-      }
-      const parsed = McpServerConfig.array().max(20).safeParse(data);
-      if (!parsed.success) throw new RpcError('invalid', `Each server needs a name and a command or a url: ${parsed.error.issues[0]?.message ?? ''}`);
-      repos.settings.set('mcp.personal', yaml);
+      mcp.savePersonalYaml(yaml);
       return { ok: true };
     },
+    'mcp.list': ({ workspaceId }) => mcp.list(workspaceId),
+    'mcp.save': async ({ original, server }) => {
+      mcp.save(original, server);
+      return { ok: true };
+    },
+    'mcp.remove': async ({ name }) => {
+      mcp.remove(name);
+      return { ok: true };
+    },
+    'mcp.setEnabled': async ({ workspaceId, source, name, enabled }) => {
+      mcp.setEnabled(workspaceId, source, name, enabled);
+      return { ok: true };
+    },
+    'mcp.check': ({ workspaceId, source, name }) => mcp.check(workspaceId, source, name),
     'sessions.draftCommitMessage': async ({ sessionId, hint }) => {
       const reply = await sessions.ask(
         sessionId,
@@ -598,9 +627,9 @@ export function createHost(config: HostConfig) {
     const servers: McpServerSpec[] = [];
     // ST-05: the workspace's shared servers from .ade/workspace.yaml.
     const ws = repos.workspaces.get(workspaceId);
+    const chosen = await mcp.forSession(workspaceId);
     if (ws) {
-      const { config } = await readWorkspaceConfig(ws.rootPath);
-      const resolved = resolveMcpServers(config.mcpServers, process.env);
+      const resolved = chosen.workspace;
       servers.push(...resolved.servers);
       for (const s of resolved.skipped) {
         sessions.record(sessionId, { type: 'notice', level: 'warning', text: `MCP server "${s.name}" was not passed to the agent: ${s.missing.join(', ')} is not set.` });
@@ -625,7 +654,7 @@ export function createHost(config: HostConfig) {
     // HI-08: the preview tools, when ADE can drive a preview window (agents without HTTP MCP do not get them).
     if (previewDriver && repos.settings.get<boolean>('preview.forAgents', true)) servers.push(await preview.specFor(sessionId));
     // CO-10: the user's personal servers, for every workspace.
-    const personal = resolveMcpServers(personalMcp(), process.env);
+    const personal = chosen.personal;
     servers.push(...personal.servers);
     for (const s of personal.skipped) {
       sessions.record(sessionId, { type: 'notice', level: 'warning', text: `Personal MCP server "${s.name}" was not passed to the agent: ${s.missing.join(', ')} is not set.` });

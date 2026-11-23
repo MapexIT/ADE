@@ -78,33 +78,15 @@ export function WorkItemSyncSettings({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/** CO-10: MCP servers of the user's own that every session receives, in any repository. */
+/** CO-10 / CO-13: personal MCP servers now live in the MCP servers dialog; Settings links to it. */
 export function PersonalMcpSettings() {
-  const toast = useStore((s) => s.toast);
-  const [yaml, setYaml] = useState('');
-  useEffect(() => {
-    void host.call('mcp.personal', {}).then((r) => setYaml(r.yaml));
-  }, []);
-  const save = async () => {
-    if (await attempt(() => host.call('mcp.savePersonal', { yaml }))) toast('Personal MCP servers saved.');
-  };
+  const set = useStore((s) => s.set);
   return (
-    <section className="flex flex-col gap-2" aria-label="Personal MCP servers">
-      <SectionLabel>Personal MCP servers</SectionLabel>
-      <p className="m-0 text-[12px] text-ink-muted">Every session in every repository receives these, next to the repository's own. Write secrets as $VARIABLE; ADE reads them from its environment.</p>
-      <label htmlFor="mcp-personal" className="sr-only">
-        Personal MCP servers (YAML)
-      </label>
-      <textarea
-        id="mcp-personal"
-        rows={5}
-        value={yaml}
-        onChange={(e) => setYaml(e.target.value)}
-        placeholder={'- name: notes\n  command: ["npx", "-y", "my-notes-mcp"]\n- name: docs\n  url: https://mcp.example.com/mcp\n  headers:\n    Authorization: Bearer $DOCS_TOKEN'}
-        className={cx(inputClass, 'py-2 font-mono text-[12px]')}
-      />
-      <Button size="dense" variant="primary" className="self-start" onClick={() => void save()}>
-        Save servers
+    <section className="flex flex-col gap-2" aria-label="MCP servers">
+      <SectionLabel>MCP servers</SectionLabel>
+      <p className="m-0 text-[12px] text-ink-muted">See every server sessions receive (your own, this repository&apos;s and ADE&apos;s), check them, switch them off, and add or remove your own.</p>
+      <Button size="dense" variant="primary" className="self-start" onClick={() => set({ settingsOpen: false, mcpOpen: true })}>
+        Manage MCP servers
       </Button>
     </section>
   );
