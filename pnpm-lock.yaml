@@ -203,6 +203,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/reasoning:
+    dependencies:
+      '@ade/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/session-core:
     dependencies:
       '@ade/contracts':

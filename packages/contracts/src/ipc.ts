@@ -12,7 +12,7 @@ import {
   WorkItem,
   Workspace,
 } from './entities.ts';
-import { PromptBlock, SessionEvent, ToolKind } from './events.ts';
+import { PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
 import { defineApi, defineTopics, method } from './rpc.ts';
 
 const Id = z.string().min(1).max(200);
@@ -426,6 +426,15 @@ export const hostApi = defineApi({
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),
   'sessions.create': method(CreateSessionInput, Session),
   'sessions.prompt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), Ok),
+  /**
+   * GN-01: sends a prompt through a reasoning method. `io` behaves like `sessions.prompt`; the others reason in the
+   * background (progress arrives as `reasoning.*` events) and then send the result. `reasoning` is true when that
+   * background run started.
+   */
+  'sessions.promptReasoned': method(
+    z.object({ sessionId: Id, content: z.array(PromptBlock).min(1), settings: ReasoningSettings }),
+    z.object({ reasoning: z.boolean() }),
+  ),
   'sessions.queue': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), z.object({ id: z.string() })),
   'sessions.unqueue': method(z.object({ sessionId: Id, id: Id }), Ok),
   'sessions.editQueued': method(z.object({ sessionId: Id, id: Id, content: z.array(PromptBlock).min(1) }), Ok),

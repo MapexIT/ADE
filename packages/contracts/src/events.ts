@@ -49,6 +49,30 @@ export type PlanEntry = z.infer<typeof PlanEntry>;
 export const AvailableCommand = z.object({ name: z.string(), description: z.string() });
 export type AvailableCommand = z.infer<typeof AvailableCommand>;
 
+/**
+ * GN-01: how a turn's prompt is generated before the agent sees it. `io` sends it as written. The others reason
+ * first: `cot` asks for step-by-step reasoning; `cot-sc` samples several reasoning paths and keeps the most
+ * consistent; `got` searches a graph of thoughts (generate, score, aggregate, refine); `foa` evolves a fleet of
+ * candidate plans (genetic particle filtering). Extra reasoning runs the same agent read-only and changes nothing.
+ */
+export const ReasoningMethod = z.enum(['io', 'cot', 'cot-sc', 'got', 'foa']);
+export type ReasoningMethod = z.infer<typeof ReasoningMethod>;
+
+export const ReasoningSettings = z.object({
+  method: ReasoningMethod,
+  /** CoT-SC: reasoning paths sampled. */
+  samples: z.number().int().min(2).max(7).default(3),
+  /** Graph of Thought: thoughts generated at the first step. */
+  branches: z.number().int().min(2).max(5).default(3),
+  /** Fleet of Agents: agents in the fleet. */
+  agents: z.number().int().min(2).max(6).default(3),
+  /** Fleet of Agents: rounds of selection and mutation. */
+  generations: z.number().int().min(1).max(3).default(1),
+});
+export type ReasoningSettings = z.infer<typeof ReasoningSettings>;
+
+export const ReasoningStepStatus = z.enum(['running', 'done', 'failed']);
+
 const base = { sessionId: z.string(), seq: z.number().int().nonnegative(), ts: z.string() };
 
 /**
@@ -140,6 +164,28 @@ export const SessionEvent = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal('session.landed'), mode: z.enum(['apply', 'commit']), files: z.array(z.string()) }),
   z.object({ ...base, type: z.literal('session.discarded'), patchPath: z.string().nullable() }),
   z.object({ ...base, type: z.literal('run.finished'), runId: z.string(), exitCode: z.number().int().nullable() }),
+  /** GN-01: a reasoning run before a turn. Steps form a graph through `parents`. */
+  z.object({ ...base, type: z.literal('reasoning.started'), runId: z.string(), method: ReasoningMethod, plannedCalls: z.number().int().nonnegative() }),
+  z.object({
+    ...base,
+    type: z.literal('reasoning.step'),
+    runId: z.string(),
+    stepId: z.string(),
+    phase: z.string(),
+    label: z.string(),
+    parents: z.array(z.string()),
+    status: ReasoningStepStatus,
+    score: z.number().nullable(),
+    detail: z.string().nullable(),
+  }),
+  z.object({
+    ...base,
+    type: z.literal('reasoning.finished'),
+    runId: z.string(),
+    outcome: z.enum(['sent', 'cancelled', 'failed']),
+    approach: z.string().nullable(),
+    calls: z.number().int().nonnegative(),
+  }),
   z.object({ ...base, type: z.literal('notice'), level: z.enum(['info', 'warning', 'error']), text: z.string() }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEvent>;
