@@ -8,7 +8,7 @@ import { RpcError } from '@ade/contracts';
  */
 export async function askOnce(
   runtime: AgentRuntime,
-  opts: { cwd: string; prompt: string; baseEnv: NodeJS.ProcessEnv; wrapper?: LaunchWrapper | null; timeoutMs: number; timeoutMessage: string },
+  opts: { cwd: string; prompt: string; baseEnv: NodeJS.ProcessEnv; wrapper?: LaunchWrapper | null; timeoutMs: number; timeoutMessage: string; signal?: AbortSignal },
 ): Promise<string> {
   const agent = await runtime.start({ cwd: opts.cwd, permissionProfile: 'read-only', baseEnv: opts.baseEnv, ...(opts.wrapper ? { wrapper: opts.wrapper } : {}) });
   try {
@@ -21,13 +21,24 @@ export async function askOnce(
       return reject ? { outcome: 'selected', optionId: reject.optionId } : { outcome: 'cancelled' };
     });
     let timer: NodeJS.Timeout | undefined;
+    let onAbort: (() => void) | undefined;
     await Promise.race([
       agent.prompt([{ type: 'text', text: opts.prompt }]),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new RpcError('timeout', opts.timeoutMessage)), opts.timeoutMs);
         timer.unref();
       }),
-    ]).finally(() => clearTimeout(timer));
+      // Aborting ends the wait; the finally block below closes the agent and its process tree.
+      new Promise((_, reject) => {
+        if (!opts.signal) return;
+        onAbort = () => reject(new RpcError('cancelled', 'Cancelled.'));
+        if (opts.signal.aborted) onAbort();
+        else opts.signal.addEventListener('abort', onAbort, { once: true });
+      }),
+    ]).finally(() => {
+      clearTimeout(timer);
+      if (onAbort) opts.signal?.removeEventListener('abort', onAbort);
+    });
     return reply;
   } finally {
     await agent.close().catch(() => undefined);

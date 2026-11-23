@@ -5,6 +5,7 @@ import type {
   PermissionOption,
   PlanEntry,
   PromptBlock,
+  ReasoningMethod,
   SessionEvent,
   SessionMode,
   ToolContent,
@@ -42,6 +43,18 @@ export type TimelineItem =
   | { kind: 'turn'; key: string; turnId: string; index: number; stopReason: string | null }
   | { kind: 'notice'; key: string; level: 'info' | 'warning' | 'error'; text: string }
   | { kind: 'screenshot'; key: string; url: string; file: string }
+  /** GN-01: a reasoning run before a turn, with its graph of steps. */
+  | {
+      kind: 'reasoning';
+      key: string;
+      runId: string;
+      method: ReasoningMethod;
+      plannedCalls: number;
+      steps: ReasoningStepView[];
+      outcome: 'sent' | 'cancelled' | 'failed' | null;
+      approach: string | null;
+      calls: number;
+    }
   /** TM-04: a command the agent runs through ADE; `output` grows live until it exits. */
   | {
       kind: 'command';
@@ -57,6 +70,16 @@ export type TimelineItem =
       killed: boolean;
     };
 
+export interface ReasoningStepView {
+  stepId: string;
+  phase: string;
+  label: string;
+  parents: string[];
+  status: 'running' | 'done' | 'failed';
+  score: number | null;
+  detail: string | null;
+}
+
 /** Live output kept per command in the view; the stored tail replaces it when the command exits. */
 export const COMMAND_OUTPUT_LIMIT = 200_000;
 
@@ -70,6 +93,8 @@ export interface SessionView {
   activeTurnId: string | null;
   pendingPermissions: string[];
   usage: Usage | null;
+  /** GN-01: the reasoning run in progress, if any. */
+  reasoningRunId: string | null;
   lastSeq: number;
 }
 
@@ -83,6 +108,7 @@ export const emptyView = (): SessionView => ({
   activeTurnId: null,
   pendingPermissions: [],
   usage: null,
+  reasoningRunId: null,
   lastSeq: -1,
 });
 
@@ -286,6 +312,38 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
       return v;
     case 'preview.screenshot':
       v.items = [...v.items, { kind: 'screenshot', key: `shot:${event.seq}`, url: event.url, file: event.file }];
+      return v;
+    case 'reasoning.started':
+      v.reasoningRunId = event.runId;
+      v.items = [
+        ...v.items,
+        { kind: 'reasoning', key: `reasoning:${event.runId}`, runId: event.runId, method: event.method, plannedCalls: event.plannedCalls, steps: [], outcome: null, approach: null, calls: 0 },
+      ];
+      return v;
+    case 'reasoning.step': {
+      const { stepId, phase, label, parents, status, score, detail } = event;
+      const step: ReasoningStepView = { stepId, phase, label, parents, status, score, detail };
+      v.items =
+        replaceWhere(
+          v.items,
+          (i) => i.kind === 'reasoning' && i.runId === event.runId,
+          (i) => {
+            const r = i as Extract<TimelineItem, { kind: 'reasoning' }>;
+            const at = r.steps.findIndex((x) => x.stepId === stepId);
+            const steps = at === -1 ? [...r.steps, step] : r.steps.map((x, n) => (n === at ? step : x));
+            return { ...r, steps, calls: steps.filter((x) => x.phase !== 'select' && x.phase !== 'resample').length };
+          },
+        ) ?? v.items;
+      return v;
+    }
+    case 'reasoning.finished':
+      if (v.reasoningRunId === event.runId) v.reasoningRunId = null;
+      v.items =
+        replaceWhere(
+          v.items,
+          (i) => i.kind === 'reasoning' && i.runId === event.runId,
+          (i) => ({ ...(i as Extract<TimelineItem, { kind: 'reasoning' }>), outcome: event.outcome, approach: event.approach, calls: event.calls }),
+        ) ?? v.items;
       return v;
     case 'checkpoint.created':
     case 'session.state_changed':

@@ -1,0 +1,16 @@
+{
+  "name": "@ade/reasoning",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reasoning trajectories (IO, CoT, CoT-SC, Graph of Thought, Fleet of Agents) over any agent. Pure: the agent is injected.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ade/contracts": "workspace:*"
+  }
+}

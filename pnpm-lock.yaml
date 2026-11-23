@@ -63,6 +63,9 @@ importers:
       '@ade/git':
         specifier: workspace:*
         version: link:../../packages/git
+      '@ade/reasoning':
+        specifier: workspace:*
+        version: link:../../packages/reasoning
       '@ade/session-core':
         specifier: workspace:*
         version: link:../../packages/session-core
@@ -198,6 +201,12 @@ importers:
         version: 2.8.0(zod@4.6.7)
 
   packages/git:
+    dependencies:
+      '@ade/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/reasoning:
     dependencies:
       '@ade/contracts':
         specifier: workspace:*

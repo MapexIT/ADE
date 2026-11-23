@@ -86,3 +86,22 @@ describe('ChunkCoalescer', () => {
     expect(c.size).toBe(0);
   });
 });
+
+describe('GN-01 reasoning in the timeline', () => {
+  it('folds a run into one item with its steps, and clears the live run when it ends', () => {
+    const step = (stepId: string, status: 'running' | 'done', score: number | null = null) =>
+      ev({ type: 'reasoning.step', runId: 'r1', stepId, phase: 'sample', label: `Path ${stepId}`, parents: [], status, score, detail: null });
+    let v = projectSession([ev({ type: 'reasoning.started', runId: 'r1', method: 'cot-sc', plannedCalls: 2 }), step('s1', 'running'), step('s2', 'running')]);
+    expect(v.reasoningRunId).toBe('r1');
+    v = applyEvent(v, step('s1', 'done', 7));
+    const item = v.items.find((i) => i.kind === 'reasoning');
+    expect(item).toMatchObject({ method: 'cot-sc', plannedCalls: 2, calls: 2, outcome: null });
+    expect(item?.kind === 'reasoning' && item.steps.map((s) => [s.stepId, s.status, s.score])).toEqual([
+      ['s1', 'done', 7],
+      ['s2', 'running', null],
+    ]);
+    v = applyEvent(v, ev({ type: 'reasoning.finished', runId: 'r1', outcome: 'sent', approach: 'patch', calls: 2 }));
+    expect(v.reasoningRunId).toBeNull();
+    expect(v.items.find((i) => i.kind === 'reasoning')).toMatchObject({ outcome: 'sent', approach: 'patch' });
+  });
+});
