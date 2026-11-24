@@ -48,7 +48,7 @@ describe('validation', () => {
     expect(validate(w).some((p) => p.level === 'error' && p.nodeId === 'l')).toBe(true);
   });
 
-  it('refuses an unbounded cycle and accepts one with a loop node', () => {
+  it('accepts a cycle without a loop node: its back edge allows one round by default (WF-13)', () => {
     const nodes = [
       { id: 'a', type: 'agent', agent: 'codex', prompt: 'x' },
       { id: 't', type: 'command', run: ['npm', 'test'] },
@@ -57,7 +57,7 @@ describe('validation', () => {
       { from: 'a', to: 't' },
       { from: 't', to: 'a', when: 'fail' },
     ]);
-    expect(validate(bad).some((p) => p.message.includes('no limit'))).toBe(true);
+    expect(validate(bad).filter((p) => p.level === 'error')).toEqual([]);
     const good = wf([...nodes, { id: 'r', type: 'loop', max: 2 }], [
       { from: 'a', to: 't' },
       { from: 't', to: 'r', when: 'fail' },

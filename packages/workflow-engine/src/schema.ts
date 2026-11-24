@@ -34,7 +34,11 @@ export const WorkflowNode = z.discriminatedUnion('type', [AgentNode, CommandNode
 export type WorkflowNode = z.infer<typeof WorkflowNode>;
 export type NodeType = WorkflowNode['type'];
 
-export const Edge = z.object({ from: Id, to: Id, when: z.enum(['pass', 'fail']).optional() });
+/**
+ * An edge. Several edges may leave one node (they run in parallel) and several may enter one (it waits for each).
+ * `maxRounds` (WF-13) applies to an edge that closes a cycle: how many times the run may go round it; default 1.
+ */
+export const Edge = z.object({ from: Id, to: Id, when: z.enum(['pass', 'fail']).optional(), maxRounds: z.number().int().min(1).max(50).optional() });
 export type Edge = z.infer<typeof Edge>;
 
 export const Budgets = z.object({
@@ -51,7 +55,8 @@ export const Workflow = z.object({
   description: z.string().default(''),
   trigger: z.enum(['manual', 'work-item', 'failed-check', 'ready-session', 'terminal-command']).default('manual'),
   budgets: Budgets.default({}),
-  nodes: z.array(WorkflowNode).min(1),
+  /** May be empty while a workflow is being drawn from scratch; it cannot run until it has a first step. */
+  nodes: z.array(WorkflowNode).default([]),
   edges: z.array(Edge).default([]),
 });
 export type Workflow = z.infer<typeof Workflow>;
@@ -62,8 +67,77 @@ export interface Problem {
   nodeId?: string;
 }
 
-export function outgoing(wf: Workflow, nodeId: string): Edge[] {
-  return wf.edges.filter((e) => e.from === nodeId);
+export type IndexedEdge = Edge & { index: number };
+
+export function outgoing(wf: Workflow, nodeId: string): IndexedEdge[] {
+  return wf.edges.flatMap((e, index) => (e.from === nodeId ? [{ ...e, index }] : []));
+}
+
+export function incoming(wf: Workflow, nodeId: string): IndexedEdge[] {
+  return wf.edges.flatMap((e, index) => (e.to === nodeId ? [{ ...e, index }] : []));
+}
+
+const backCache = new WeakMap<Workflow, Set<number>>();
+
+/**
+ * WF-13: the edges that close a cycle, found by a depth-first walk from the first node in edge order (then from any
+ * node not reached). Every cycle has exactly one, and the run follows it at most its `maxRounds` times.
+ */
+export function backEdges(wf: Workflow): Set<number> {
+  const cached = backCache.get(wf);
+  if (cached) return cached;
+  const back = new Set<number>();
+  const state = new Map<string, 'open' | 'done'>();
+  const visit = (id: string) => {
+    state.set(id, 'open');
+    for (const e of outgoing(wf, id)) {
+      const st = state.get(e.to);
+      if (st === 'open') back.add(e.index);
+      else if (!st) visit(e.to);
+    }
+    state.set(id, 'done');
+  };
+  for (const n of wf.nodes) if (!state.has(n.id)) visit(n.id);
+  backCache.set(wf, back);
+  return back;
+}
+
+/** WF-13: each cycle as its back edge, the nodes on it and its round limit, for the editor. */
+export function cycles(wf: Workflow): { edgeIndex: number; nodes: string[]; maxRounds: number }[] {
+  return [...backEdges(wf)].map((i) => {
+    const e = wf.edges[i]!;
+    // Nodes on a forward path from the back edge's target to its source.
+    const back = backEdges(wf);
+    const fwd = wf.edges.filter((_, j) => !back.has(j));
+    const reach = (from: string, out: boolean) => {
+      const seen = new Set([from]);
+      const q = [from];
+      while (q.length) {
+        const id = q.shift()!;
+        for (const x of fwd) {
+          const [a, b] = out ? [x.from, x.to] : [x.to, x.from];
+          if (a === id && !seen.has(b)) (seen.add(b), q.push(b));
+        }
+      }
+      return seen;
+    };
+    const a = reach(e.to, true);
+    const b = reach(e.from, false);
+    const nodes = wf.nodes.map((n) => n.id).filter((id) => a.has(id) && b.has(id));
+    return { edgeIndex: i, nodes, maxRounds: roundLimit(wf, i, nodes) };
+  });
+}
+
+/**
+ * WF-13: how many times a back edge may send the run round its cycle: its own `maxRounds`; otherwise the limit of a
+ * loop node on the cycle (so workflows written before round limits keep their retries); otherwise 1.
+ */
+export function roundLimit(wf: Workflow, edgeIndex: number, cycleNodes?: string[]): number {
+  const e = wf.edges[edgeIndex]!;
+  if (e.maxRounds !== undefined) return e.maxRounds;
+  const on = new Set(cycleNodes ?? cycles(wf).find((c) => c.edgeIndex === edgeIndex)?.nodes ?? []);
+  const loops = wf.nodes.filter((n): n is LoopNode => n.type === 'loop' && on.has(n.id));
+  return loops.length ? Math.max(...loops.map((l) => l.max)) : 1;
 }
 
 /** The first node listed runs first. (It may sit inside a retry cycle, so "no incoming edge" is not a rule.) */
@@ -86,7 +160,7 @@ export function validate(wf: Workflow): Problem[] {
   if (problems.length) return problems;
 
   const start = startNode(wf);
-  if (!start) return problems;
+  if (!start) return [{ level: 'error', message: 'This workflow has no steps yet. Add a first step from the palette.' }];
 
   // Reachability.
   const seen = new Set<string>([start.id]);
@@ -116,27 +190,17 @@ export function validate(wf: Workflow): Problem[] {
     for (const e of outgoing(wf, id)) stack.push({ id: e.to, gated });
   }
 
-  // Cycles need a bound: a loop node on the cycle, or a loop budget.
-  const onStack = new Set<string>();
-  const done = new Set<string>();
-  const dfs = (id: string, path: string[]): void => {
-    onStack.add(id);
-    for (const e of outgoing(wf, id)) {
-      if (onStack.has(e.to)) {
-        const cycle = [...path.slice(path.indexOf(e.to)), id];
-        const bounded = cycle.some((c) => byId.get(c)?.type === 'loop') || wf.budgets.loops !== undefined;
-        if (!bounded) problems.push({ level: 'error', message: `The cycle ${cycle.join(' → ')} has no limit. Add a loop node or a loop budget.` });
-      } else if (!done.has(e.to)) dfs(e.to, [...path, e.to]);
-    }
-    onStack.delete(id);
-    done.add(id);
-  };
-  dfs(start.id, [start.id]);
+  // WF-13: every cycle is bounded by its back edge's round limit (default 1), so cycles need no loop node.
+  const back = backEdges(wf);
+  wf.edges.forEach((e, i) => {
+    if (e.maxRounds !== undefined && !back.has(i)) problems.push({ level: 'warning', message: `The round limit on ${e.from} → ${e.to} has no effect: that edge does not close a cycle.` });
+  });
 
   for (const n of wf.nodes) {
     const out = outgoing(wf, n.id);
-    if ((n.type === 'command' || n.type === 'branch') && out.length > 1 && out.some((e) => !e.when)) {
-      problems.push({ level: 'error', message: `${n.id} has several next steps; mark each edge with pass or fail.`, nodeId: n.id });
+    // WF-12: several unmarked next steps run in parallel; say so where it may be a surprise.
+    if (n.type === 'branch' && out.length > 1 && out.every((e) => !e.when)) {
+      problems.push({ level: 'warning', message: `${n.id} is a branch, but none of its edges says pass or fail, so every next step runs.`, nodeId: n.id });
     }
     if (n.type === 'agent' && n.profile === 'autonomous') {
       problems.push({ level: 'warning', message: `${n.id} runs without approvals; it only starts when its session is sandboxed.`, nodeId: n.id });
