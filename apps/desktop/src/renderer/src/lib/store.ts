@@ -95,6 +95,8 @@ interface State {
   protocolSessionId: string | null;
   confirm: ConfirmSpec | null;
   toasts: Toast[];
+  /** WA-10: text to put in a session's chat box (Redirect the agent); the composer takes it and clears it. */
+  composerDraft: { sessionId: string; text: string } | null;
 }
 
 interface Actions {
@@ -184,6 +186,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   protocolSessionId: null,
   confirm: null,
   toasts: [],
+  composerDraft: null,
 
   async init() {
     const [workspaces, firstRunDone, lastWorkspace, inbox] = await Promise.all([

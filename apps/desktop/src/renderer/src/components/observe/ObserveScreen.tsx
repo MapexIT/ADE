@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
 import { useStore } from '../../lib/store.ts';
 import { AnimatedNumber, DrawnCheck, Orb, PHASE_STYLE, PhaseBar, Sparkline } from './visuals.tsx';
-import { AgentTeams, QuietAgents } from './Teams.tsx';
+import { AgentTeams, LoopingAgents, QuietAgents } from './Teams.tsx';
 import { useTeams } from '../../lib/teams.ts';
 
 const LIVE_STATES = new Set<Session['state']>(['queued', 'starting', 'working', 'waiting-on-user']);
@@ -143,6 +143,7 @@ export function ObserveScreen() {
         />
       </section>
 
+      <LoopingAgents />
       <QuietAgents teams={teams} />
       <section aria-label="Teams" className="flex max-h-[42%] shrink-0 flex-col gap-2 overflow-auto">
         <SectionLabel>Agent teams · who started them, and how hard they work</SectionLabel>

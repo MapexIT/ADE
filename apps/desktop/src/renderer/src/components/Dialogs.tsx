@@ -1,7 +1,7 @@
 import { Bot, Check, CircleAlert, Download, FolderGit2, FolderOpen, Info, MessagesSquare, Navigation, RefreshCw, Save, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
-import type { ContainmentStatus, ProtocolMessage } from '@ade/contracts';
+import { LoopSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
 import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -83,6 +83,7 @@ const KIND_LABELS: Record<string, string> = {
   limit: 'Limit reached',
   gate: 'Workflow gate',
   paused: 'Workflow paused',
+  loop: 'May be looping',
 };
 
 export function InboxDialog() {
@@ -160,6 +161,7 @@ export function SettingsDialog() {
   const [sandboxByDefault, setSandboxByDefault] = useState(true);
   const [runInPlace, setRunInPlace] = useState(false);
   const [keepRunning, setKeepRunning] = useState(true);
+  const [loops, setLoops] = useState<LoopSettings>({ enabled: true, stopTurn: false });
 
   useEffect(() => {
     if (!open) return;
@@ -169,6 +171,10 @@ export function SettingsDialog() {
     void host.call('settings.get', { key: 'app.keepRunningInBackground' }).then((v) => setKeepRunning(v.value !== false));
     void host.call('settings.get', { key: 'concurrencyCap' }).then((v) => setCap(typeof v.value === 'number' ? v.value : 3));
     void host.call('settings.get', { key: 'limits' }).then((v) => v.value && setLimits(v.value as typeof limits));
+    void host.call('settings.get', { key: 'loops' }).then((v) => {
+      const parsed = LoopSettings.safeParse(v.value ?? {});
+      setLoops(parsed.success ? parsed.data : { enabled: true, stopTurn: false });
+    });
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
@@ -178,6 +184,7 @@ export function SettingsDialog() {
   const save = async () => {
     await attempt(() => host.call('settings.set', { key: 'concurrencyCap', value: Math.max(1, Math.min(10, cap)) }));
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
+    await attempt(() => host.call('settings.set', { key: 'loops', value: loops }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
@@ -201,6 +208,20 @@ export function SettingsDialog() {
           <Field label="Maximum minutes per turn" htmlFor="set-mins">
             <input id="set-mins" type="number" min={1} value={limits.maxTurnMinutes} onChange={(e) => setLimits({ ...limits, maxTurnMinutes: Number(e.target.value) })} className={inputClass} />
           </Field>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={loops.enabled} onChange={(e) => setLoops({ ...loops, enabled: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Warn when an agent goes round in circles
+              <span className="block text-[12px] text-ink-muted">The same step repeated, the same command failing, or a file switched back and forth, within one turn.</span>
+            </span>
+          </label>
+          <label className={cx('flex min-h-11 items-start gap-2', !loops.enabled && 'opacity-60')}>
+            <input type="checkbox" checked={loops.stopTurn} disabled={!loops.enabled} onChange={(e) => setLoops({ ...loops, stopTurn: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Stop the turn if it carries on
+              <span className="block text-[12px] text-ink-muted">ADE cancels the turn at twice the warning level. Nothing is undone and nothing lands.</span>
+            </span>
+          </label>
           <label className="flex min-h-11 items-start gap-2">
             <input type="checkbox" checked={keepRunning} onChange={(e) => setKeepRunning(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
             <span>

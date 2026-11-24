@@ -1,4 +1,5 @@
 import { isLive } from '@ade/session-core';
+import { redirectLoop } from './loops.ts';
 import { host, main } from './bridge.ts';
 import { PAGES } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
@@ -64,6 +65,13 @@ export function buildCommands(): Command[] {
   if (session) {
     if (isLive(session.state)) {
       cmds.push({ id: 'session.cancel', title: 'Cancel the running turn', group: 'Session', shortcut: 'Esc', run: () => void attempt(() => host.call('sessions.cancel', { sessionId: session.id })) });
+    }
+    const loop = s.activity[session.id]?.loop;
+    if (loop) {
+      cmds.push(
+        { id: 'session.loop.redirect', title: 'Redirect the looping agent', group: 'Session', run: () => redirectLoop(session.id, loop) },
+        { id: 'session.loop.dismiss', title: 'Dismiss the loop warning', group: 'Session', run: () => void attempt(() => host.call('sessions.dismissLoop', { sessionId: session.id })) },
+      );
     }
     cmds.push(
       { id: 'session.review', title: 'Review changes', group: 'Session', run: () => s.setTab('review') },

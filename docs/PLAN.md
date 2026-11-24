@@ -190,6 +190,8 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M9-T03** Host `LoopWatch`: events, inbox, notification, optional stop, audit; integration tests with the
       fake agent.
 - [x] **M9-T04** Projection and activity (`loop` timeline item, `Activity.loop`) with unit tests.
-- [ ] **M9-T05** Renderer: timeline card, redirect draft, header and list badges, Observe section, inbox label,
+- [x] **M9-T05** Renderer: timeline card, redirect draft, header and list badges, Observe section, inbox label,
       settings, palette commands; `e2e/loop-watch.spec.ts`. Done when the spec passes on Windows against the
       production build and the development renderer, and CI is green on Windows and Ubuntu.
+      The spec passes on Windows against the production build and the development renderer; CI on Ubuntu has
+      not run yet (the branch is not pushed).

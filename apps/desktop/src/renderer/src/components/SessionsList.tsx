@@ -48,7 +48,9 @@ export function SessionsList() {
   }, [sessions, waitingTerminals]);
 
   const detail = (s: Session) => {
-    const pending = inbox.filter((i) => i.sessionId === s.id);
+    // WA-10: a loop warning is shown only when nothing else needs the user; the session stays under Working.
+    const pending = inbox.filter((i) => i.sessionId === s.id).sort((a, b) => Number(a.kind === 'loop') - Number(b.kind === 'loop'));
+    if (pending[0]?.kind === 'loop') return { text: 'May be looping', attention: true };
     if (pending[0]) return { text: pending[0].kind === 'question' ? 'Has a question' : pending[0].kind === 'permission' ? 'Asks for approval' : pending[0].title, attention: true };
     if (waitingTerminals.some((t) => t.sessionId === s.id)) return { text: 'Agent terminal is waiting', attention: true };
     return { text: STATE_LABELS[s.state], attention: false };
