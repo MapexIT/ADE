@@ -1,4 +1,4 @@
-import { validate, Workflow, type NodeType, type Problem, type WorkflowNode } from '@ade/workflow-engine';
+import { backEdges, cycles, incoming, outgoing, roundLimit, validate, Workflow, type Edge, type NodeType, type Problem, type WorkflowNode } from '@ade/workflow-engine';
 
 /**
  * Pure edits over a workflow being designed (WF-01). Every function returns a new workflow, so the canvas can
@@ -98,6 +98,43 @@ export function cycleEdge(wf: Draft, index: number): Draft {
     }),
   };
 }
+
+/** WF-12 / WF-13: changes one edge: when it applies, and (for an edge that closes a cycle) its round limit. */
+export function setEdge(wf: Draft, index: number, patch: { when?: Edge['when'] | null; maxRounds?: number | null }): Draft {
+  return {
+    ...wf,
+    edges: wf.edges.map((e, i) => {
+      if (i !== index) return e;
+      const next: Edge = { ...e };
+      if (patch.when !== undefined) {
+        if (patch.when === null) delete next.when;
+        else next.when = patch.when;
+      }
+      if (patch.maxRounds !== undefined) {
+        if (patch.maxRounds === null) delete next.maxRounds;
+        else next.maxRounds = Math.min(50, Math.max(1, Math.round(patch.maxRounds)));
+      }
+      return next;
+    }),
+  };
+}
+
+/** WF-13: what the editor says about an edge: whether it closes a cycle, the steps on it and its round limit. */
+export function edgeInfo(wf: Draft, index: number): { cycle: boolean; steps: string[]; maxRounds: number } {
+  const c = cycles(wf).find((x) => x.edgeIndex === index);
+  return c ? { cycle: true, steps: c.nodes, maxRounds: c.maxRounds } : { cycle: false, steps: [], maxRounds: 1 };
+}
+
+/** WF-12: how many inputs a step waits for and how many next steps it can start. */
+export function fanOf(wf: Draft, id: string): { inputs: number; outputs: number } {
+  const back = backEdges(wf);
+  return { inputs: incoming(wf, id).filter((e) => !back.has(e.index)).length, outputs: outgoing(wf, id).length };
+}
+
+/** A new, empty workflow: no steps yet. */
+export const emptyDraft = (name: string): Draft => Workflow.parse({ name: name.trim() || 'New workflow' });
+
+export { roundLimit };
 
 export function removeEdge(wf: Draft, index: number): Draft {
   return { ...wf, edges: wf.edges.filter((_, i) => i !== index) };

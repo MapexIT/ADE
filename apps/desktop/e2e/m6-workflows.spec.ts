@@ -54,7 +54,7 @@ test('M6 gate: the story workflow runs end to end and stops at both gates', asyn
 
   // Gate 1, also listed in Needs you.
   const details = page.getByRole('complementary', { name: 'Run details' });
-  const decision = details.getByRole('region', { name: 'Decision' });
+  const decision = details.getByRole('region', { name: /^Decision/ });
   await expect(decision.getByText('Is the plan right?')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /Needs you/ }).click();
   await expect(page.getByRole('option', { name: /Is the plan right\?.*Workflow gate/ })).toBeVisible();
@@ -122,7 +122,7 @@ test('M6-T04: the new session dialog starts a workflow instead of one agent (WF-
 
   const decision = page
     .getByRole('complementary', { name: 'Run details' })
-    .getByRole('region', { name: 'Decision' });
+    .getByRole('region', { name: /^Decision/ });
   await expect(decision.getByText('Happy with it?')).toBeVisible({ timeout: 30_000 });
   await decision.getByRole('button', { name: 'Open latest session' }).click();
   await expect(page.getByText('Looked at The login page.').first()).toBeVisible();

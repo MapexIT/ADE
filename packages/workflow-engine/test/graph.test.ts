@@ -194,3 +194,19 @@ describe('Empty workflows', () => {
     expect(validate(wf)).toEqual([{ level: 'error', message: 'This workflow has no steps yet. Add a first step from the palette.' }]);
   });
 });
+
+describe('The parallel checks template', () => {
+  it('lints and tests in parallel, retries a failing test twice at most, and joins at the gate', async () => {
+    const { TEMPLATES } = await import('../src/index.ts');
+    const wf = parseWorkflow(TEMPLATES['parallel-checks']!);
+    let tests = 0;
+    const command = fake('command', (n) => ({ outcome: n.id === 'test' && ++tests < 3 ? 'fail' : 'pass', packet: { checkOutput: `${n.id} ${tests}` } }), 5);
+    const agent = fake('agent', pass);
+    const runner = new WorkflowRunner(wf, 'r', new MemoryRunStore(), [agent, command], {}, undefined, { exclusive: ['agent', 'command', 'land'] });
+    await runner.start();
+    expect(agent.calls).toEqual(['build', 'build', 'build']);
+    expect(runner.current.status).toBe('waiting-gate');
+    expect(runner.current.active).toEqual(['review']);
+    expect(runner.current.rounds).toEqual({ '4': 2 });
+  });
+});

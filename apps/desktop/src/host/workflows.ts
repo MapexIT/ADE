@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { WorkflowSummary } from '@ade/contracts';
-import { describeNode, TEMPLATES, validate, Workflow, WorkflowError } from '@ade/workflow-engine';
+import { backEdges, describeNode, roundLimit, TEMPLATES, validate, Workflow, WorkflowError } from '@ade/workflow-engine';
 import { parse } from 'yaml';
 
 export const detailOf = describeNode;
@@ -29,7 +29,7 @@ export function summarise(id: string, source: WorkflowSummary['source'], path: s
     trigger: wf.trigger,
     agents: [...new Set(wf.nodes.flatMap((n) => (n.type === 'agent' ? [n.agent] : [])))],
     nodes: wf.nodes.map((n) => ({ id: n.id, type: n.type, title: n.title ?? n.id, detail: detailOf(n) })),
-    edges: wf.edges.map((e) => ({ from: e.from, to: e.to, when: e.when ?? null })),
+    edges: edgeViews(wf),
     problems: validate(wf).map((p) => ({ level: p.level, message: p.message, nodeId: p.nodeId ?? null })),
   };
 }
@@ -55,4 +55,10 @@ export async function loadWorkflowSource(repoRoot: string, id: string): Promise<
     return readFile(join(repoRoot, '.ade', 'workflows', file), 'utf8').catch(() => null);
   }
   return null;
+}
+
+/** WF-13: edges for views, with the cycle each back edge closes and its round limit. */
+export function edgeViews(wf: Workflow) {
+  const back = backEdges(wf);
+  return wf.edges.map((e, i) => ({ from: e.from, to: e.to, when: e.when ?? null, cycle: back.has(i), maxRounds: back.has(i) ? roundLimit(wf, i) : null }));
 }

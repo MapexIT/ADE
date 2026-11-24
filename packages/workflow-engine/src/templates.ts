@@ -1,5 +1,23 @@
 /** WF-04: built-in templates. Each one validates (see the tests) and ends in a gate before any land. */
 export const TEMPLATES: Record<string, string> = {
+  'parallel-checks': `
+name: Build with parallel checks
+description: Build, then lint and test at the same time. The gate waits for both; a failing test sends the work back to the agent at most twice.
+trigger: work-item
+nodes:
+  - { id: build, type: agent, agent: claude-code, prompt: "Implement: {{workItem.title}}. {{checkOutput}}" }
+  - { id: lint, type: command, run: [pnpm, lint] }
+  - { id: test, type: command, run: [pnpm, test] }
+  - { id: review, type: gate, question: "Lint and tests ran. Review the change" }
+  - { id: land, type: land, mode: commit }
+edges:
+  - { from: build, to: lint }
+  - { from: build, to: test }
+  - { from: lint, to: review }
+  - { from: test, to: review }
+  - { from: test, to: build, when: fail, maxRounds: 2 }
+  - { from: review, to: land, when: pass }
+`,
   'story-to-pull-request': `
 name: Story to pull request
 description: Plan, build and test a work item, with two gates before a pull request.

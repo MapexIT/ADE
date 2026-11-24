@@ -116,7 +116,10 @@ export function cycles(wf: Workflow): { edgeIndex: number; nodes: string[]; maxR
         const id = q.shift()!;
         for (const x of fwd) {
           const [a, b] = out ? [x.from, x.to] : [x.to, x.from];
-          if (a === id && !seen.has(b)) (seen.add(b), q.push(b));
+          if (a === id && !seen.has(b)) {
+            seen.add(b);
+            q.push(b);
+          }
         }
       }
       return seen;
