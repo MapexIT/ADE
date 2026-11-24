@@ -71,6 +71,12 @@ export const ReasoningSettings = z.object({
 });
 export type ReasoningSettings = z.infer<typeof ReasoningSettings>;
 
+/** WA-10: the shapes of repetition loop watch recognises within one turn. */
+export const LoopPattern = z.enum(['repeated-action', 'failing-command', 'edit-ping-pong']);
+export type LoopPattern = z.infer<typeof LoopPattern>;
+export const LoopLevel = z.enum(['warning', 'severe']);
+export type LoopLevel = z.infer<typeof LoopLevel>;
+
 export const ReasoningStepStatus = z.enum(['running', 'done', 'failed']);
 
 const base = { sessionId: z.string(), seq: z.number().int().nonnegative(), ts: z.string() };
@@ -186,6 +192,19 @@ export const SessionEvent = z.discriminatedUnion('type', [
     approach: z.string().nullable(),
     calls: z.number().int().nonnegative(),
   }),
+  /** WA-10: the agent seems to be repeating itself in this turn. Recorded when a level is first reached. */
+  z.object({
+    ...base,
+    type: z.literal('loop.detected'),
+    turnId: z.string(),
+    pattern: LoopPattern,
+    subject: z.string().max(300),
+    count: z.number().int().positive(),
+    level: LoopLevel,
+    detail: z.string().max(200).nullable(),
+  }),
+  /** WA-10: the user said it is not a loop; no more loop events in this turn. */
+  z.object({ ...base, type: z.literal('loop.dismissed'), turnId: z.string() }),
   z.object({ ...base, type: z.literal('notice'), level: z.enum(['info', 'warning', 'error']), text: z.string() }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEvent>;

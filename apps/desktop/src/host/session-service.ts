@@ -115,8 +115,8 @@ export class SessionService {
   }
 
   /** Appends an event on behalf of another service so it is stored and published the same way. */
-  record(sessionId: string, event: EventInput) {
-    return this.append(sessionId, event);
+  record(sessionId: string, event: EventInput, turnId: string | null = null) {
+    return this.append(sessionId, event, turnId);
   }
 
   private emitTransient(sessionId: string, event: EventInput) {

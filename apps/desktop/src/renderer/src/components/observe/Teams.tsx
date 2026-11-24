@@ -1,6 +1,6 @@
-import { BrainCircuit, CircleStop, Columns2, Hourglass, MessagesSquare, User, Workflow, type LucideIcon } from 'lucide-react';
+import { BrainCircuit, CircleStop, Columns2, Hourglass, MessagesSquare, Repeat2, User, Workflow, type LucideIcon } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
-import { motionFor, type Team, type TeamAgent, type TeamKind } from '@ade/session-core';
+import { loopTitle, motionFor, type Team, type TeamAgent, type TeamKind } from '@ade/session-core';
 import type { CSSProperties } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { agentLabel } from '../../lib/format.ts';
@@ -111,6 +111,42 @@ export function AgentTeams({ teams }: { teams: Team[] }) {
 }
 
 /** WA-09: agents that should be working but have been silent; each can be opened or its turn cancelled. */
+/** WA-10: sessions whose running turn has a loop warning, with Open and Cancel turn. */
+export function LoopingAgents() {
+  const selectSession = useStore((s) => s.selectSession);
+  const set = useStore((s) => s.set);
+  const sessions = useStore((s) => s.sessions);
+  const activity = useStore((s) => s.activity);
+  const workspaceId = useStore((s) => s.workspaceId);
+  const looping = Object.values(sessions).flatMap((x) => {
+    const loop = x.workspaceId === workspaceId ? activity[x.id]?.loop : null;
+    return loop ? [{ id: x.id, title: x.title, loop }] : [];
+  });
+  if (!looping.length) return null;
+  return (
+    <section aria-label="Agents that may be looping" className="flex flex-col gap-2 rounded-[var(--radius)] border border-attention-line bg-surface p-3">
+      <span className="flex items-center gap-2 font-semibold text-attention">
+        <Repeat2 className="size-4" aria-hidden="true" />
+        {looping.length === 1 ? 'An agent may be going round in circles' : `${looping.length} agents may be going round in circles`}
+      </span>
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        {looping.map((a) => (
+          <li key={a.id} className="flex flex-wrap items-center gap-2 text-[12px]">
+            <span className="min-w-0 truncate font-semibold">{a.title}</span>
+            <span className="min-w-0 flex-1 truncate text-ink-muted">{loopTitle(a.loop)}</span>
+            <Button size="dense" icon={<MessagesSquare className="size-4" aria-hidden="true" />} onClick={() => (selectSession(a.id), set({ tab: 'sessions' }))}>
+              Open
+            </Button>
+            <Button size="dense" variant="ghost" icon={<CircleStop className="size-4" aria-hidden="true" />} onClick={() => void attempt(() => host.call('sessions.cancel', { sessionId: a.id }))}>
+              Cancel turn
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function QuietAgents({ teams }: { teams: Team[] }) {
   const selectSession = useStore((s) => s.selectSession);
   const set = useStore((s) => s.set);

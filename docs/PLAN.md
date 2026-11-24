@@ -181,3 +181,17 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       commands, "Since my review", and the end-to-end test `e2e/rv15-review-progress.spec.ts`.
       The end-to-end test passes on Windows against the production build and the development renderer;
       Linux is covered by the host and unit tests in CI.
+
+## M9 - Loop watch
+
+- [x] **M9-T01** Feature, decisions and plan for loop watch (WA-10).
+- [x] **M9-T02** Contracts (`loop.detected`, `loop.dismissed`, `LoopSettings`, inbox kind, `sessions.dismissLoop`)
+      and the pure detector `applyLoop` with its unit tests.
+- [x] **M9-T03** Host `LoopWatch`: events, inbox, notification, optional stop, audit; integration tests with the
+      fake agent.
+- [x] **M9-T04** Projection and activity (`loop` timeline item, `Activity.loop`) with unit tests.
+- [x] **M9-T05** Renderer: timeline card, redirect draft, header and list badges, Observe section, inbox label,
+      settings, palette commands; `e2e/loop-watch.spec.ts`. Done when the spec passes on Windows against the
+      production build and the development renderer, and CI is green on Windows and Ubuntu.
+      The spec passes on Windows against the production build and the development renderer; CI on Ubuntu has
+      not run yet (the branch is not pushed).

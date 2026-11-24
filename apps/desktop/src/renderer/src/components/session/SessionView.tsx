@@ -1,7 +1,7 @@
-import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, ScrollText, SendHorizontal, Zap } from 'lucide-react';
+import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, Repeat2, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
-import { intensity, isBusy, isLive, STATE_LABELS } from '@ade/session-core';
+import { intensity, isBusy, isLive, loopTitle, STATE_LABELS } from '@ade/session-core';
 import { ActivityWave } from '../observe/Teams.tsx';
 import { useTick } from '../../lib/teams.ts';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -27,6 +27,7 @@ function stateTone(s: Session['state']) {
 export function SessionHeader({ session }: { session: Session }) {
   const view = useStore((s) => s.views[session.id]);
   const agent = useStore((s) => s.agents.find((a) => a.id === session.agentId));
+  const loop = useStore((s) => s.activity[session.id]?.loop ?? null);
   const set = useStore((s) => s.set);
   const ended = session.state === 'landed' || session.state === 'discarded';
   const [, tick] = useState(0);
@@ -46,6 +47,12 @@ export function SessionHeader({ session }: { session: Session }) {
       <Badge tone={stateTone(session.state)} className="font-semibold">
         {STATE_LABELS[session.state]}
       </Badge>
+      {loop ? (
+        <Badge tone="attention" title={loopTitle(loop)}>
+          <Repeat2 className="size-3.5" aria-hidden="true" />
+          May be looping
+        </Badge>
+      ) : null}
       <Badge>
         {agentLabel(session.agentId)}
         {agent?.version ? ` ${agent.version.replace(/^[^\d]*/, '').split(' ')[0]}` : ''}
@@ -215,6 +222,24 @@ export function Composer({ session }: { session: Session }) {
   useEffect(() => {
     void loadComposer(session.id);
   }, [session.id, loadComposer]);
+
+  // WA-10: "Redirect the agent" leaves a draft for this session. It is read from the store, not from the render, so
+  // StrictMode's second run of the effect finds it already taken and does nothing; the focus is never cancelled.
+  const composerDraft = useStore((s) => s.composerDraft);
+  useEffect(() => {
+    const pending = useStore.getState().composerDraft;
+    if (!pending || pending.sessionId !== session.id) return;
+    useStore.getState().set({ composerDraft: null });
+    setText(pending.text);
+    if (useComposer.getState().states[session.id]?.mode === 'board') updateComposer(session.id, (s) => ({ ...s, mode: 'chat' }));
+    requestAnimationFrame(() => {
+      const box = document.getElementById(`composer-${session.id}`);
+      if (box instanceof HTMLTextAreaElement) {
+        box.focus();
+        box.setSelectionRange(box.value.length, box.value.length);
+      }
+    });
+  }, [composerDraft, session.id, updateComposer]);
 
   const send = async (mode: 'send' | 'interrupt') => {
     const content: PromptBlock[] = textPrompt(draft, attachments);

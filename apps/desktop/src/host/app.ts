@@ -25,6 +25,7 @@ import { commitDetail, commitDiff, gitGraph } from './git-graph.ts';
 import { ReviewAssistant } from './review-assistant.ts';
 import { ReasoningService } from './reasoning-service.ts';
 import { TelegramNotifier, type FetchLike } from './telegram.ts';
+import { LoopWatch } from './loop-watch.ts';
 import { askOnce } from './one-shot.ts';
 import { ScratchService } from './scratch.ts';
 import { instructionStatus } from './instruction-files.ts';
@@ -34,7 +35,7 @@ import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { ComposerState, PromptBoxes, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
+import { ComposerState, LoopSettings, PromptBoxes, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -134,6 +135,20 @@ export function createHost(config: HostConfig) {
     () => sessions.refreshInbox(),
   );
   sessions.inboxSources.push(() => workflows.inbox());
+  // WA-10: loop watch records what it finds as session events, so it works with the window closed.
+  const loops = new LoopWatch({
+    bus,
+    record: (sessionId, event, turnId) => sessions.record(sessionId, event, turnId ?? null),
+    cancel: (sessionId) => sessions.cancel(sessionId),
+    settings: () => {
+      const parsed = LoopSettings.safeParse(repos.settings.raw('loops') ?? {});
+      return parsed.success ? parsed.data : LoopSettings.parse({});
+    },
+    session: (sessionId) => repos.sessions.get(sessionId),
+    audit: (entry) => repos.audit.append(entry),
+    refreshInbox: () => sessions.refreshInbox(),
+  });
+  sessions.inboxSources.push(() => loops.inbox());
   const resolveCommand = commandResolver(config.node, config.nodeEnv);
   const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
   const runnerLog = (sessionId: string) => join(config.userData, 'runner', `${sessionId}.jsonl`);
@@ -313,6 +328,10 @@ export function createHost(config: HostConfig) {
       // Cancelling stops a reasoning run too; nothing it was preparing is sent.
       reasoning.cancel(sessionId);
       await sessions.cancel(sessionId);
+      return { ok: true };
+    },
+    'sessions.dismissLoop': ({ sessionId }) => {
+      loops.dismiss(sessionId);
       return { ok: true };
     },
     'sessions.interrupt': async ({ sessionId, content }) => {
@@ -706,6 +725,7 @@ export function createHost(config: HostConfig) {
     },
     async dispose() {
       clearInterval(mergeTimer);
+      loops.dispose();
       telegram.dispose();
       await lsp.dispose();
       await preview.dispose();

@@ -1,4 +1,5 @@
 import type { SessionEvent, ToolKind, Usage } from '@ade/contracts';
+import { loopTitle, type LoopFinding } from './loops.ts';
 
 /**
  * WA-07: live observability of an agent session, derived from its event stream. Pure and agent-neutral:
@@ -27,7 +28,8 @@ export type FeedKind =
   | 'plan'
   | 'turn'
   | 'state'
-  | 'notice';
+  | 'notice'
+  | 'loop';
 
 export interface FeedEntry {
   id: number;
@@ -56,6 +58,8 @@ export interface Activity {
     commands: number;
     commandsFailed: number;
     approvals: number;
+    /** WA-10: loop warnings (warning level) in this session. */
+    loops: number;
   };
   /** Files the agent read or changed, with how often. */
   files: Record<string, { reads: number; edits: number }>;
@@ -68,6 +72,8 @@ export interface Activity {
   /** Set when a turn ends; cleared when the next starts. */
   outcome: { stopReason: string; at: number; durationMs: number | null } | null;
   lastMessage: string | null;
+  /** WA-10: the latest loop warning of the running turn, until the turn ends or the user dismisses it. */
+  loop: (LoopFinding & { since: number }) | null;
   feed: FeedEntry[];
   /** Internal: open tool calls and commands, so the phase falls back correctly when one finishes. */
   open: { tools: Record<string, { title: string; kind: ToolKind }>; commands: Record<string, string> };
@@ -99,6 +105,7 @@ export const emptyActivity = (): Activity => ({
     commands: 0,
     commandsFailed: 0,
     approvals: 0,
+    loops: 0,
   },
   files: {},
   segments: [],
@@ -108,6 +115,7 @@ export const emptyActivity = (): Activity => ({
   turns: 0,
   outcome: null,
   lastMessage: null,
+  loop: null,
   feed: [],
   open: { tools: {}, commands: {} },
   toolPaths: {},
@@ -200,6 +208,7 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
       a.turns = Math.max(a.turns, e.index + 1);
       a.turnStartedAt = at;
       a.outcome = null;
+      a.loop = null;
       setPhase(a, 'working', at);
       a.now = 'Working';
       feed(a, at, 'turn', `Turn ${e.index + 1} started`);
@@ -212,6 +221,7 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
         durationMs: a.turnStartedAt === null ? null : at - a.turnStartedAt,
       };
       a.open = { tools: {}, commands: {} };
+      a.loop = null;
       setPhase(a, 'idle', at);
       a.now = null;
       feed(a, at, 'turn', `Turn finished (${e.stopReason.replace(/_/g, ' ')})`);
@@ -330,7 +340,9 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
       } else if (e.to === 'ready') {
         setPhase(a, 'idle', at);
         a.now = null;
+        a.loop = null;
       } else if (e.to === 'interrupted' || e.to === 'landed' || e.to === 'discarded') {
+        a.loop = null;
         setPhase(a, 'stopped', at);
         a.now = null;
         feed(a, at, 'state', `Session ${e.to.replace(/-/g, ' ')}`);
@@ -344,6 +356,22 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
       break;
     case 'notice':
       feed(a, at, 'notice', excerpt(e.text));
+      break;
+    case 'loop.detected':
+      a.loop = {
+        pattern: e.pattern,
+        subject: e.subject,
+        count: e.count,
+        level: e.level,
+        detail: e.detail,
+        since: a.loop?.since ?? at,
+      };
+      if (e.level === 'warning') a.counts.loops++;
+      feed(a, at, 'loop', excerpt(loopTitle(e)));
+      break;
+    case 'loop.dismissed':
+      a.loop = null;
+      feed(a, at, 'loop', 'Loop warning dismissed');
       break;
     default:
       break;

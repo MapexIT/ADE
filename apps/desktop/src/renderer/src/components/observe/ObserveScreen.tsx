@@ -8,13 +8,13 @@ import {
   type FeedKind,
 } from '@ade/session-core';
 import type { Session } from '@ade/contracts';
-import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Repeat2, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
 import { useStore } from '../../lib/store.ts';
 import { AnimatedNumber, DrawnCheck, Orb, PHASE_STYLE, PhaseBar, Sparkline } from './visuals.tsx';
-import { AgentTeams, QuietAgents } from './Teams.tsx';
+import { AgentTeams, LoopingAgents, QuietAgents } from './Teams.tsx';
 import { useTeams } from '../../lib/teams.ts';
 
 const LIVE_STATES = new Set<Session['state']>(['queued', 'starting', 'working', 'waiting-on-user']);
@@ -54,6 +54,7 @@ const FEED_ICONS: Record<FeedKind, LucideIcon> = {
   turn: Play,
   state: Bot,
   notice: CircleAlert,
+  loop: Repeat2,
 };
 
 /** WA-07: every agent session in the workspace, live, with what it is doing and what it did. */
@@ -142,6 +143,7 @@ export function ObserveScreen() {
         />
       </section>
 
+      <LoopingAgents />
       <QuietAgents teams={teams} />
       <section aria-label="Teams" className="flex max-h-[42%] shrink-0 flex-col gap-2 overflow-auto">
         <SectionLabel>Agent teams · who started them, and how hard they work</SectionLabel>
