@@ -120,7 +120,8 @@ relies on the worktree and the agent's own sandbox.
 Event mapping (ADE event types in `packages/contracts`): `user.message`, `turn.started`, `turn.ended`,
 `agent.message.chunk`, `agent.thought.chunk`, `tool.call`, `tool.update`, `plan.updated`,
 `permission.requested`, `permission.decided`, `commands.available`, `mode.changed`, `checkpoint.created`,
-`session.state_changed`, `session.landed`, `session.discarded`, `run.finished`. Persist every event except
+`session.state_changed`, `session.landed`, `session.discarded`, `run.finished`, and ADE's own `loop.detected` and
+`loop.dismissed` (WA-10, recorded by the host's loop watch). Persist every event except
 raw chunks, which are coalesced into the completed message before storage.
 
 Agent process environment: an allow-list of variables (PATH, HOME or USERPROFILE, locale, proxy settings and
