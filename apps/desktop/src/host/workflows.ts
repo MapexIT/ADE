@@ -57,7 +57,7 @@ export async function loadWorkflowSource(repoRoot: string, id: string): Promise<
   return null;
 }
 
-/** WF-13: edges for views, with the cycle each back edge closes and its round limit. */
+/** WF-17: edges for views, with the cycle each back edge closes and its round limit. */
 export function edgeViews(wf: Workflow) {
   const back = backEdges(wf);
   return wf.edges.map((e, i) => ({ from: e.from, to: e.to, when: e.when ?? null, cycle: back.has(i), maxRounds: back.has(i) ? roundLimit(wf, i) : null }));

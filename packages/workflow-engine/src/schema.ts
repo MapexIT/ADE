@@ -36,7 +36,7 @@ export type NodeType = WorkflowNode['type'];
 
 /**
  * An edge. Several edges may leave one node (they run in parallel) and several may enter one (it waits for each).
- * `maxRounds` (WF-13) applies to an edge that closes a cycle: how many times the run may go round it; default 1.
+ * `maxRounds` (WF-17) applies to an edge that closes a cycle: how many times the run may go round it; default 1.
  */
 export const Edge = z.object({ from: Id, to: Id, when: z.enum(['pass', 'fail']).optional(), maxRounds: z.number().int().min(1).max(50).optional() });
 export type Edge = z.infer<typeof Edge>;
@@ -80,7 +80,7 @@ export function incoming(wf: Workflow, nodeId: string): IndexedEdge[] {
 const backCache = new WeakMap<Workflow, Set<number>>();
 
 /**
- * WF-13: the edges that close a cycle, found by a depth-first walk from the first node in edge order (then from any
+ * WF-17: the edges that close a cycle, found by a depth-first walk from the first node in edge order (then from any
  * node not reached). Every cycle has exactly one, and the run follows it at most its `maxRounds` times.
  */
 export function backEdges(wf: Workflow): Set<number> {
@@ -102,7 +102,7 @@ export function backEdges(wf: Workflow): Set<number> {
   return back;
 }
 
-/** WF-13: each cycle as its back edge, the nodes on it and its round limit, for the editor. */
+/** WF-17: each cycle as its back edge, the nodes on it and its round limit, for the editor. */
 export function cycles(wf: Workflow): { edgeIndex: number; nodes: string[]; maxRounds: number }[] {
   return [...backEdges(wf)].map((i) => {
     const e = wf.edges[i]!;
@@ -132,7 +132,7 @@ export function cycles(wf: Workflow): { edgeIndex: number; nodes: string[]; maxR
 }
 
 /**
- * WF-13: how many times a back edge may send the run round its cycle: its own `maxRounds`; otherwise the limit of a
+ * WF-17: how many times a back edge may send the run round its cycle: its own `maxRounds`; otherwise the limit of a
  * loop node on the cycle (so workflows written before round limits keep their retries); otherwise 1.
  */
 export function roundLimit(wf: Workflow, edgeIndex: number, cycleNodes?: string[]): number {
@@ -193,7 +193,7 @@ export function validate(wf: Workflow): Problem[] {
     for (const e of outgoing(wf, id)) stack.push({ id: e.to, gated });
   }
 
-  // WF-13: every cycle is bounded by its back edge's round limit (default 1), so cycles need no loop node.
+  // WF-17: every cycle is bounded by its back edge's round limit (default 1), so cycles need no loop node.
   const back = backEdges(wf);
   wf.edges.forEach((e, i) => {
     if (e.maxRounds !== undefined && !back.has(i)) problems.push({ level: 'warning', message: `The round limit on ${e.from} → ${e.to} has no effect: that edge does not close a cycle.` });
@@ -201,7 +201,7 @@ export function validate(wf: Workflow): Problem[] {
 
   for (const n of wf.nodes) {
     const out = outgoing(wf, n.id);
-    // WF-12: several unmarked next steps run in parallel; say so where it may be a surprise.
+    // WF-16: several unmarked next steps run in parallel; say so where it may be a surprise.
     if (n.type === 'branch' && out.length > 1 && out.every((e) => !e.when)) {
       problems.push({ level: 'warning', message: `${n.id} is a branch, but none of its edges says pass or fail, so every next step runs.`, nodeId: n.id });
     }

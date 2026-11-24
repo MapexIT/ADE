@@ -40,7 +40,7 @@ function fake(type: WorkflowNode['type'], answer: (n: WorkflowNode, p: HandOff) 
 
 const pass = (n: WorkflowNode): NodeResult => ({ outcome: 'pass', packet: { summary: `${n.id} done` } });
 
-describe('WF-12 parallel branches', () => {
+describe('WF-16 parallel branches', () => {
   const diamond = parseWorkflow(`
 name: diamond
 nodes:
@@ -120,7 +120,7 @@ edges:
   });
 });
 
-describe('WF-13 cycles and round limits', () => {
+describe('WF-17 cycles and round limits', () => {
   const loopy = (maxRounds?: number) =>
     parseWorkflow(`
 name: cycle

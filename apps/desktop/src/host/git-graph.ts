@@ -47,7 +47,7 @@ export function parseWorktrees(out: string): Map<string, string> {
 }
 
 /**
- * HI-09: the data for the branch graph. Only read-only Git commands, as argument arrays. ADE's own checkpoint refs
+ * HI-12: the data for the branch graph. Only read-only Git commands, as argument arrays. ADE's own checkpoint refs
  * (refs/ade/...) are left out: the log walks branches (and remotes when asked) and HEAD, never `--all`.
  */
 export async function gitGraph(root: string, sessions: Session[], opts: { limit: number; remotes: boolean }): Promise<GitGraph> {
@@ -123,7 +123,7 @@ export async function gitGraph(root: string, sessions: Session[], opts: { limit:
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const MAX_DIFF_BYTES = 2_000_000;
 
-/** HI-09: a commit in full. Read-only. */
+/** HI-12: a commit in full. Read-only. */
 export async function commitDetail(root: string, hash: string): Promise<GitCommitDetail> {
   const out = await git(['show', '-s', `--format=%H${SEP}%P${SEP}%an${SEP}%at${SEP}%cn${SEP}%ct${SEP}%B`, hash, '--'], { cwd: root });
   const [full = '', parents = '', author = '', time = '0', committer = '', committerTime = '0', ...message] = out.split(SEP);
@@ -132,7 +132,7 @@ export async function commitDetail(root: string, hash: string): Promise<GitCommi
   return { hash: full, parents: parentList, author, time: Number(time) || 0, committer, committerTime: Number(committerTime) || 0, message: message.join(SEP).trim(), files };
 }
 
-/** HI-09: one file of a commit against the commit's first parent. Large or binary files are not sent as text. */
+/** HI-12: one file of a commit against the commit's first parent. Large or binary files are not sent as text. */
 export async function commitDiff(root: string, hash: string, path: string, oldPath: string | null): Promise<DiffText> {
   const parent = (await git(['rev-parse', '--verify', '-q', `${hash}^1`], { cwd: root, okCodes: [1] })).trim();
   const before = parent ? await fileAt(root, parent, oldPath ?? path) : null;

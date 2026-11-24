@@ -33,7 +33,7 @@ function useCommit(workspaceId: string, hash: string | null) {
 }
 
 /**
- * HI-09: Git, built around the branch graph. The graph is the main component, in the middle; the selected commit is
+ * HI-12: Git, built around the branch graph. The graph is the main component, in the middle; the selected commit is
  * shown on both sides of it: its message, author, parents and changed files on the left, the selected file's diff
  * on the right. Mouse or arrow keys move through the graph. Read-only: nothing here changes the repository.
  */

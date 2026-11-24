@@ -9,7 +9,7 @@ import { attempt, useStore } from '../lib/store.ts';
 type Source = 'github' | 'shortcut';
 type Creds = { available: boolean; backend: string };
 
-/** Reads the connection status (CO-11) and the credential store, and re-reads both on demand. */
+/** Reads the connection status (CO-14) and the credential store, and re-reads both on demand. */
 function useConnection(onChecked?: () => void) {
   const workspaceId = useStore((s) => s.workspaceId);
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
@@ -236,7 +236,7 @@ function ShortcutGuide({ status, creds, checking, check }: { status: ConnectionS
   );
 }
 
-/** CO-11: step by step, what is missing to connect a work item source, read from this machine. */
+/** CO-14: step by step, what is missing to connect a work item source, read from this machine. */
 export function ConnectionGuide({ source, onChecked }: { source: Source; onChecked?: () => void }) {
   const { status, creds, checking, check } = useConnection(onChecked);
   return source === 'github' ? (

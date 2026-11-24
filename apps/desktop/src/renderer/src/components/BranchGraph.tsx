@@ -45,7 +45,7 @@ function RefChip({ r, sessionTitle }: { r: GitCommit['refs'][number]; sessionTit
 }
 
 /**
- * HI-09: the repository's branches as a commit graph: lanes and merges, branch, remote and tag labels, which session
+ * HI-12: the repository's branches as a commit graph: lanes and merges, branch, remote and tag labels, which session
  * owns a branch and how far each is ahead of or behind the checkout. Read-only.
  */
 export function BranchGraph({

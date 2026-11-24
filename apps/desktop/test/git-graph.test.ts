@@ -9,7 +9,7 @@ import { layoutGraph, relativeTime } from '../src/renderer/src/lib/git-graph.ts'
 
 const c = (hash: string, parents: string[] = []): GitCommit => ({ hash, parents, author: 'a', time: 0, subject: hash, refs: [] });
 
-describe('HI-09 lane layout', () => {
+describe('HI-12 lane layout', () => {
   it('keeps a straight history in one lane', () => {
     const { rows, width } = layoutGraph([c('c', ['b']), c('b', ['a']), c('a')]);
     expect(width).toBe(1);
@@ -47,7 +47,7 @@ describe('HI-09 lane layout', () => {
   });
 });
 
-describe('HI-09 git parsing', () => {
+describe('HI-12 git parsing', () => {
   it('labels decorations', () => {
     expect(parseDecorations('HEAD -> main, origin/main, tag: v1.0, agent/fix')).toEqual([
       { name: 'HEAD', kind: 'head' },
@@ -67,7 +67,7 @@ describe('HI-09 git parsing', () => {
   });
 });
 
-describe('HI-09 branch graph from a repository', () => {
+describe('HI-12 branch graph from a repository', () => {
   let repo: string;
   const run = (...args: string[]) => git(args, { cwd: repo });
   beforeEach(async () => {

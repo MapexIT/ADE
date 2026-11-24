@@ -5,7 +5,7 @@ import { Field, inputClass } from '../Modal.tsx';
 import { edgeInfo, fanOf, type Draft } from '../../lib/workflow-draft.ts';
 
 /**
- * WF-12 / WF-13: one connection's settings: when it applies, and, when it closes a cycle, how many rounds the run
+ * WF-16 / WF-17: one connection's settings: when it applies, and, when it closes a cycle, how many rounds the run
  * may go round it (default 1). Several connections may leave or enter one step.
  */
 export function EdgeSettings({

@@ -3,7 +3,7 @@ import { gitIdentityCommands, suggestedGitEmail } from '../src/renderer/src/lib/
 
 const account = { login: 'octocat', id: 583231, name: 'The Octocat', email: null };
 
-describe('CO-11 Git identity suggestions', () => {
+describe('CO-14 Git identity suggestions', () => {
   it('prefers the public email, then the private no-reply address', () => {
     expect(suggestedGitEmail({ ...account, email: 'octo@example.invalid' })).toBe('octo@example.invalid');
     expect(suggestedGitEmail(account)).toBe('583231+octocat@users.noreply.github.com');

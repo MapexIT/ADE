@@ -46,7 +46,7 @@ export interface RunnerHooks {
 
 export interface RunnerOptions {
   /**
-   * WF-12: node types that must not run at the same time as each other, because they share something (in ADE: the
+   * WF-16: node types that must not run at the same time as each other, because they share something (in ADE: the
    * run's worktree). Parallel branches still advance; these steps take turns in the order they became ready.
    */
   exclusive?: NodeType[];
@@ -102,7 +102,7 @@ export class WorkflowRunner {
     }
   }
 
-  /** Runs one node without blocking the others (WF-12); its result goes back through the event queue. */
+  /** Runs one node without blocking the others (WF-16); its result goes back through the event queue. */
   private launch(nodeId: string, packet: HandOff) {
     const node = this.wf.nodes.find((n) => n.id === nodeId)!;
     const executor = this.executors.get(node.type);

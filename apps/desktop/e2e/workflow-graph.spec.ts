@@ -17,7 +17,7 @@ async function connect(page: Page, from: string, to: string) {
   await page.waitForTimeout(400);
 }
 
-test('WF-01/12/13: a workflow from scratch with parallel steps, a join and a cycle with a round limit', async () => {
+test('WF-01/16/17: a workflow from scratch with parallel steps, a join and a cycle with a round limit', async () => {
   const repo = makeRepo();
   const { app, page } = await launch(userDataDir());
   await page.getByRole('button', { name: 'Done' }).click();

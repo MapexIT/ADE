@@ -48,7 +48,7 @@ describe('validation', () => {
     expect(validate(w).some((p) => p.level === 'error' && p.nodeId === 'l')).toBe(true);
   });
 
-  it('accepts a cycle without a loop node: its back edge allows one round by default (WF-13)', () => {
+  it('accepts a cycle without a loop node: its back edge allows one round by default (WF-17)', () => {
     const nodes = [
       { id: 'a', type: 'agent', agent: 'codex', prompt: 'x' },
       { id: 't', type: 'command', run: ['npm', 'test'] },
