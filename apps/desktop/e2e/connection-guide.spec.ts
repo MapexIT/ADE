@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { launch, userDataDir } from './helpers.ts';
 
-test('CO-11: an unconnected source explains, step by step, how to connect it', async () => {
+test('CO-14: an unconnected source explains, step by step, how to connect it', async () => {
   const { app, page } = await launch(userDataDir());
   await page.getByRole('button', { name: 'Done' }).click();
   await page.keyboard.press('Control+2');

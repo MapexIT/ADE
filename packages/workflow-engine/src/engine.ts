@@ -35,11 +35,11 @@ export interface RunState {
   status: RunStatus;
   /** The first active node, for views that show one current step. */
   current: string | null;
-  /** WF-12: every node running or waiting at a gate right now (parallel branches). */
+  /** WF-16: every node running or waiting at a gate right now (parallel branches). */
   active: string[];
   nodes: Record<string, NodeRun>;
   loops: Record<string, number>;
-  /** WF-13: how many times each back edge (by index) has sent the run round its cycle. */
+  /** WF-17: how many times each back edge (by index) has sent the run round its cycle. */
   rounds: Record<string, number>;
   used: { turns: number; minutes: number; loops: number; costUsd: number };
   packet: HandOff;
@@ -205,7 +205,7 @@ function deliver(wf: Workflow, s: RunState, i: number, token: Token | null, at: 
   const back = backEdges(wf);
   if (back.has(i)) {
     if (!token) return { state: s, effects: [] };
-    // WF-13: a back edge sends the run round its cycle, at most `maxRounds` times (default 1).
+    // WF-17: a back edge sends the run round its cycle, at most `maxRounds` times (default 1).
     const max = roundLimit(wf, i, cycleRegion(wf, i));
     const used = s.rounds[String(i)] ?? 0;
     if (used >= max) return pause(s, edge.to, token, `The cycle back to ${edge.to} reached its limit of ${max} round${max === 1 ? '' : 's'}.`);
@@ -260,7 +260,7 @@ function finish(wf: Workflow, s: RunState, nodeId: string, outcome: 'pass' | 'fa
 }
 
 /**
- * The run state machine (M6-T01, WF-12, WF-13): a pure reducer from events to state plus effects. Results travel
+ * The run state machine (M6-T01, WF-16, WF-17): a pure reducer from events to state plus effects. Results travel
  * as tokens along edges: a node may send to several next steps at once (they run in parallel), a node with several
  * inputs waits for each of them (an input not taken arrives as a skip), and a back edge sends the run round its
  * cycle at most `maxRounds` times. The runner persists every state, so a run survives a restart (WF-08).

@@ -68,7 +68,7 @@ export const McpCheck = z.object({
 });
 export type McpCheck = z.infer<typeof McpCheck>;
 
-/** HI-09: a branch in the branch graph. `ahead` and `behind` count commits against the checkout's HEAD. */
+/** HI-12: a branch in the branch graph. `ahead` and `behind` count commits against the checkout's HEAD. */
 export const GitBranch = z.object({
   name: z.string(),
   kind: z.enum(['local', 'remote']),
@@ -104,7 +104,7 @@ export const GitGraph = z.object({
 });
 export type GitGraph = z.infer<typeof GitGraph>;
 
-/** HI-09: one commit in full, with the files it changed against its first parent (or against nothing, for a root). */
+/** HI-12: one commit in full, with the files it changed against its first parent (or against nothing, for a root). */
 export const GitCommitDetail = z.object({
   hash: z.string(),
   parents: z.array(z.string()),
@@ -321,7 +321,7 @@ export const Board = z.object({
 export type Board = z.infer<typeof Board>;
 
 /**
- * CO-11: what ADE can see of the user's GitHub and Shortcut set-up, so an empty work item screen can say what
+ * CO-14: what ADE can see of the user's GitHub and Shortcut set-up, so an empty work item screen can say what
  * is missing. Read locally from `gh` and `git config`; nothing is sent anywhere.
  */
 export const ConnectionStatus = z.object({
@@ -473,7 +473,7 @@ export const WorkflowSummary = z.object({
   /** Agents its steps name, so a picker can offer stand-ins for agents that are not ready (WF-09). */
   agents: z.array(AgentId),
   nodes: z.array(z.object({ id: z.string(), type: z.string(), title: z.string(), detail: z.string() })),
-  /** WF-13: `cycle` marks the edge that closes a cycle; `maxRounds` is then how often the run may go round it. */
+  /** WF-17: `cycle` marks the edge that closes a cycle; `maxRounds` is then how often the run may go round it. */
   edges: z.array(z.object({ from: z.string(), to: z.string(), when: z.enum(['pass', 'fail']).nullable(), cycle: z.boolean().default(false), maxRounds: z.number().int().nullable().default(null) })),
   problems: z.array(z.object({ level: z.enum(['error', 'warning']), message: z.string(), nodeId: z.string().nullable() })),
 });
@@ -490,9 +490,9 @@ export const WorkflowRunView = z.object({
   workflowName: z.string(),
   status: WorkflowRunStatus,
   current: z.string().nullable(),
-  /** WF-12: every step running or waiting at a gate (parallel branches). */
+  /** WF-16: every step running or waiting at a gate (parallel branches). */
   active: z.array(z.string()).default([]),
-  /** WF-13: rounds used per cycle, keyed by the index of the edge that closes it. */
+  /** WF-17: rounds used per cycle, keyed by the index of the edge that closes it. */
   rounds: z.record(z.string(), z.number()).default({}),
   pauseReason: z.string().nullable(),
   nodes: z.array(
@@ -682,7 +682,7 @@ export const hostApi = defineApi({
   'files.readImage': method(z.object({ path: AbsPath }), z.object({ dataUrl: z.string() })),
   'composer.get': method(z.object({ sessionId: Id }), ComposerState.nullable()),
   'composer.save': method(z.object({ sessionId: Id, state: ComposerState }), Ok),
-  /** HI-09: the repository's branches and their commits, newest first in topological order. Read-only. */
+  /** HI-12: the repository's branches and their commits, newest first in topological order. Read-only. */
   'git.graph': method(z.object({ workspaceId: Id, limit: z.number().int().min(20).max(2000).default(400), remotes: z.boolean().default(false) }), GitGraph),
   'git.commit': method(z.object({ workspaceId: Id, hash: CommitHash }), GitCommitDetail),
   /** One file of a commit, before and after (the first parent's version on the left). */

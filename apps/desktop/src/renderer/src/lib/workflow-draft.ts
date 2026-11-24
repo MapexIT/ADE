@@ -99,7 +99,7 @@ export function cycleEdge(wf: Draft, index: number): Draft {
   };
 }
 
-/** WF-12 / WF-13: changes one edge: when it applies, and (for an edge that closes a cycle) its round limit. */
+/** WF-16 / WF-17: changes one edge: when it applies, and (for an edge that closes a cycle) its round limit. */
 export function setEdge(wf: Draft, index: number, patch: { when?: Edge['when'] | null; maxRounds?: number | null }): Draft {
   return {
     ...wf,
@@ -119,13 +119,13 @@ export function setEdge(wf: Draft, index: number, patch: { when?: Edge['when'] |
   };
 }
 
-/** WF-13: what the editor says about an edge: whether it closes a cycle, the steps on it and its round limit. */
+/** WF-17: what the editor says about an edge: whether it closes a cycle, the steps on it and its round limit. */
 export function edgeInfo(wf: Draft, index: number): { cycle: boolean; steps: string[]; maxRounds: number } {
   const c = cycles(wf).find((x) => x.edgeIndex === index);
   return c ? { cycle: true, steps: c.nodes, maxRounds: c.maxRounds } : { cycle: false, steps: [], maxRounds: 1 };
 }
 
-/** WF-12: how many inputs a step waits for and how many next steps it can start. */
+/** WF-16: how many inputs a step waits for and how many next steps it can start. */
 export function fanOf(wf: Draft, id: string): { inputs: number; outputs: number } {
   const back = backEdges(wf);
   return { inputs: incoming(wf, id).filter((e) => !back.has(e.index)).length, outputs: outgoing(wf, id).length };

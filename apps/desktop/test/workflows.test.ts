@@ -195,7 +195,7 @@ edges:
     expect(host.sessions.inbox().some((i) => i.runId === started.id)).toBe(false);
   }, 60_000);
 
-  it('fans out to parallel checks, waits at a gate while the cycle goes round once, then pauses (WF-12, WF-13)', async () => {
+  it('fans out to parallel checks, waits at a gate while the cycle goes round once, then pauses (WF-16, WF-17)', async () => {
     writeWorkflow(
       'fan',
       `

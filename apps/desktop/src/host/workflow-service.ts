@@ -382,7 +382,7 @@ export class WorkflowService {
           }),
       },
       state,
-      // WF-12: parallel branches share the run's worktree, so steps that use it take turns.
+      // WF-16: parallel branches share the run's worktree, so steps that use it take turns.
       { exclusive: ['agent', 'command', 'land'] },
     );
     const active: ActiveRun = { runner, wf, ctx, workflowId: row.workflowId, createdAt: row.createdAt };
@@ -437,7 +437,7 @@ export class WorkflowService {
   decideGate(runId: string, nodeId: string, approved: boolean) {
     const run = this.load(runId);
     const s = run.runner.current;
-    // WF-12: a gate can wait while other branches still run, so look at the gate itself, not the run's status.
+    // WF-16: a gate can wait while other branches still run, so look at the gate itself, not the run's status.
     if (s.nodes[nodeId]?.status !== 'waiting' || !(s.active ?? [s.current]).includes(nodeId))
       throw new RpcError('not_waiting', 'That step is not waiting for a decision.');
     this.repos.audit.append({

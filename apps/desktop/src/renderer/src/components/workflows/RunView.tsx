@@ -42,14 +42,14 @@ export function RunView({ run }: { run: WorkflowRunView }) {
     () =>
       buildGraph(
         run.nodes,
-        // WF-13: cycle edges show the rounds this run has used.
+        // WF-17: cycle edges show the rounds this run has used.
         run.edges.map((e, i) => (e.cycle ? { ...e, rounds: run.rounds?.[String(i)] ?? 0 } : e)),
         { selected: selected ?? run.current },
       ),
     [run, selected],
   );
   const node = run.nodes.find((n) => n.id === (selected ?? run.current)) ?? null;
-  // WF-12: several branches can wait at gates at once; each gets its own decision.
+  // WF-16: several branches can wait at gates at once; each gets its own decision.
   const gates = run.status === 'cancelled' || run.status === 'succeeded' || run.status === 'failed' ? [] : run.nodes.filter((n) => n.type === 'gate' && n.status === 'waiting');
   const running = run.nodes.filter((n) => n.status === 'running');
   const status = RUN_STATUS[run.status];

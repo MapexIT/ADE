@@ -14,7 +14,7 @@ export interface GraphEdge {
   from: string;
   to: string;
   when?: 'pass' | 'fail' | null | undefined;
-  /** WF-13: this edge closes a cycle; `maxRounds` is its limit and `rounds` how many a run has used. */
+  /** WF-17: this edge closes a cycle; `maxRounds` is its limit and `rounds` how many a run has used. */
   cycle?: boolean | undefined;
   maxRounds?: number | null | undefined;
   rounds?: number | undefined;
@@ -24,7 +24,7 @@ export interface GraphEdge {
 const RETURN_DROP = 90;
 
 /**
- * WF-13: a connection that closes a cycle goes back under the graph instead of across the steps: out of the source,
+ * WF-17: a connection that closes a cycle goes back under the graph instead of across the steps: out of the source,
  * down, back along the bottom, and up into the target. Its label sits on the bottom stretch.
  */
 export function CycleEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style, label, labelStyle, labelBgStyle, interactionWidth, data }: EdgeProps) {

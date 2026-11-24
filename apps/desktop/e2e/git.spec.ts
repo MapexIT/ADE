@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { launch, makeRepo, stubDirectoryPicker, userDataDir } from './helpers.ts';
 
-test('HI-09: the Git page is the branch graph; moving through it shows each commit, its files and diffs', async () => {
+test('HI-12: the Git page is the branch graph; moving through it shows each commit, its files and diffs', async () => {
   const repo = makeRepo();
   const run = (...args: string[]) => execFileSync('git', args, { cwd: repo });
   const commit = (file: string, text: string, message: string) => {

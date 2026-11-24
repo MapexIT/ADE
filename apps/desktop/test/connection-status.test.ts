@@ -20,7 +20,7 @@ const GIT_OK = {
   'config --get user.email': { code: 0, stdout: 'ada@example.invalid\n' },
 };
 
-describe('CO-11 connection status', () => {
+describe('CO-14 connection status', () => {
   it('parses what gh prints', () => {
     expect(parseGhVersion('gh version 2.101.0 (2026-09-15)\nhttps://github.com/cli/cli/releases/tag/v2.101.0\n')).toBe('2.101.0');
     expect(parseGhVersion('nonsense')).toBeNull();

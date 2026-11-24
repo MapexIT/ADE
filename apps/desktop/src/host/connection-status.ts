@@ -45,7 +45,7 @@ export function parseGhUser(stdout: string): NonNullable<ConnectionStatus['githu
 }
 
 /**
- * CO-11: reads what the work item guides need, locally: whether `gh` is installed and who it signs in as, which
+ * CO-14: reads what the work item guides need, locally: whether `gh` is installed and who it signs in as, which
  * connector tokens are stored, and the Git identity. Tokens never leave the credential cache; only "stored" is
  * reported.
  */
