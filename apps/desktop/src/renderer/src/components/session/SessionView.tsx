@@ -1,7 +1,9 @@
 import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
-import { isLive, STATE_LABELS } from '@ade/session-core';
+import { intensity, isBusy, isLive, STATE_LABELS } from '@ade/session-core';
+import { ActivityWave } from '../observe/Teams.tsx';
+import { useTick } from '../../lib/teams.ts';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { host } from '../../lib/bridge.ts';
@@ -403,6 +405,17 @@ export function Composer({ session }: { session: Session }) {
   );
 }
 
+/** WA-08: the header's activity wave, in its own component so its ticks do not re-render the timeline. */
+function SessionWave({ session }: { session: Session }) {
+  const now = useTick(500);
+  const activity = useStore((s) => s.activity[session.id]);
+  // Reasoning agents work for the session before its turn starts (GN-01), so they move the wave too.
+  const reasoning = useStore((s) => !!s.views[session.id]?.reasoningRunId);
+  const busy = session.state === 'working' && !!activity && isBusy(activity.phase);
+  const level = busy && activity ? Math.max(0.12, intensity(activity.times, now)) : reasoning ? 0.6 : 0;
+  return <ActivityWave active={busy || reasoning} level={level} />;
+}
+
 export function SessionView() {
   const session = useStore(selectedSession);
   const set = useStore((s) => s.set);
@@ -420,6 +433,7 @@ export function SessionView() {
   return (
     <main className="flex h-full min-w-0 flex-col overflow-y-auto" aria-label="Session">
       <SessionHeader session={memoSession} />
+      <SessionWave session={memoSession} />
       <PlanPanel sessionId={memoSession.id} />
       <Timeline sessionId={memoSession.id} />
       <Composer session={memoSession} />
