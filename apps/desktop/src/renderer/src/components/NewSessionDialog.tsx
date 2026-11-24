@@ -1,6 +1,9 @@
 import { Badge, Button, cx, Tabs } from '@ade/ui';
 import type { AgentId, ContainmentStatus, PermissionProfile, WorkflowSummary } from '@ade/contracts';
 import { useEffect, useMemo, useState } from 'react';
+import type { ReasoningSettings } from '@ade/contracts';
+import { DEFAULT_SETTINGS } from '@ade/reasoning';
+import { ReasoningSelect } from './session/ReasoningPicker.tsx';
 import { host } from '../lib/bridge.ts';
 import { PROFILE_LABELS, promptPreview, textPrompt } from '../lib/format.ts';
 import { attempt, useStore } from '../lib/store.ts';
@@ -46,6 +49,7 @@ export function NewSessionDialog() {
   const [compareIds, setCompareIds] = useState<AgentId[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [workflowId, setWorkflowId] = useState('');
+  const [reasoning, setReasoning] = useState<ReasoningSettings>(DEFAULT_SETTINGS);
   const workflow = workflows.find((w) => w.id === workflowId) ?? null;
   const stand = useAgentOverrides(workflow?.agents ?? [], open && mode === 'workflow');
 
@@ -59,6 +63,7 @@ export function NewSessionDialog() {
     setProfile('ask');
     setBringChanges(false);
     setInPlace(false);
+    setReasoning(DEFAULT_SETTINGS);
     setMode(prefill?.compare ? 'compare' : (prefill?.mode ?? 'agent'));
     void attempt(() => host.call('containment.status', {})).then((s) => {
       setContainment(s ?? null);
@@ -201,6 +206,7 @@ export function NewSessionDialog() {
         ...(!inPlace && baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
         ...(prefill?.workItem ? { workItemRef: prefill.workItem.ref } : {}),
         ...(prefill?.skills?.length ? { skills: prefill.skills } : {}),
+        ...(reasoning.method !== 'io' ? { reasoning } : {}),
       }),
     );
     setBusy(false);
@@ -301,6 +307,15 @@ export function NewSessionDialog() {
               className={inputClass}
             />
           </Field>
+          {mode === 'agent' ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12px] font-semibold text-ink-muted">How the first prompt is generated</span>
+              <ReasoningSelect id="ns-reasoning" value={reasoning} onChange={setReasoning} agent={agents.find((a) => a.id === agentId)?.label ?? 'the agent'} />
+              {reasoning.method !== 'io' ? (
+                <span className="text-[12px] text-ink-muted">ADE reasons once the worktree is ready, then sends the prompt with the chosen approach. Follow-ups use the same method until you change it.</span>
+              ) : null}
+            </div>
+          ) : null}
           {mode === 'workflow' && prefill?.handOff?.checkOutput ? (
             <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-dashed border-line p-3">
               <span className="text-[12px] font-semibold text-ink-muted">
