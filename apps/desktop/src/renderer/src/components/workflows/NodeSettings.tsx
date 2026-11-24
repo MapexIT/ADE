@@ -1,3 +1,4 @@
+import { FlaskConical, Play, Trash2 } from 'lucide-react';
 import { Button, SectionLabel } from '@ade/ui';
 import type { WorkflowNode } from '@ade/workflow-engine';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -283,17 +284,17 @@ export function NodeSettings({
 
       <div className="flex flex-wrap gap-2 pt-1">
         {onTest ? (
-          <Button size="dense" onClick={onTest}>
+          <Button icon={<FlaskConical className="size-4" aria-hidden="true" />} size="dense" onClick={onTest}>
             Test this step
           </Button>
         ) : null}
         {!isStart && !readOnly ? (
-          <Button size="dense" variant="ghost" onClick={onMakeStart}>
+          <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={onMakeStart}>
             Start here
           </Button>
         ) : null}
         {!readOnly ? (
-          <Button size="dense" variant="danger" onClick={onDelete}>
+          <Button icon={<Trash2 className="size-4" aria-hidden="true" />} size="dense" variant="danger" onClick={onDelete}>
             Delete step
           </Button>
         ) : null}

@@ -8,6 +8,7 @@ import { Tooltip } from './Tooltip.tsx';
 import { PAGES, pageShortcut } from '../lib/pages.ts';
 import { followTelegram, telegramSummary, useTelegram } from '../lib/telegram.ts';
 import { useEffect } from 'react';
+import { AgentPulse } from './observe/Teams.tsx';
 
 const PAGE_ICONS: Record<Tab, LucideIcon> = {
   sessions: MessagesSquare,
@@ -94,6 +95,7 @@ export function TopBar() {
       </nav>
 
       <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+        <AgentPulse />
         {tab === 'sessions' ? <PanelsMenu /> : null}
         <Button size="dense" variant={inboxCount ? 'attention' : 'secondary'} onClick={() => set({ inboxOpen: true })} aria-label={`Needs you: ${inboxCount}`} icon={<Bell className="size-4" aria-hidden="true" />}>
           <span className="hidden xl:inline">Needs you:</span> {inboxCount}

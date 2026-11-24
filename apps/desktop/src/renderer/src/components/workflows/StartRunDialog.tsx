@@ -1,3 +1,4 @@
+import { Play } from 'lucide-react';
 import { Button } from '@ade/ui';
 import type { AgentId, HandOffSample } from '@ade/contracts';
 import { useState } from 'react';
@@ -50,7 +51,7 @@ export function StartRunDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
+          <Button icon={<Play className="size-4" aria-hidden="true" />}
             variant="primary"
             disabled={blocked}
             onClick={() => {

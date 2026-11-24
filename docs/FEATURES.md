@@ -1,6 +1,6 @@
 # Features
 
-152 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+154 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -26,6 +26,8 @@ Linux.
 | WA-05 | Protocol inspector | MVP | Lists raw ACP messages for a session with search. Credentials in `env` or headers are redacted. |
 | WA-06 | Follow mode | v1 | The editor follows the file the agent is working on. |
 | WA-07 | Live observability | v1 | The Observe page shows every session as it works: what the agent is doing now, a phase timeline, event rate, tool calls, edits, commands, approvals, files touched, plan progress and usage, and the result when a turn ends. Built only from ACP events, so it is the same for every agent. |
+| WA-08 | Agent teams, live | v1 | Observe shows every working agent in a team named after who started it: you, a comparison, a workflow run, or a session's reasoning run (whose read-only agents appear while they work). Each team is an animated constellation: the starter in the middle, its agents around it. Motion follows real activity: the orbit speeds up with the team's activity, each agent pulses and glows with its own recent event rate, dashes flow along a working agent's link, and waiting agents hold still. The top bar shows one pulsing dot per working agent, grouped by team (click for Observe), and a session's header shows a thin wave while it or its reasoning works. With reduced motion, everything is shown without moving. |
+| WA-09 | Quiet agents | v1 | An agent that should be working but has sent nothing for a while (3 minutes while working or thinking, 5 while starting or in a tool, 10 while running a command) is called quiet: Observe lists it with how long it has been silent, with Open and Cancel turn; its dot in the constellation and the top bar turns hollow. Waiting for you never counts as quiet. |
 
 ## Steer (SR)
 
@@ -45,7 +47,7 @@ Linux.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| GN-01 | Generation method (reasoning trajectories) | v1 | A per-session dropdown picks how a prompt is generated: IO (as written, the default), Chain of Thought, CoT self-consistency, Graph of Thought or Fleet of Agents. Switching to anything but IO first shows a dialog that explains the change and the number of extra agent calls, with the method's settings (paths, thoughts, agents, generations); back to IO needs no dialog. Extra calls go to the session's own agent, read-only, in a temporary detached worktree with every permission refused. Each run is a timeline card with every step of the graph, its scores and the chosen approach; Cancel reasoning stops it and sends nothing. The user's words are always sent first, unchanged. Interrupt and send skips reasoning. |
+| GN-01 | Generation method (reasoning trajectories) | v1 | A dropdown in the composer and in the New session dialog picks how a prompt is generated (a session can start with any method; it reasons about the first prompt once its worktree is ready): IO (as written, the default), Chain of Thought, CoT self-consistency, Graph of Thought or Fleet of Agents. Switching to anything but IO first shows a dialog that explains the change and the number of extra agent calls, with the method's settings (paths, thoughts, agents, generations); back to IO needs no dialog. Extra calls go to the session's own agent, read-only, in a temporary detached worktree with every permission refused. Each run is a timeline card with every step of the graph, its scores and the chosen approach; Cancel reasoning stops it and sends nothing. The user's words are always sent first, unchanged. Interrupt and send skips reasoning. |
 | GN-02 | Prompt board | v1 | Besides the chat box, a Board mode where the prompt is built from text boxes that can be added, titled, written, moved and resized (mouse or arrow keys) and deleted. Selected boxes, read top to bottom and left to right, are the prompt; titled boxes become headings. The board belongs to the workspace: every session there shares the same boxes, and a change in one session shows in the others. Positions, sizes, content and selection are kept across restarts; Chat or Board and the generation method are saved per session. |
 
 ## Contain (CN)

@@ -19,33 +19,29 @@ const PARAMS: Partial<Record<ReasoningMethod, { key: NumberKey; label: string; m
 
 /**
  * GN-01: picks how prompts are generated. IO (as written) is the default; switching to any other method first asks
- * for confirmation, because it changes what the agent receives and may make extra agent calls.
+ * for confirmation, because it changes what the agent receives and may make extra agent calls. Controlled, so the
+ * composer and the New session dialog share it.
  */
-export function ReasoningPicker({ sessionId, agent, disabled }: { sessionId: string; agent: string; disabled?: boolean }) {
-  // A stable fallback: a new object here would re-render forever before the state has loaded.
-  const settings = useComposer((c) => c.states[sessionId]?.reasoning ?? DEFAULT_SETTINGS);
-  const update = useComposer((c) => c.update);
+export function ReasoningSelect({ id, value, onChange, agent, disabled }: { id: string; value: ReasoningSettings; onChange(next: ReasoningSettings): void; agent: string; disabled?: boolean }) {
   const [pending, setPending] = useState<ReasoningSettings | null>(null);
-  const apply = (next: ReasoningSettings) => update(sessionId, (s) => ({ ...s, reasoning: next }));
-
   const choose = (method: ReasoningMethod) => {
-    if (method === 'io') apply({ ...settings, method });
-    else setPending({ ...settings, method });
+    if (method === 'io') onChange({ ...value, method });
+    else setPending({ ...value, method });
   };
-
   return (
     <>
-      <label htmlFor={`reasoning-${sessionId}`} className="sr-only">
+      <label htmlFor={id} className="sr-only">
         Generation method
       </label>
       <div className="flex items-center gap-1">
+        <BrainCircuit className={cx('size-4 shrink-0', value.method === 'io' ? 'text-ink-muted' : 'text-accent-soft')} aria-hidden="true" />
         <select
-          id={`reasoning-${sessionId}`}
-          value={settings.method}
+          id={id}
+          value={value.method}
           disabled={disabled}
           onChange={(e) => choose(e.target.value as ReasoningMethod)}
-          title={strategyFor(settings.method).summary}
-          className={cx('min-h-9 rounded-[var(--radius)] border bg-surface px-3 text-ink', settings.method === 'io' ? 'border-line' : 'border-accent')}
+          title={strategyFor(value.method).summary}
+          className={cx('min-h-9 rounded-[var(--radius)] border bg-surface px-3 text-ink', value.method === 'io' ? 'border-line' : 'border-accent')}
         >
           {METHODS.map((m) => (
             <option key={m} value={m}>
@@ -53,8 +49,8 @@ export function ReasoningPicker({ sessionId, agent, disabled }: { sessionId: str
             </option>
           ))}
         </select>
-        {PARAMS[settings.method] ? (
-          <Button size="dense" variant="ghost" className="w-9 px-0" aria-label="Adjust generation method" title="Adjust generation method" disabled={disabled} onClick={() => setPending(settings)}>
+        {PARAMS[value.method] ? (
+          <Button size="dense" variant="ghost" className="w-9 px-0" aria-label="Adjust generation method" title="Adjust generation method" disabled={disabled} onClick={() => setPending(value)}>
             <SlidersHorizontal className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
@@ -62,16 +58,24 @@ export function ReasoningPicker({ sessionId, agent, disabled }: { sessionId: str
       <ReasoningDialog
         settings={pending}
         agent={agent}
-        current={settings.method}
+        current={value.method}
         onCancel={() => setPending(null)}
         onAccept={(next) => {
-          apply(next);
+          onChange(next);
           setPending(null);
         }}
         onChange={setPending}
       />
     </>
   );
+}
+
+/** GN-01: the composer's picker, saved with the session. */
+export function ReasoningPicker({ sessionId, agent, disabled }: { sessionId: string; agent: string; disabled?: boolean }) {
+  // A stable fallback: a new object here would re-render forever before the state has loaded.
+  const settings = useComposer((c) => c.states[sessionId]?.reasoning ?? DEFAULT_SETTINGS);
+  const update = useComposer((c) => c.update);
+  return <ReasoningSelect id={`reasoning-${sessionId}`} value={settings} agent={agent} disabled={disabled} onChange={(next) => update(sessionId, (s) => ({ ...s, reasoning: next }))} />;
 }
 
 function ReasoningDialog({

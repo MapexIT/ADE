@@ -203,6 +203,8 @@ export const CreateSessionInput = z.object({
   hostSandbox: z.boolean().optional(),
   /** CN-08: work in the real checkout after a snapshot. Needs the "run in place" setting; one session at a time. */
   inPlace: z.boolean().optional(),
+  /** GN-01: how the first prompt is generated. Anything but IO reasons once the session is ready, then sends. */
+  reasoning: ReasoningSettings.optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
 

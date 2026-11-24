@@ -1,4 +1,4 @@
-import { ChevronRight, FileCode2, LoaderCircle, Pencil, Plug, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { ChevronRight, FileCode2, LoaderCircle, Pencil, Plug, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { Badge, Button, cx, EmptyState } from '@ade/ui';
 import type { McpCheck, McpServerEntry } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
@@ -105,7 +105,7 @@ export function McpDialog() {
           <textarea id="mcp-yaml" rows={14} value={yaml} onChange={(e) => setYaml(e.target.value)} className={cx(inputClass, 'py-2 font-mono text-[12px]')} spellCheck={false} />
           <span className="text-[12px] text-ink-muted">The same shape as mcpServers in .ade/workspace.yaml. Servers you switched off stay off if they keep their name.</span>
           <div className="flex gap-2">
-            <Button
+            <Button icon={<Save className="size-4" aria-hidden="true" />}
               variant="primary"
               onClick={() =>
                 void attempt(() => host.call('mcp.savePersonal', { yaml })).then(async (ok) => {
@@ -159,7 +159,7 @@ export function McpDialog() {
               </span>
               {listing.workspaceFile.error ? <span className="text-danger">The file has a problem: {listing.workspaceFile.error}</span> : null}
               {listing.workspaceFile.exists ? (
-                <Button size="dense" variant="ghost" className="ml-auto" onClick={() => void attempt(() => main('main.openInEditor', { path: listing.workspaceFile!.path }))}>
+                <Button icon={<FileCode2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" className="ml-auto" onClick={() => void attempt(() => main('main.openInEditor', { path: listing.workspaceFile!.path }))}>
                   Open the file
                 </Button>
               ) : null}
@@ -348,7 +348,7 @@ function ServerForm({ initial, isNew, onCancel, onSave }: { initial: McpDraft; i
         </p>
       ) : null}
       <div className="flex gap-2">
-        <Button type="submit" variant="primary">
+        <Button icon={<Save className="size-4" aria-hidden="true" />} type="submit" variant="primary">
           {isNew ? 'Add server' : 'Save server'}
         </Button>
         <Button onClick={onCancel}>Cancel</Button>

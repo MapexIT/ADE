@@ -1,3 +1,4 @@
+import { Image } from 'lucide-react';
 import { Badge, Button } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -118,7 +119,7 @@ export function InlineViewer({ block, cwd }: { block: CommandBlock; cwd: string 
         image ? (
           <img src={image} alt={view.path} className="max-h-80 max-w-full self-start rounded" />
         ) : cwd ? (
-          <Button size="dense" className="self-start" onClick={() => void attempt(() => host.call('files.readImage', { path: /^([A-Za-z]:|\/)/.test(view.path) ? view.path : joinPath(cwd, view.path) })).then((r) => r && setImage(r.dataUrl))}>
+          <Button icon={<Image className="size-4" aria-hidden="true" />} size="dense" className="self-start" onClick={() => void attempt(() => host.call('files.readImage', { path: /^([A-Za-z]:|\/)/.test(view.path) ? view.path : joinPath(cwd, view.path) })).then((r) => r && setImage(r.dataUrl))}>
             Show {view.path}
           </Button>
         ) : null,

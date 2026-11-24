@@ -1,4 +1,4 @@
-import { Ban, Check, CheckCheck, MessageSquareX, X } from 'lucide-react';
+import { Ban, Check, CheckCheck, MessageSquareX, Pencil, Save, Trash2, X } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { PermissionOption, ToolContent } from '@ade/contracts';
 import type { TimelineItem } from '@ade/session-core';
@@ -135,7 +135,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
             className="rounded-[var(--radius)] border border-line bg-bg p-2.5 text-ink focus:border-accent focus:outline-none"
           />
           <div className="flex gap-2">
-            <Button variant="primary" onClick={() => void answer(noteFor.optionId, note)}>
+            <Button icon={<MessageSquareX className="size-4" aria-hidden="true" />} variant="primary" onClick={() => void answer(noteFor.optionId, note)}>
               Reject and send the note
             </Button>
             <Button variant="ghost" onClick={() => setNoteFor(null)}>
@@ -231,7 +231,7 @@ export function QueuedMessages({ sessionId }: { sessionId: string }) {
               </label>
               <textarea id={`q-${q.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} className="rounded border border-line bg-bg p-2 text-ink" />
               <div className="flex gap-2">
-                <Button
+                <Button icon={<Save className="size-4" aria-hidden="true" />}
                   size="dense"
                   variant="primary"
                   onClick={() =>
@@ -249,7 +249,7 @@ export function QueuedMessages({ sessionId }: { sessionId: string }) {
             <>
               <span className="whitespace-pre-wrap">{promptPreview(q.content)}</span>
               <div className="flex gap-2">
-                <Button
+                <Button icon={<Pencil className="size-4" aria-hidden="true" />}
                   size="dense"
                   variant="ghost"
                   onClick={() => {
@@ -259,7 +259,7 @@ export function QueuedMessages({ sessionId }: { sessionId: string }) {
                 >
                   Edit
                 </Button>
-                <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.unqueue', { sessionId, id: q.id }))}>
+                <Button icon={<Trash2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => void attempt(() => host.call('sessions.unqueue', { sessionId, id: q.id }))}>
                   Remove
                 </Button>
               </div>

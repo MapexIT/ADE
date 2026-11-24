@@ -17,6 +17,7 @@ import {
   type PermissionDecision,
   type PromptBlock,
   type ProtocolMessage,
+  ReasoningSettings,
   type Session,
   type SessionState,
   type Turn,
@@ -85,7 +86,9 @@ const titleFrom = (content: PromptBlock[]) => {
  */
 export class SessionService {
   private readonly live = new Map<string, LiveSession>();
-  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string; skills?: string[] }>();
+  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string; skills?: string[]; reasoned?: { content: PromptBlock[]; settings: ReasoningSettings } }>();
+  /** GN-01: sends the first prompt through a reasoning method once the session is ready (set by the host). */
+  firstReasoned: ((sessionId: string, content: PromptBlock[], settings: ReasoningSettings) => Promise<unknown>) | null = null;
   private readonly booting = new Set<string>();
   private disposed = false;
   /** Extra MCP servers to hand agents (connectors, M5). */
@@ -281,8 +284,16 @@ export class SessionService {
     };
     this.repos.sessions.insert(session);
     this.append(id, { type: 'session.state_changed', from: null, to: state, reason: state === 'queued' ? 'Waiting for a free slot' : null });
-    this.repos.queue.push(id, input.prompt);
-    this.bootOptions.set(id, { bringChanges: input.bringChanges ?? false, ...(input.modeId ? { modeId: input.modeId } : {}), ...(input.modelId ? { modelId: input.modelId } : {}), ...(input.skills?.length ? { skills: input.skills } : {}) });
+    // GN-01: a reasoned first prompt is not queued: it is reasoned about once the agent is ready, then sent.
+    const reasoned = input.reasoning && input.reasoning.method !== 'io' && this.firstReasoned ? { content: input.prompt, settings: ReasoningSettings.parse(input.reasoning) } : undefined;
+    if (!reasoned) this.repos.queue.push(id, input.prompt);
+    this.bootOptions.set(id, {
+      bringChanges: input.bringChanges ?? false,
+      ...(input.modeId ? { modeId: input.modeId } : {}),
+      ...(input.modelId ? { modelId: input.modelId } : {}),
+      ...(input.skills?.length ? { skills: input.skills } : {}),
+      ...(reasoned ? { reasoned } : {}),
+    });
     this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
@@ -348,6 +359,10 @@ export class SessionService {
         this.append(sessionId, { type: 'notice', level: 'warning', text: 'This session works in your checkout. Discard puts every file back to the snapshot taken when it started.' });
         await this.startAgent(sessionId);
         await this.sendNext(sessionId);
+        if (opts.reasoned) {
+          await this.firstReasoned?.(sessionId, opts.reasoned.content, opts.reasoned.settings);
+          await this.sendNext(sessionId);
+        }
         return;
       }
       await createWorktree({
@@ -379,6 +394,11 @@ export class SessionService {
         this.append(sessionId, { type: 'notice', level: 'info', text: `Using the model ${opts.modelId}.` });
       }
       await this.sendNext(sessionId);
+      if (opts.reasoned) {
+        // CoT queues its prompt at once (sent below); the searching methods send it themselves when they finish.
+        await this.firstReasoned?.(sessionId, opts.reasoned.content, opts.reasoned.settings);
+        await this.sendNext(sessionId);
+      }
     } catch (err) {
       const message = err instanceof AgentAuthRequiredError ? `${err.message} Open the agent's own terminal UI to sign in.` : (err as Error).message;
       this.append(sessionId, { type: 'notice', level: 'error', text: message });
@@ -650,7 +670,8 @@ export class SessionService {
     const session = this.repos.sessions.require(sessionId);
     if (isTerminal(session.state)) throw new RpcError('session_ended', 'This session has ended.');
     const id = this.repos.queue.push(sessionId, content);
-    const busy = this.hasActiveTurn(sessionId) || ['queued', 'starting', 'working', 'waiting-on-user'].includes(session.state);
+    // A session that finished booting can stay in "starting" until its first turn; it is only busy while booting.
+    const busy = this.hasActiveTurn(sessionId) || ['queued', 'working', 'waiting-on-user'].includes(session.state) || (session.state === 'starting' && this.booting.has(sessionId));
     if (!busy) void this.sendNext(sessionId).catch((err: Error) => this.append(sessionId, { type: 'notice', level: 'error', text: err.message }));
     else this.bus.emit('session.changed', { workspaceId: session.workspaceId, session });
     return { id, queued: busy };

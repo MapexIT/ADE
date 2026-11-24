@@ -1,3 +1,4 @@
+import { Bookmark, Plus, Save, Trash2 } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Button, cx } from '@ade/ui';
 import type { SavedCommand } from '@ade/contracts';
@@ -38,7 +39,7 @@ export function SavedCommands({ terminalId, disabled }: { terminalId: string; di
     <>
       <Menu.Root>
         <Menu.Trigger asChild>
-          <Button size="dense" variant="ghost" disabled={disabled}>
+          <Button icon={<Bookmark className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={disabled}>
             Saved commands
           </Button>
         </Menu.Trigger>
@@ -66,7 +67,7 @@ export function SavedCommands({ terminalId, disabled }: { terminalId: string; di
         footer={
           <>
             <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button variant="primary" onClick={() => void save()}>
+            <Button icon={<Save className="size-4" aria-hidden="true" />} variant="primary" onClick={() => void save()}>
               Save
             </Button>
           </>
@@ -83,12 +84,12 @@ export function SavedCommands({ terminalId, disabled }: { terminalId: string; di
                 Command {i + 1}
               </label>
               <input id={`cmd-text-${c.id}`} value={c.command} placeholder="pnpm test" onChange={(e) => patch(c.id, { command: e.target.value })} className={cx(inputClass, 'min-w-40 flex-1 font-mono')} />
-              <Button size="dense" variant="ghost" aria-label={`Remove command ${i + 1}`} onClick={() => setEditing((list) => list?.filter((x) => x.id !== c.id) ?? null)}>
+              <Button icon={<Trash2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" aria-label={`Remove command ${i + 1}`} onClick={() => setEditing((list) => list?.filter((x) => x.id !== c.id) ?? null)}>
                 Remove
               </Button>
             </div>
           ))}
-          <Button size="dense" className="self-start" onClick={() => setEditing((list) => [...(list ?? []), { id: newId(), name: '', command: '' }])}>
+          <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" className="self-start" onClick={() => setEditing((list) => [...(list ?? []), { id: newId(), name: '', command: '' }])}>
             Add command
           </Button>
         </div>

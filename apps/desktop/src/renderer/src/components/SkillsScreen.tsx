@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { Pencil, Play, Plus, RefreshCw, Save, Sparkles } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, Skill } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -61,10 +61,10 @@ export function SkillsScreen() {
           Agent Skills folders you can attach to sessions and workflow steps.
         </span>
         <span className="flex-1" />
-        <Button size="dense" onClick={() => setPane({ kind: 'draft' })} disabled={!workspaceId}>
+        <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" onClick={() => setPane({ kind: 'draft' })} disabled={!workspaceId}>
           Draft with an agent
         </Button>
-        <Button size="dense" variant="primary" onClick={() => setPane({ kind: 'build' })}>
+        <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => setPane({ kind: 'build' })}>
           New skill
         </Button>
       </div>
@@ -211,7 +211,7 @@ function SkillDetail({
       ))}
       {own ? (
         <div className="flex flex-wrap gap-2">
-          <Button
+          <Button icon={<Pencil className="size-4" aria-hidden="true" />}
             size="dense"
             onClick={() =>
               onEdit({
@@ -224,10 +224,10 @@ function SkillDetail({
           >
             Edit
           </Button>
-          <Button size="dense" onClick={() => onTry(skill.name)} disabled={!workspaceId}>
+          <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" onClick={() => onTry(skill.name)} disabled={!workspaceId}>
             Try in a session
           </Button>
-          <Button
+          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />}
             size="dense"
             variant={synced ? 'ghost' : 'secondary'}
             onClick={() =>
@@ -366,7 +366,7 @@ function SkillBuilder({
           </select>
         </div>
         <div>
-          <Button type="submit" variant="primary" disabled={disabled}>
+          <Button icon={<Save className="size-4" aria-hidden="true" />} type="submit" variant="primary" disabled={disabled}>
             Save skill
           </Button>
         </div>
@@ -480,7 +480,7 @@ function SkillDraft({ workspaceId }: { workspaceId: string }) {
         </select>
       </div>
       <div>
-        <Button
+        <Button icon={<Sparkles className="size-4" aria-hidden="true" />}
           type="submit"
           variant="primary"
           disabled={!agentId || !name || !!nameError || !description.trim()}

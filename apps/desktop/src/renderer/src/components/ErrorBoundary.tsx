@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import { Button } from '@ade/ui';
 import { Component, type ReactNode } from 'react';
 
@@ -15,7 +16,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <p className="font-semibold">This screen hit an error.</p>
         <p className="max-w-xl font-mono text-[12px] text-ink-muted">{this.state.error.message}</p>
-        <Button size="dense" variant="primary" onClick={() => this.setState({ error: null })}>
+        <Button icon={<RotateCcw className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => this.setState({ error: null })}>
           Try again
         </Button>
       </div>

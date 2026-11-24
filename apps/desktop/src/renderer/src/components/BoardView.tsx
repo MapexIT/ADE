@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, ExternalLink, Play, RefreshCw, Settings } from 'lucide-react';
 import { Badge, Button, cx, EmptyState } from '@ade/ui';
 import type { Board, BoardSettings } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
@@ -63,14 +63,14 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
               </label>
             </>
           ) : null}
-          <Button size="dense" disabled={loading} onClick={() => void load()}>
+          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading} onClick={() => void load()}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
         </div>
       ) : null}
       {problem ? (
         <>
-          <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
+          <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button icon={<Settings className="size-4" aria-hidden="true" />} onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
           {settings ? <ConnectionGuide key={settings.source} source={settings.source} onChecked={() => void load()} /> : null}
         </>
       ) : board ? (
@@ -97,11 +97,11 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <Button size="dense" onClick={() => set({ newSession: { workItem: { ref: item.ref, source: item.ref.startsWith('sc-') ? 'shortcut' : 'github', title: item.title, description: '', state: col.name, url: item.url, group: board.title } } })}>
+                      <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" onClick={() => set({ newSession: { workItem: { ref: item.ref, source: item.ref.startsWith('sc-') ? 'shortcut' : 'github', title: item.title, description: '', state: col.name, url: item.url, group: board.title } } })}>
                         Start a session
                       </Button>
                       {item.url ? (
-                        <Button size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: item.url! }))}>
+                        <Button icon={<ExternalLink className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: item.url! }))}>
                           Open
                         </Button>
                       ) : null}

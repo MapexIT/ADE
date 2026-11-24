@@ -1,5 +1,5 @@
 import { BranchGraph } from './BranchGraph.tsx';
-import { ExternalLink, GitCompareArrows, History, PanelRight } from 'lucide-react';
+import { ExternalLink, GitCompareArrows, GitFork, History, PanelRight, Undo2 } from 'lucide-react';
 import { Button, cx, EmptyState, SectionLabel, Tabs } from '@ade/ui';
 import type { FileChange } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
@@ -137,7 +137,7 @@ export function Inspector() {
                       Turn {t.index + 1} · {t.endedAt ? 'snapshot saved' : 'in progress'}
                     </span>
                     {t.endCheckpoint ? (
-                      <Button
+                      <Button icon={<GitFork className="size-4" aria-hidden="true" />}
                         size="dense"
                         variant="ghost"
                         title={`SR-06: a new session and worktree starting from the end of turn ${t.index + 1}`}
@@ -147,7 +147,7 @@ export function Inspector() {
                       </Button>
                     ) : null}
                     {t.startCheckpoint && !isLive(session.state) ? (
-                      <Button
+                      <Button icon={<Undo2 className="size-4" aria-hidden="true" />}
                         size="dense"
                         variant="ghost"
                         onClick={() =>

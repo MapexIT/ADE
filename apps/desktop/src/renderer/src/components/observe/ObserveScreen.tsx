@@ -8,32 +8,14 @@ import {
   type FeedKind,
 } from '@ade/session-core';
 import type { Session } from '@ade/contracts';
-import {
-  Activity as ActivityIcon,
-  ArrowRight,
-  Bot,
-  CircleAlert,
-  Coins,
-  FileCode,
-  FilePen,
-  Files,
-  GitCompareArrows,
-  Hand,
-  ListChecks,
-  MessageSquare,
-  Play,
-  Search,
-  SquareTerminal,
-  Timer,
-  User,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
+import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
 import { useStore } from '../../lib/store.ts';
 import { AnimatedNumber, DrawnCheck, Orb, PHASE_STYLE, PhaseBar, Sparkline } from './visuals.tsx';
+import { AgentTeams, QuietAgents } from './Teams.tsx';
+import { useTeams } from '../../lib/teams.ts';
 
 const LIVE_STATES = new Set<Session['state']>(['queued', 'starting', 'working', 'waiting-on-user']);
 const MAX_SESSIONS = 24;
@@ -83,6 +65,7 @@ export function ObserveScreen() {
   const workspaceId = useStore((s) => s.workspaceId);
   const loadSession = useStore((s) => s.loadSession);
   const [selected, setSelected] = useState<string | null>(null);
+  const teams = useTeams(1000);
 
   // Live sessions first, then the most recent.
   const list = useMemo(
@@ -125,7 +108,7 @@ export function ObserveScreen() {
         title="No agents to observe yet"
         body="Start a session and watch it here: what the agent is doing, how busy it is, the files it touches and the result."
         action={
-          <Button variant="primary" onClick={() => useStore.getState().set({ newSession: {} })}>
+          <Button icon={<Plus className="size-4" aria-hidden="true" />} variant="primary" onClick={() => useStore.getState().set({ newSession: {} })}>
             New session
           </Button>
         }
@@ -157,6 +140,12 @@ export function ObserveScreen() {
           value={sum((a) => tokens(a) ?? 0)}
           sub={all.some((a) => a.usage) ? undefined : 'not reported'}
         />
+      </section>
+
+      <QuietAgents teams={teams} />
+      <section aria-label="Teams" className="flex max-h-[42%] shrink-0 flex-col gap-2 overflow-auto">
+        <SectionLabel>Agent teams · who started them, and how hard they work</SectionLabel>
+        <AgentTeams teams={teams} />
       </section>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,420px)_1fr]">

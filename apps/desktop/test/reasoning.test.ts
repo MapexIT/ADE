@@ -137,3 +137,28 @@ describe('GN-02 composer state and the shared prompt board', () => {
     await expect((async () => host.handlers['promptBoard.get']({ workspaceId: '00000000-0000-4000-8000-000000000000' }))()).rejects.toThrow('Unknown workspace');
   });
 });
+
+describe('GN-01 starting a session with a reasoning method', () => {
+  it('reasons about the first prompt once the worktree is ready, then sends it; the composer keeps the method', async () => {
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const settings = { ...DEFAULT_SETTINGS, method: 'cot-sc' as const, samples: 2 };
+    const s = await host.handlers['sessions.create']({ workspaceId: ws.id, agentId: 'fake', prompt: text('say FINAL APPROACH: start reasoned'), permissionProfile: 'ask', bringChanges: false, reasoning: settings });
+    expect(await finished(s.id)).toMatchObject({ outcome: 'sent', approach: 'start reasoned', calls: 2 });
+    await ended(s.id, 1);
+    const first = sent(s.id)[0]!;
+    expect(first.startsWith('say FINAL APPROACH: start reasoned')).toBe(true);
+    expect(first).toContain('CoT self-consistency');
+    expect(sent(s.id)).toHaveLength(1);
+    expect(await host.handlers['composer.get']({ sessionId: s.id })).toEqual({ mode: 'chat', reasoning: settings });
+  });
+
+  it('CoT at the start adds the instruction; IO starts as before', async () => {
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const cot = await host.handlers['sessions.create']({ workspaceId: ws.id, agentId: 'fake', prompt: text('say cot start'), permissionProfile: 'ask', bringChanges: false, reasoning: { ...DEFAULT_SETTINGS, method: 'cot' } });
+    await ended(cot.id, 1);
+    expect(sent(cot.id)[0]).toMatch(/^say cot start\n\nBefore you change anything/);
+    const io = await host.handlers['sessions.create']({ workspaceId: ws.id, agentId: 'fake', prompt: text('say io start'), permissionProfile: 'ask', bringChanges: false });
+    await ended(io.id, 1);
+    expect(sent(io.id)).toEqual(['say io start']);
+  });
+});

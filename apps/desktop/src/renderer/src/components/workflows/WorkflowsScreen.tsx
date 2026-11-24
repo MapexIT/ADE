@@ -1,4 +1,4 @@
-import { Workflow } from 'lucide-react';
+import { Copy, Play, Save, Undo2, Workflow } from 'lucide-react';
 import { Background, Controls, ReactFlow, type OnNodesChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Badge, Button, cx, EmptyState, palette, SectionLabel } from '@ade/ui';
@@ -195,22 +195,22 @@ export function WorkflowsScreen() {
         {dirty ? <Badge tone="attention">Unsaved changes</Badge> : null}
         <span className="flex-1" />
         {summary && readOnly ? (
-          <Button size="dense" onClick={copyToRepository}>
+          <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={copyToRepository}>
             Copy to repository to edit
           </Button>
         ) : null}
         {summary && !readOnly ? (
           <>
-            <Button size="dense" variant="ghost" disabled={!dirty} onClick={() => setDraft(saved)}>
+            <Button icon={<Undo2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={!dirty} onClick={() => setDraft(saved)}>
               Discard changes
             </Button>
-            <Button size="dense" disabled={!dirty || !fileOf} onClick={() => fileOf && void save(fileOf)}>
+            <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" disabled={!dirty || !fileOf} onClick={() => fileOf && void save(fileOf)}>
               Save
             </Button>
           </>
         ) : null}
         {summary ? (
-          <Button
+          <Button icon={<Play className="size-4" aria-hidden="true" />}
             size="dense"
             variant="primary"
             disabled={errors.length > 0 || dirty}

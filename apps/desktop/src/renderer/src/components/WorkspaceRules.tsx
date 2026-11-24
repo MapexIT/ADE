@@ -1,3 +1,4 @@
+import { Plus, Save, Trash2 } from 'lucide-react';
 import { Button, cx, SectionLabel } from '@ade/ui';
 import type { PermissionRule } from '@ade/contracts';
 import { useEffect, useState } from 'react';
@@ -86,16 +87,16 @@ export function WorkspaceRules({ workspaceId }: { workspaceId: string }) {
             onChange={(e) => patch(r.id, { pattern: e.target.value })}
             className={cx(inputClass, 'min-w-40 flex-1 font-mono')}
           />
-          <Button variant="ghost" size="dense" onClick={() => update(rules.filter((x) => x.id !== r.id))} aria-label={`Remove rule ${i + 1}`}>
+          <Button icon={<Trash2 className="size-4" aria-hidden="true" />} variant="ghost" size="dense" onClick={() => update(rules.filter((x) => x.id !== r.id))} aria-label={`Remove rule ${i + 1}`}>
             Remove
           </Button>
         </div>
       ))}
       <div className="flex gap-2">
-        <Button size="dense" onClick={() => update([...rules, { id: newId(), decision: 'allow', kind: 'execute', pattern: '' }])}>
+        <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" onClick={() => update([...rules, { id: newId(), decision: 'allow', kind: 'execute', pattern: '' }])}>
           Add rule
         </Button>
-        <Button size="dense" variant="primary" disabled={!dirty} onClick={() => void save()}>
+        <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" variant="primary" disabled={!dirty} onClick={() => void save()}>
           Save rules
         </Button>
       </div>

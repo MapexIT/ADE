@@ -1,4 +1,4 @@
-import { Check, Copy, GitBranch as GitBranchIcon, Maximize2, RefreshCw } from 'lucide-react';
+import { Check, Copy, GitBranch as GitBranchIcon, Maximize2, MessagesSquare, RefreshCw } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { GitBranch, GitCommit, GitGraph } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
@@ -268,7 +268,7 @@ export function BranchGraph({
             .map((r) => {
               const s = sessionByBranch.get(r.name)!;
               return (
-                <Button key={r.name} size="dense" className="self-start" onClick={() => selectSession(s.id)}>
+                <Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} key={r.name} size="dense" className="self-start" onClick={() => selectSession(s.id)}>
                   Open session: {s.title}
                 </Button>
               );

@@ -395,3 +395,72 @@ textarea,
     background: none;
   }
 }
+
+/* WA-08: agent teams. Durations come from CSS variables set per element from its live activity. */
+@keyframes ade-team-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ade-team-counter {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes ade-team-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: calc(0.55 + var(--glow, 0.5) * 0.45);
+  }
+  50% {
+    transform: scale(calc(1 + var(--glow, 0.5) * 0.35));
+    opacity: 1;
+  }
+}
+@keyframes ade-team-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@keyframes ade-wave {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.ade-orbit {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: ade-team-orbit var(--orbit, 30s) linear infinite;
+}
+.ade-counter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ade-team-counter var(--orbit, 30s) linear infinite;
+}
+.ade-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ade-team-pulse var(--pulse, 2s) ease-in-out infinite;
+}
+.ade-flow {
+  stroke-dasharray: 3 9;
+  animation: ade-team-flow var(--flow, 2s) linear infinite;
+}
+.ade-wave {
+  background-image: linear-gradient(90deg, transparent 0%, var(--accent) 25%, var(--accent-soft) 50%, transparent 75%, transparent 100%);
+  background-size: 200% 100%;
+  animation: ade-wave var(--wave, 2s) linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ade-orbit,
+  .ade-counter,
+  .ade-pulse,
+  .ade-flow,
+  .ade-wave {
+    animation: none;
+  }
+}

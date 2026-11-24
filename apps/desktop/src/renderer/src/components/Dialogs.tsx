@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, FolderGit2, Info, MessagesSquare, Navigation, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { Bot, Check, CircleAlert, Download, FolderGit2, FolderOpen, Info, MessagesSquare, Navigation, RefreshCw, Save, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
 import type { ContainmentStatus, ProtocolMessage } from '@ade/contracts';
@@ -188,7 +188,7 @@ export function SettingsDialog() {
   };
 
   return (
-    <Modal open={open} onOpenChange={(o) => set({ settingsOpen: o })} title="Settings" wide footer={<><Button onClick={() => set({ settingsOpen: false })}>Close</Button><Button variant="primary" onClick={() => void save()}>Save</Button></>}>
+    <Modal open={open} onOpenChange={(o) => set({ settingsOpen: o })} title="Settings" wide footer={<><Button onClick={() => set({ settingsOpen: false })}>Close</Button><Button icon={<Save className="size-4" aria-hidden="true" />} variant="primary" onClick={() => void save()}>Save</Button></>}>
       <div className="grid gap-6 md:grid-cols-2">
         <section className="flex flex-col gap-3">
           <SectionLabel>Sessions</SectionLabel>
@@ -228,7 +228,7 @@ export function SettingsDialog() {
                   {k} token
                 </label>
                 <input id={`tok-${k}`} type="password" autoComplete="off" value={token[k]} onChange={(e) => setToken({ ...token, [k]: e.target.value })} placeholder="Read-only token" className={`${inputClass} flex-1`} disabled={!creds?.available} />
-                <Button
+                <Button icon={<Save className="size-4" aria-hidden="true" />}
                   disabled={!token[k] || !creds?.available}
                   onClick={() =>
                     void attempt(() => main('main.credentials.set', { key: k, secret: token[k] })).then(async () => {
@@ -240,7 +240,7 @@ export function SettingsDialog() {
                   Save
                 </Button>
                 {creds?.stored.includes(k) ? (
-                  <Button variant="ghost" onClick={() => void attempt(() => main('main.credentials.delete', { key: k })).then(async () => setCreds(await main('main.credentials.status', {})))}>
+                  <Button icon={<Trash2 className="size-4" aria-hidden="true" />} variant="ghost" onClick={() => void attempt(() => main('main.credentials.delete', { key: k })).then(async () => setCreds(await main('main.credentials.status', {})))}>
                     Remove
                   </Button>
                 ) : null}
@@ -352,13 +352,13 @@ export function FirstRunDialog() {
       wide
       footer={
         <>
-          <Button onClick={() => void refreshAgents(true)}>Check again</Button>
+          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} onClick={() => void refreshAgents(true)}>Check again</Button>
           {workspaces.length === 0 ? (
-            <Button variant="primary" onClick={() => void pickAndOpenWorkspace().then(finish)}>
+            <Button icon={<FolderOpen className="size-4" aria-hidden="true" />} variant="primary" onClick={() => void pickAndOpenWorkspace().then(finish)}>
               Open a repository
             </Button>
           ) : null}
-          <Button variant={workspaces.length ? 'primary' : 'secondary'} onClick={finish}>
+          <Button icon={<Check className="size-4" aria-hidden="true" />} variant={workspaces.length ? 'primary' : 'secondary'} onClick={finish}>
             Done
           </Button>
         </>
@@ -387,7 +387,7 @@ export function FirstRunDialog() {
               )}
               <Badge tone={a.health === 'ready' ? 'ok' : 'attention'}>{a.health === 'ready' ? 'Ready' : a.health === 'needs-sign-in' ? 'Needs sign-in' : 'Not installed'}</Badge>
               {a.health === 'not-installed' ? (
-                <Button size="dense" onClick={() => void main('main.openExternal', { url: a.id === 'opencode' ? 'https://opencode.ai/docs/' : a.id === 'codex' ? 'https://developers.openai.com/codex/cli' : 'https://code.claude.com/docs/en/setup' })}>
+                <Button icon={<Download className="size-4" aria-hidden="true" />} size="dense" onClick={() => void main('main.openExternal', { url: a.id === 'opencode' ? 'https://opencode.ai/docs/' : a.id === 'codex' ? 'https://developers.openai.com/codex/cli' : 'https://code.claude.com/docs/en/setup' })}>
                   Get {a.label}
                 </Button>
               ) : null}

@@ -90,7 +90,7 @@ function Shell({ icon, title, body, checking, onCheck, children }: { icon: React
           <h2 className="m-0 text-[17px] font-semibold tracking-[-0.01em]">{title}</h2>
           <p className="m-0 text-ink-muted">{body}</p>
         </div>
-        <Button size="dense" disabled={checking} onClick={onCheck}>
+        <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={checking} onClick={onCheck}>
           <RefreshCw className={cx('size-3.5', checking && 'animate-spin')} aria-hidden="true" />
           {checking ? 'Checking…' : 'Check again'}
         </Button>

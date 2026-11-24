@@ -1,3 +1,4 @@
+import { CircleStop, Maximize2 } from 'lucide-react';
 import { Badge, Button } from '@ade/ui';
 import type { TimelineItem } from '@ade/session-core';
 import { useEffect, useRef, useState } from 'react';
@@ -53,11 +54,11 @@ export function CommandItem({ item, sessionId }: { item: Command; sessionId: str
           {item.command}
         </code>
         <Badge tone={status.tone}>{status.label}</Badge>
-        <Button size="dense" variant="ghost" onClick={() => setOpen(true)}>
+        <Button icon={<Maximize2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => setOpen(true)}>
           Open
         </Button>
         {item.running ? (
-          <Button size="dense" variant="danger" onClick={stop}>
+          <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" variant="danger" onClick={stop}>
             Stop
           </Button>
         ) : null}
@@ -73,7 +74,7 @@ export function CommandItem({ item, sessionId }: { item: Command; sessionId: str
         footer={
           <>
             {item.running ? (
-              <Button variant="danger" onClick={stop}>
+              <Button icon={<CircleStop className="size-4" aria-hidden="true" />} variant="danger" onClick={stop}>
                 Stop the command
               </Button>
             ) : null}

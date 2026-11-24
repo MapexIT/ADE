@@ -1,4 +1,4 @@
-import { FileCode } from 'lucide-react';
+import { Eye, FileCode, FileSearch, Play, Save } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { Badge, Button, EmptyState } from '@ade/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,7 +35,7 @@ export function EditorPanel() {
   const follow = useStore((s) => s.follow);
   const set = useStore((s) => s.set);
   const followButton = (
-    <Button size="dense" variant={follow ? 'primary' : 'secondary'} aria-pressed={follow} onClick={() => set({ follow: !follow })} title="WA-06: open the file the agent is working on">
+    <Button icon={<Eye className="size-4" aria-hidden="true" />} size="dense" variant={follow ? 'primary' : 'secondary'} aria-pressed={follow} onClick={() => set({ follow: !follow })} title="WA-06: open the file the agent is working on">
       Follow agent
     </Button>
   );
@@ -161,7 +161,7 @@ export function EditorPanel() {
           body="Open a file from the Files tab in the inspector, go to a file by name, or follow the agent."
           action={
             <div className="flex gap-2">
-              {root ? <Button onClick={() => setGoTo(true)}>Go to file (Ctrl P)</Button> : null}
+              {root ? <Button icon={<FileSearch className="size-4" aria-hidden="true" />} onClick={() => setGoTo(true)}>Go to file (Ctrl P)</Button> : null}
               {followButton}
             </div>
           }
@@ -204,18 +204,18 @@ export function EditorPanel() {
         {followButton}
         {runner ? (
           <>
-            <Button size="dense" onClick={() => void runFile()} title={`Runs with ${runner.join(' ')}`}>
+            <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" onClick={() => void runFile()} title={`Runs with ${runner.join(' ')}`}>
               Run file
             </Button>
-            <Button size="dense" onClick={() => void runSelection()}>
+            <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" onClick={() => void runSelection()}>
               Run selection
             </Button>
           </>
         ) : null}
-        <Button size="dense" onClick={() => setGoTo(true)}>
+        <Button icon={<FileSearch className="size-4" aria-hidden="true" />} size="dense" onClick={() => setGoTo(true)}>
           Go to file
         </Button>
-        <Button size="dense" variant="primary" disabled={!dirty} onClick={() => void save()}>
+        <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" variant="primary" disabled={!dirty} onClick={() => void save()}>
           Save
         </Button>
       </div>

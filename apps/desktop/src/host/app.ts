@@ -224,6 +224,8 @@ export function createHost(config: HostConfig) {
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const reasoning = new ReasoningService(repos, sessions, runtimes, join(config.userData, 'reasoning-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   reasoning.recover();
+  // GN-01: a session created with a reasoning method reasons about its first prompt once it is ready.
+  sessions.firstReasoned = (sessionId, content, settings) => reasoning.prompt(sessionId, content, settings).catch((err: Error) => sessions.record(sessionId, { type: 'notice', level: 'error', text: `Reasoning could not start: ${err.message}` }));
   const telegram = new TelegramNotifier({
     fetch: ((url, init) => fetch(url, init)) as FetchLike,
     // Tests point this at a local stand-in for the Bot API.
@@ -284,7 +286,12 @@ export function createHost(config: HostConfig) {
       events: repos.events.list(sessionId),
       queued: sessions.queued(sessionId),
     }),
-    'sessions.create': (input) => sessions.create(input),
+    'sessions.create': async (input) => {
+      const session = await sessions.create(input);
+      // The composer keeps the method the session started with.
+      if (input.reasoning) repos.settings.set(`composer.${session.id}`, { mode: 'chat', reasoning: input.reasoning });
+      return session;
+    },
     'sessions.prompt': async ({ sessionId, content }) => {
       await sessions.prompt(sessionId, content);
       return { ok: true };

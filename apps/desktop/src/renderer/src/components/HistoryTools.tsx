@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react';
 import { Badge, Button, cx, SectionLabel } from '@ade/ui';
 import type { InstructionStatus, SessionSearchResult } from '@ade/contracts';
 import { useEffect, useState } from 'react';
@@ -49,7 +50,7 @@ export function ExportAuditButton({ workspaceId }: { workspaceId: string }) {
   };
   return (
     <div className="flex flex-col gap-1">
-      <Button size="dense" className="self-start" onClick={() => void run()}>
+      <Button icon={<Download className="size-4" aria-hidden="true" />} size="dense" className="self-start" onClick={() => void run()}>
         Export audit log
       </Button>
       <span className="text-[12px] text-ink-muted">JSON. Local paths become placeholders and anything that looks like a secret is redacted.</span>

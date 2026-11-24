@@ -1,3 +1,4 @@
+import { Check, MessagesSquare, Play, RotateCcw, X } from 'lucide-react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import { Badge, Button, palette, SectionLabel } from '@ade/ui';
 import type { WorkflowRunView } from '@ade/contracts';
@@ -103,11 +104,11 @@ export function RunView({ run }: { run: WorkflowRunView }) {
             </p>
             <div className="flex flex-wrap gap-2">
               {latestSession ? (
-                <Button size="dense" onClick={() => openSession(latestSession)}>
+                <Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} size="dense" onClick={() => openSession(latestSession)}>
                   Open latest session
                 </Button>
               ) : null}
-              <Button
+              <Button icon={<Check className="size-4" aria-hidden="true" />}
                 variant="primary"
                 size="dense"
                 onClick={() =>
@@ -118,7 +119,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
               >
                 Approve and continue
               </Button>
-              <Button
+              <Button icon={<X className="size-4" aria-hidden="true" />}
                 variant="danger"
                 size="dense"
                 onClick={() =>
@@ -135,7 +136,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
 
         <div className="flex flex-wrap gap-2">
           {run.status === 'paused' ? (
-            <Button
+            <Button icon={<Play className="size-4" aria-hidden="true" />}
               variant="attention"
               size="dense"
               onClick={() => void attempt(() => host.call('workflows.resume', { runId: run.id }))}
@@ -186,12 +187,12 @@ export function RunView({ run }: { run: WorkflowRunView }) {
             ) : null}
             <div className="flex flex-wrap gap-2">
               {node.sessionId ? (
-                <Button size="dense" onClick={() => openSession(node.sessionId!)}>
+                <Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} size="dense" onClick={() => openSession(node.sessionId!)}>
                   Open session
                 </Button>
               ) : null}
               {run.status !== 'running' && live(run.status) ? (
-                <Button
+                <Button icon={<RotateCcw className="size-4" aria-hidden="true" />}
                   size="dense"
                   variant="ghost"
                   onClick={() =>
