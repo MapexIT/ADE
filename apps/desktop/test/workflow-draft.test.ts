@@ -56,7 +56,8 @@ describe('workflow drafts (WF-01)', () => {
   });
 
   it('reads definitions and names files', () => {
-    expect(toDraft({ name: 'x' })).toBeNull();
+    expect(toDraft({ name: 'x' })).toMatchObject({ name: 'x', nodes: [], edges: [] });
+    expect(toDraft({ nodes: 'nope' })).toBeNull();
     expect(toDraft({ name: 'x', nodes: [{ id: 'a', type: 'gate' }] })?.nodes[0]).toMatchObject({
       question: 'Review before continuing',
     });

@@ -1,6 +1,6 @@
 # Features
 
-154 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+156 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -182,7 +182,7 @@ Linux.
 
 | ID | Feature | Phase | Description |
 | --- | --- | --- | --- |
-| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. |
+| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. "New workflow" starts one from scratch (an empty canvas) or from a template; an empty workflow saves but cannot run until it has a first step. Clicking a connection opens its settings (when it applies, round limit, delete). |
 | WF-02 | Workflow picker | v1 | Choose a workflow instead of a single agent when starting a session or work item. |
 | WF-03 | Workflow files | v1 | YAML in `.ade/workflows/`, versioned with the code. |
 | WF-04 | Templates | v1 | Plan-build-review, fix failing tests, cross-review, spec first, story to pull request. |
@@ -193,6 +193,8 @@ Linux.
 | WF-09 | Mixed agents per step | v1 | Different agent or model per node. |
 | WF-10 | Manual and event triggers | v1 | By hand, from a terminal command, on a failed check or a ready session. |
 | WF-11 | Test a node | v1 | Run one node on sample input. |
+| WF-12 | Several inputs and several next steps | v1 | A step may connect to several next steps and receive from several steps. Next steps whose condition matches all run, at the same time; a step with several inputs waits until each input has either arrived or been ruled out (its step took another path), then runs once with the inputs merged (summaries, diffs and check output joined). Steps that use the run's worktree (agents, commands, landing) take turns, so parallel branches never write over each other; gates and connectors run alongside. Several gates can wait for you at once, each with its own decision; the run view says which steps run in parallel. A branch that fails with nowhere to go fails the run once the other branches stop. |
+| WF-13 | Round limits on cycles | v1 | A connection that closes a cycle is marked on the canvas (dashed, with its limit) and has a "Maximum rounds" setting: how many times a run may go back round that cycle. The default is 1. When the limit is reached the run pauses until you resume it, which grants the rounds again. A cycle that has a loop step and no limit of its own uses the loop step's limit. The run view shows the rounds used. |
 | WF-12 | Fan-out and join | Later | Parallel nodes with a compare view. |
 | WF-13 | Scheduled and external triggers | Later | Schedule, story state, issue label. |
 | WF-14 | Shared library | Later | Export and import workflows and skills. |

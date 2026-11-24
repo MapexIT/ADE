@@ -195,6 +195,40 @@ edges:
     expect(host.sessions.inbox().some((i) => i.runId === started.id)).toBe(false);
   }, 60_000);
 
+  it('fans out to parallel checks, waits at a gate while the cycle goes round once, then pauses (WF-12, WF-13)', async () => {
+    writeWorkflow(
+      'fan',
+      `
+name: Fan
+nodes:
+  - { id: build, type: agent, agent: fake, prompt: "say Built." }
+  - { id: a, type: command, run: ${exists('README.md')} }
+  - { id: b, type: command, run: ${exists('never.txt')} }
+  - { id: review, type: gate, question: "Both checks ran" }
+edges:
+  - { from: build, to: a }
+  - { from: build, to: b }
+  - { from: a, to: review }
+  - { from: b, to: review, when: pass }
+  - { from: b, to: build, when: fail }
+`,
+    );
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const started = await host.workflows.start({ workspaceId: ws.id, workflowId: 'repo:fan.yaml' });
+    expect(started.edges.map((e) => e.cycle)).toEqual([false, false, false, false, true]);
+    const r = await until(started.id, 'paused');
+    expect(r.pauseReason).toBe('The cycle back to build reached its limit of 1 round.');
+    expect(node(r, 'build').attempts).toBe(2);
+    expect(node(r, 'a').attempts).toBe(2);
+    expect(node(r, 'b').attempts).toBe(2);
+    expect(r.rounds).toEqual({ '4': 1 });
+    // The gate waits for a decision even though the run is paused; both show in the inbox.
+    expect(node(r, 'review').status).toBe('waiting');
+    const items = host.sessions.inbox().filter((i) => i.runId === started.id);
+    expect(items.map((i) => i.kind).sort()).toEqual(['gate', 'paused']);
+    await host.handlers['workflows.cancel']({ runId: started.id });
+  }, 60_000);
+
   it('cancelling a run cancels the running agent', async () => {
     writeWorkflow(
       'hang',
@@ -251,7 +285,10 @@ edges:
       'Build it carefully',
     );
     expect((await host.workflows.detail(ws.id, 'repo:my-review.yaml')).summary.name).toBe('My review');
-    await expect(host.workflows.save(ws.id, 'x.yaml', { name: 'x', nodes: [] })).rejects.toMatchObject({
+    // An empty workflow (started from scratch) saves; it only cannot run until it has a first step.
+    const empty = await host.workflows.save(ws.id, 'x.yaml', { name: 'x', nodes: [] });
+    expect(empty.problems.map((p) => p.message)).toEqual(['This workflow has no steps yet. Add a first step from the palette.']);
+    await expect(host.workflows.save(ws.id, 'y.yaml', { name: 'y', nodes: [{ id: 'Bad Id', type: 'gate' }] })).rejects.toMatchObject({
       code: 'invalid_workflow',
     });
 

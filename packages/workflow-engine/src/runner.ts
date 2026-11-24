@@ -44,6 +44,14 @@ export interface RunnerHooks {
   onPaused?(reason: string, state: RunState): void;
 }
 
+export interface RunnerOptions {
+  /**
+   * WF-12: node types that must not run at the same time as each other, because they share something (in ADE: the
+   * run's worktree). Parallel branches still advance; these steps take turns in the order they became ready.
+   */
+  exclusive?: NodeType[];
+}
+
 /**
  * Drives a run: feeds events to the pure reducer, persists every state, and performs the effects it returns
  * with the registered executors. Gates and pauses stop the loop until `decideGate` or `resume` is called.
@@ -53,12 +61,18 @@ export class WorkflowRunner {
   private readonly executors = new Map<NodeType, NodeExecutor>();
   private readonly abort = new AbortController();
   private idle: Promise<void> = Promise.resolve();
+  /** Node executions in flight (parallel branches). */
+  private readonly inflight = new Set<Promise<void>>();
+  /** The turn-taking chain for exclusive node types. */
+  private exclusiveChain: Promise<unknown> = Promise.resolve();
+  private readonly exclusive: Set<NodeType>;
   private readonly wf: Workflow;
   private readonly runId: string;
   private readonly store: RunStore;
   private readonly hooks: RunnerHooks;
 
-  constructor(wf: Workflow, runId: string, store: RunStore, executors: NodeExecutor[], hooks: RunnerHooks = {}, state?: RunState) {
+  constructor(wf: Workflow, runId: string, store: RunStore, executors: NodeExecutor[], hooks: RunnerHooks = {}, state?: RunState, options: RunnerOptions = {}) {
+    this.exclusive = new Set(options.exclusive ?? []);
     this.wf = wf;
     this.runId = runId;
     this.store = store;
@@ -80,44 +94,70 @@ export class WorkflowRunner {
   }
 
   private async drive(effects: Effect[]): Promise<void> {
-    let queue = effects;
-    while (queue.length && !this.abort.signal.aborted) {
-      const effect = queue.shift()!;
+    for (const effect of effects) {
+      if (this.abort.signal.aborted) return;
       if (effect.type === 'await-gate') this.hooks.onGate?.(effect.nodeId, this.state);
       else if (effect.type === 'paused') this.hooks.onPaused?.(effect.reason, this.state);
-      else if (effect.type === 'run-node') {
-        const node = this.wf.nodes.find((n) => n.id === effect.nodeId)!;
-        const executor = this.executors.get(node.type);
-        let result: NodeResult;
-        await this.apply({ type: 'node.started', nodeId: node.id, at: Date.now() });
-        if (!executor) result = { outcome: 'fail', packet: { summary: `No executor for ${node.type} nodes.` } };
-        else {
-          try {
-            let reported = false;
-            const ctx: ExecutionContext = {
-              signal: this.abort.signal,
-              reportSession: (sessionId) => {
-                reported = true;
-                void this.apply({ type: 'node.session', nodeId: node.id, sessionId });
-              },
-            };
-            result = await executor.execute(node, effect.packet, ctx);
-            if (result.sessionId && !reported) await this.apply({ type: 'node.session', nodeId: node.id, sessionId: result.sessionId });
-          } catch (err) {
-            result = { outcome: 'fail', packet: { summary: (err as Error).message } };
-          }
+      else if (effect.type === 'run-node') this.launch(effect.nodeId, effect.packet);
+    }
+  }
+
+  /** Runs one node without blocking the others (WF-12); its result goes back through the event queue. */
+  private launch(nodeId: string, packet: HandOff) {
+    const node = this.wf.nodes.find((n) => n.id === nodeId)!;
+    const executor = this.executors.get(node.type);
+    const work = async () => {
+      let result: NodeResult;
+      if (!executor) result = { outcome: 'fail', packet: { summary: `No executor for ${node.type} nodes.` } };
+      else {
+        try {
+          let reported = false;
+          const ctx: ExecutionContext = {
+            signal: this.abort.signal,
+            reportSession: (sessionId) => {
+              reported = true;
+              void this.post({ type: 'node.session', nodeId: node.id, sessionId });
+            },
+          };
+          result = await executor.execute(node, packet, ctx);
+          if (result.sessionId && !reported) await this.post({ type: 'node.session', nodeId: node.id, sessionId: result.sessionId });
+        } catch (err) {
+          result = { outcome: 'fail', packet: { summary: (err as Error).message } };
         }
-        queue = [
-          ...queue,
-          ...(await this.apply({ type: 'node.finished', nodeId: node.id, outcome: result.outcome, packet: result.packet, ...(result.turns !== undefined ? { turns: result.turns } : {}), ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}), at: Date.now() })),
-        ];
       }
+      if (this.abort.signal.aborted) return;
+      await this.post({ type: 'node.finished', nodeId: node.id, outcome: result.outcome, packet: result.packet, ...(result.turns !== undefined ? { turns: result.turns } : {}), ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}), at: Date.now() });
+    };
+    const task = (async () => {
+      await this.post({ type: 'node.started', nodeId: node.id, at: Date.now() });
+      if (this.exclusive.has(node.type)) {
+        const turn = this.exclusiveChain.then(work, work);
+        this.exclusiveChain = turn.catch(() => undefined);
+        await turn;
+      } else await work();
+    })().catch(() => undefined);
+    this.inflight.add(task);
+    void task.finally(() => this.inflight.delete(task));
+  }
+
+  /** Applies an event in order with every other one and performs its effects. */
+  private post(event: RunEvent): Promise<void> {
+    this.idle = this.idle.then(async () => this.drive(await this.apply(event)));
+    return this.idle;
+  }
+
+  /** Resolves once nothing is running: the run finished, or waits at a gate or a pause. */
+  private async settled(): Promise<void> {
+    await this.idle;
+    while (this.inflight.size) {
+      await Promise.all([...this.inflight]);
+      await this.idle;
     }
   }
 
   private enqueue(event: RunEvent): Promise<void> {
-    this.idle = this.idle.then(async () => this.drive(await this.apply(event)));
-    return this.idle;
+    void this.post(event);
+    return this.settled();
   }
 
   /** `packet` seeds the hand-off, which is how a single node is tested on sample input (WF-11). */
@@ -144,6 +184,7 @@ export class WorkflowRunner {
   async cancel(): Promise<void> {
     this.abort.abort();
     await this.idle.catch(() => undefined);
+    await Promise.allSettled([...this.inflight]);
     const { state } = reduce(this.wf, this.state, { type: 'cancel', at: Date.now() });
     this.state = state;
     await this.store.save(this.runId, this.wf.name, state);

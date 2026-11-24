@@ -1,29 +1,32 @@
-import { Copy, Play, Save, Undo2, Workflow } from 'lucide-react';
-import { Background, Controls, ReactFlow, type OnNodesChange } from '@xyflow/react';
+import { Copy, FilePlus2, Play, Plus, Save, Undo2, Workflow } from 'lucide-react';
+import { Background, Controls, ReactFlow, type OnNodesChange, type ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Badge, Button, cx, EmptyState, palette, SectionLabel } from '@ade/ui';
 import type { AgentId, WorkflowRunView, WorkflowSummary } from '@ade/contracts';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { elapsed } from '../../lib/format.ts';
 import { attempt, useStore } from '../../lib/store.ts';
 import {
   addNode,
   connect,
-  cycleEdge,
+  edgeInfo,
   fileNameFor,
   makeStart,
   NODE_TYPES,
   problemsOf,
   removeEdge,
   removeNode,
+  setEdge,
   toDraft,
   updateNode,
   type Draft,
 } from '../../lib/workflow-draft.ts';
 import { describeNode as detailOf } from '@ade/workflow-engine';
-import { buildGraph } from './graph.tsx';
+import { buildGraph, EDGE_TYPES } from './graph.tsx';
 import { NodeSettings } from './NodeSettings.tsx';
+import { EdgeSettings } from './EdgeSettings.tsx';
+import { NewWorkflowDialog } from './NewWorkflowDialog.tsx';
 import { RUN_STATUS, RunView } from './RunView.tsx';
 import { StartRunDialog, type StartRequest } from './StartRunDialog.tsx';
 
@@ -41,6 +44,9 @@ export function WorkflowsScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
+  const flow = useRef<ReactFlowInstance | null>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [dialog, setDialog] = useState<'run' | 'test' | null>(null);
   const [skillNames, setSkillNames] = useState<string[]>([]);
@@ -83,6 +89,7 @@ export function WorkflowsScreen() {
   // Load the selected workflow's definition into an editable draft.
   useEffect(() => {
     setSelectedNode(null);
+    setSelectedEdge(null);
     setPositions({});
     if (view?.kind !== 'workflow' || !workspaceId) return setDraft(null);
     void attempt(() => host.call('workflows.get', { workspaceId, workflowId: view.id })).then((d) => {
@@ -106,12 +113,24 @@ export function WorkflowsScreen() {
     const problemNodes = new Set(errors.flatMap((p) => (p.nodeId ? [p.nodeId] : [])));
     return buildGraph(
       draft.nodes.map((n) => ({ id: n.id, type: n.type, title: n.title ?? n.id, detail: detailOf(n) })),
-      draft.edges,
-      { problemNodes, selected: selectedNode, positions },
+      draft.edges.map((e, i) => {
+        const info = edgeInfo(draft, i);
+        return { ...e, cycle: info.cycle, maxRounds: info.cycle ? info.maxRounds : null };
+      }),
+      { problemNodes, selected: selectedNode, selectedEdge, positions },
     );
-  }, [draft, errors, selectedNode, positions]);
+  }, [draft, errors, selectedNode, selectedEdge, positions]);
 
   const edit = (next: Draft) => setDraft(next);
+  // Keep every step in view when steps or connections change: both move the layout (and a canvas started empty
+  // first fits a single step).
+  const stepCount = draft?.nodes.length ?? 0;
+  const edgeCount = draft?.edges.length ?? 0;
+  useEffect(() => {
+    if (!stepCount) return;
+    const t = setTimeout(() => void flow.current?.fitView({ maxZoom: 1.1, padding: 0.2, duration: 150 }), 30);
+    return () => clearTimeout(t);
+  }, [stepCount, edgeCount]);
   const node = draft?.nodes.find((n) => n.id === selectedNode) ?? null;
   const agentsUsed = useMemo<AgentId[]>(() => {
     const nodes = dialog === 'test' && node ? [node] : (draft?.nodes ?? []);
@@ -226,6 +245,9 @@ export function WorkflowsScreen() {
           aria-label="Workflows"
           className="flex w-64 flex-col gap-3 overflow-auto border-r border-line bg-surface p-3"
         >
+          <Button variant="primary" icon={<FilePlus2 className="size-4" aria-hidden="true" />} onClick={() => setCreating(true)}>
+            New workflow
+          </Button>
           {(['repository', 'template'] as const).map((source) => {
             const items = list.filter((w) => w.source === source);
             return (
@@ -233,7 +255,7 @@ export function WorkflowsScreen() {
                 <SectionLabel>{source === 'repository' ? 'In this repository' : 'Templates'}</SectionLabel>
                 {items.length === 0 && source === 'repository' ? (
                   <p className="m-0 text-[12px] text-ink-muted">
-                    Copy a template to start your own. Files go in .ade/workflows/.
+                    Start a new workflow, empty or from a template. Files go in .ade/workflows/.
                   </p>
                 ) : null}
                 {items.map((w) => (
@@ -313,33 +335,43 @@ export function WorkflowsScreen() {
                     </Button>
                   ))}
                   <span className="ml-auto text-[12px] text-ink-muted">
-                    Drag between steps to connect. Click a connection to switch always, on pass, on fail.
+                    Drag between steps to connect; a step can have several inputs and next steps. Click a connection for its settings.
                   </span>
                 </div>
               ) : null}
               <div className="min-h-0 flex-1" aria-label="Workflow canvas">
-                {draft && draft.nodes.length ? (
+                {draft && !draft.nodes.length && !readOnly ? (
+                  <EmptyState
+                    icon={<Plus className="size-5" />}
+                    title="An empty workflow"
+                    body="Add a first step from the toolbar above. The first step is where a run starts; drag from one step to another to connect them."
+                  />
+                ) : draft && draft.nodes.length ? (
                   <ReactFlow
                     key={view?.kind === 'workflow' ? view.id : 'none'}
                     nodes={graph.nodes}
                     edges={graph.edges}
                     fitView
+                    fitViewOptions={{ maxZoom: 1.1, padding: 0.2 }}
+                    edgeTypes={EDGE_TYPES}
+                    onInit={(instance) => (flow.current = instance)}
                     nodesConnectable={!readOnly}
                     nodesDraggable
                     onNodesChange={onNodesChange}
-                    onNodeClick={(_, n) => setSelectedNode(n.id)}
-                    onPaneClick={() => setSelectedNode(null)}
+                    onNodeClick={(_, n) => (setSelectedNode(n.id), setSelectedEdge(null))}
+                    onPaneClick={() => (setSelectedNode(null), setSelectedEdge(null))}
                     onConnect={(c) => c.source && c.target && edit(connect(draft, c.source, c.target))}
-                    onEdgeClick={(_, e) => !readOnly && edit(cycleEdge(draft, Number(e.id.slice(1))))}
-                    onEdgesDelete={(es) =>
-                      !readOnly &&
+                    onEdgeClick={(_, e) => (setSelectedEdge(Number(e.id.slice(1))), setSelectedNode(null))}
+                    onEdgesDelete={(es) => {
+                      if (readOnly) return;
+                      setSelectedEdge(null);
                       edit(
                         es
                           .map((e) => Number(e.id.slice(1)))
                           .sort((a, b) => b - a)
                           .reduce((wf, i) => removeEdge(wf, i), draft),
-                      )
-                    }
+                      );
+                    }}
                     onNodesDelete={(ns) =>
                       !readOnly && edit(ns.reduce((wf, n) => removeNode(wf, n.id), draft))
                     }
@@ -361,7 +393,19 @@ export function WorkflowsScreen() {
               aria-label="Step settings"
               className="flex w-96 flex-col gap-4 overflow-auto border-l border-line bg-surface p-4"
             >
-              {node && draft ? (
+              {selectedEdge !== null && draft?.edges[selectedEdge] ? (
+                <EdgeSettings
+                  key={selectedEdge}
+                  draft={draft}
+                  index={selectedEdge}
+                  readOnly={readOnly}
+                  onChange={(patch) => edit(setEdge(draft, selectedEdge, patch))}
+                  onDelete={() => {
+                    edit(removeEdge(draft, selectedEdge));
+                    setSelectedEdge(null);
+                  }}
+                />
+              ) : node && draft ? (
                 <NodeSettings
                   key={node.id}
                   node={node}
@@ -387,7 +431,7 @@ export function WorkflowsScreen() {
                 <p className="m-0 text-ink-muted">
                   {summary?.description ||
                     'Workflows chain agent sessions with checks and gates. A gate always comes before anything lands.'}{' '}
-                  Select a step to see its settings.
+                  Select a step or a connection to see its settings.
                 </p>
               )}
               {problems.length ? (
@@ -415,6 +459,16 @@ export function WorkflowsScreen() {
           </>
         )}
       </div>
+      <NewWorkflowDialog
+        open={creating}
+        onOpenChange={setCreating}
+        workspaceId={workspaceId}
+        list={list}
+        onCreated={(created) => {
+          void reloadList().then(() => setView({ kind: 'workflow', id: created.id }));
+          toast(`Created ${created.path ?? created.name}`, 'info');
+        }}
+      />
       <StartRunDialog
         open={dialog !== null}
         onOpenChange={(o) => !o && setDialog(null)}

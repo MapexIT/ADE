@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { duration } from '../../lib/format.ts';
 import { attempt, useStore } from '../../lib/store.ts';
-import { buildGraph, STATUS } from './graph.tsx';
+import { EDGE_TYPES, buildGraph, STATUS } from './graph.tsx';
 
 export const RUN_STATUS: Record<
   WorkflowRunView['status'],
@@ -39,11 +39,19 @@ export function RunView({ run }: { run: WorkflowRunView }) {
   const selectSession = useStore((s) => s.selectSession);
   const set = useStore((s) => s.set);
   const graph = useMemo(
-    () => buildGraph(run.nodes, run.edges, { selected: selected ?? run.current }),
+    () =>
+      buildGraph(
+        run.nodes,
+        // WF-13: cycle edges show the rounds this run has used.
+        run.edges.map((e, i) => (e.cycle ? { ...e, rounds: run.rounds?.[String(i)] ?? 0 } : e)),
+        { selected: selected ?? run.current },
+      ),
     [run, selected],
   );
   const node = run.nodes.find((n) => n.id === (selected ?? run.current)) ?? null;
-  const gate = run.status === 'waiting-gate' ? run.nodes.find((n) => n.id === run.current) : null;
+  // WF-12: several branches can wait at gates at once; each gets its own decision.
+  const gates = run.status === 'cancelled' || run.status === 'succeeded' || run.status === 'failed' ? [] : run.nodes.filter((n) => n.type === 'gate' && n.status === 'waiting');
+  const running = run.nodes.filter((n) => n.status === 'running');
   const status = RUN_STATUS[run.status];
   // The session of the step that most recently finished: what a gate asks you to review.
   const latestSession =
@@ -64,6 +72,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
           nodes={graph.nodes}
           edges={graph.edges}
           fitView
+          edgeTypes={EDGE_TYPES}
           nodesConnectable={false}
           nodesDraggable={false}
           onNodeClick={(_, n) => setSelected(n.id)}
@@ -83,6 +92,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
             <Badge tone={status.tone}>{status.label}</Badge>
           </div>
           <span className="text-[12px] text-ink-muted">{budgetLine(run)}</span>
+          {running.length > 1 ? <span className="text-[12px] text-accent-soft">{running.length} steps running in parallel: {running.map((n) => n.title).join(', ')}</span> : null}
           {run.pauseReason && run.status === 'paused' ? (
             <p className="m-0 rounded-[var(--radius)] border border-attention-line bg-attention-tint px-3 py-2 text-attention">
               {run.pauseReason}
@@ -90,12 +100,12 @@ export function RunView({ run }: { run: WorkflowRunView }) {
           ) : null}
         </section>
 
-        {gate ? (
-          <section
-            aria-label="Decision"
+        {gates.map((gate) => (
+          <section key={gate.id}
+            aria-label={`Decision: ${gate.title}`}
             className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-attention-line bg-attention-tint p-3"
           >
-            <SectionLabel>Your decision</SectionLabel>
+            <SectionLabel>Your decision{gates.length > 1 ? ` · ${gate.title}` : ''}</SectionLabel>
             <p className="m-0 font-semibold text-ink">{gate.detail}</p>
             <p className="m-0 text-[12px] text-ink-muted">
               {latestSession
@@ -132,7 +142,7 @@ export function RunView({ run }: { run: WorkflowRunView }) {
               </Button>
             </div>
           </section>
-        ) : null}
+        ))}
 
         <div className="flex flex-wrap gap-2">
           {run.status === 'paused' ? (

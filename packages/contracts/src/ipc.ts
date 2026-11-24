@@ -473,7 +473,8 @@ export const WorkflowSummary = z.object({
   /** Agents its steps name, so a picker can offer stand-ins for agents that are not ready (WF-09). */
   agents: z.array(AgentId),
   nodes: z.array(z.object({ id: z.string(), type: z.string(), title: z.string(), detail: z.string() })),
-  edges: z.array(z.object({ from: z.string(), to: z.string(), when: z.enum(['pass', 'fail']).nullable() })),
+  /** WF-13: `cycle` marks the edge that closes a cycle; `maxRounds` is then how often the run may go round it. */
+  edges: z.array(z.object({ from: z.string(), to: z.string(), when: z.enum(['pass', 'fail']).nullable(), cycle: z.boolean().default(false), maxRounds: z.number().int().nullable().default(null) })),
   problems: z.array(z.object({ level: z.enum(['error', 'warning']), message: z.string(), nodeId: z.string().nullable() })),
 });
 export type WorkflowSummary = z.infer<typeof WorkflowSummary>;
@@ -489,6 +490,10 @@ export const WorkflowRunView = z.object({
   workflowName: z.string(),
   status: WorkflowRunStatus,
   current: z.string().nullable(),
+  /** WF-12: every step running or waiting at a gate (parallel branches). */
+  active: z.array(z.string()).default([]),
+  /** WF-13: rounds used per cycle, keyed by the index of the edge that closes it. */
+  rounds: z.record(z.string(), z.number()).default({}),
   pauseReason: z.string().nullable(),
   nodes: z.array(
     z.object({

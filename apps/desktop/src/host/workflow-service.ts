@@ -11,6 +11,7 @@ import {
 } from '@ade/contracts';
 import { diffPatch, git, revParse, snapshot } from '@ade/git';
 import {
+  initialState,
   parseWorkflow,
   Workflow,
   WorkflowError,
@@ -34,7 +35,7 @@ import {
   tail,
 } from './executors.ts';
 import type { Repositories, WorkflowRunRow } from './repositories.ts';
-import { detailOf, listWorkflows, loadWorkflowSource, summarise } from './workflows.ts';
+import { detailOf, edgeViews, listWorkflows, loadWorkflowSource, summarise } from './workflows.ts';
 
 interface ActiveRun {
   runner: WorkflowRunner;
@@ -381,6 +382,8 @@ export class WorkflowService {
           }),
       },
       state,
+      // WF-12: parallel branches share the run's worktree, so steps that use it take turns.
+      { exclusive: ['agent', 'command', 'land'] },
     );
     const active: ActiveRun = { runner, wf, ctx, workflowId: row.workflowId, createdAt: row.createdAt };
     this.active.set(row.id, active);
@@ -434,7 +437,8 @@ export class WorkflowService {
   decideGate(runId: string, nodeId: string, approved: boolean) {
     const run = this.load(runId);
     const s = run.runner.current;
-    if (s.status !== 'waiting-gate' || s.current !== nodeId)
+    // WF-12: a gate can wait while other branches still run, so look at the gate itself, not the run's status.
+    if (s.nodes[nodeId]?.status !== 'waiting' || !(s.active ?? [s.current]).includes(nodeId))
       throw new RpcError('not_waiting', 'That step is not waiting for a decision.');
     this.repos.audit.append({
       workspaceId: run.ctx.workspaceId,
@@ -487,30 +491,23 @@ export class WorkflowService {
     return row ? this.viewOf(row) : null;
   }
 
-  /** WF-06 inbox side: one item per gate waiting and per paused run. */
+  /** WF-06 inbox side: one item per gate waiting (several branches can wait at once) and per paused run. */
   inbox(): NeedsYouItem[] {
     const items: NeedsYouItem[] = [];
-    for (const row of this.repos.workflowRuns.inStatuses(['waiting-gate', 'paused'])) {
+    for (const row of this.repos.workflowRuns.inStatuses(['waiting-gate', 'paused', 'running'])) {
       const state = row.state as RunState | null;
       if (!state) continue;
       const ctx = row.context as RunContext;
       const wf = safeParse(row.yaml);
-      const node = wf?.nodes.find((n) => n.id === state.current);
-      items.push({
-        id: `workflow:${row.id}:${state.current ?? ''}`,
-        sessionId: ctx.head?.sessionId ?? '',
-        sessionTitle: ctx.workflowName,
-        kind: row.status === 'paused' ? 'paused' : 'gate',
-        title:
-          row.status === 'paused'
-            ? (state.pauseReason ?? 'The run paused')
-            : node?.type === 'gate'
-              ? node.question
-              : 'Waiting for a decision',
-        createdAt: row.createdAt,
-        runId: row.id,
-        ...(state.current ? { nodeId: state.current } : {}),
-      });
+      const base = { sessionId: ctx.head?.sessionId ?? '', sessionTitle: ctx.workflowName, createdAt: row.createdAt, runId: row.id };
+      if (row.status === 'paused') {
+        items.push({ ...base, id: `workflow:${row.id}:${state.current ?? ''}`, kind: 'paused', title: state.pauseReason ?? 'The run paused', ...(state.current ? { nodeId: state.current } : {}) });
+      }
+      const gates = Object.entries(state.nodes).filter(([, n]) => n.status === 'waiting').map(([id]) => id);
+      for (const nodeId of gates) {
+        const node = wf?.nodes.find((n) => n.id === nodeId);
+        items.push({ ...base, id: `workflow:${row.id}:${nodeId}`, kind: 'gate', title: node?.type === 'gate' ? node.question : 'Waiting for a decision', nodeId });
+      }
     }
     return items;
   }
@@ -574,21 +571,7 @@ function safeParse(yaml: string): Workflow | null {
 }
 
 function emptyState(wf: Workflow): RunState {
-  return {
-    status: 'running',
-    current: null,
-    nodes: Object.fromEntries(
-      wf.nodes.map((n) => [
-        n.id,
-        { status: 'pending', attempts: 0, sessionId: null, output: null, startedAt: null, endedAt: null },
-      ]),
-    ),
-    loops: {},
-    used: { turns: 0, minutes: 0, loops: 0, costUsd: 0 },
-    packet: { summary: '', diff: '', checkOutput: '', workItem: {} },
-    pauseReason: null,
-    log: [],
-  };
+  return initialState(wf);
 }
 
 export function buildView(
@@ -606,6 +589,8 @@ export function buildView(
     workflowName: wf.name,
     status: s.status,
     current: s.current,
+    active: s.active ?? (s.current ? [s.current] : []),
+    rounds: s.rounds ?? {},
     pauseReason: s.pauseReason,
     nodes: wf.nodes.map((n) => {
       const nr = s.nodes[n.id];
@@ -623,7 +608,7 @@ export function buildView(
           n.type === 'gate' || n.type === 'loop' || n.type === 'branch' ? '' : (nr?.output?.summary ?? ''),
       };
     }),
-    edges: wf.edges.map((e) => ({ from: e.from, to: e.to, when: e.when ?? null })),
+    edges: edgeViews(wf),
     used: s.used,
     budgets: wf.budgets,
     log: s.log,
