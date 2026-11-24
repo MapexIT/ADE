@@ -1,3 +1,4 @@
+import { ClipboardPaste, Play, Sparkles, X } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { AgentId, HistoryEntry, TerminalInfo, TerminalLayout } from '@ade/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,7 +22,7 @@ export function SuggestionsBar({ terminal }: { terminal: TerminalInfo }) {
           <code className="min-w-0 flex-1 truncate font-mono text-[12.5px]" title={s.command}>
             {s.command}
           </code>
-          <Button
+          <Button icon={<Play className="size-4" aria-hidden="true" />}
             size="dense"
             variant="primary"
             autoFocus={i === pending.length - 1}
@@ -32,7 +33,7 @@ export function SuggestionsBar({ terminal }: { terminal: TerminalInfo }) {
           >
             Run
           </Button>
-          <Button size="dense" variant="ghost" onClick={() => dismiss(s.id)} aria-label={`Dismiss ${s.command}`}>
+          <Button icon={<X className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => dismiss(s.id)} aria-label={`Dismiss ${s.command}`}>
             Dismiss
           </Button>
         </div>
@@ -87,7 +88,7 @@ export function AskBar({ terminal }: { terminal: TerminalInfo }) {
           </option>
         ))}
       </select>
-      <Button size="dense" type="submit" disabled={working || !question.trim()}>
+      <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" type="submit" disabled={working || !question.trim()}>
         {working ? 'Drafting…' : 'Draft'}
       </Button>
     </form>
@@ -135,7 +136,7 @@ export function HistoryDialog({ open, onClose, terminalId }: { open: boolean; on
                 {r.sessionId ? (sessions[r.sessionId]?.title ?? 'a session') : 'your checkout'} · {new Date(r.at).toLocaleDateString('en-GB')}
               </span>
               {r.exitCode !== null && r.exitCode !== 0 ? <Badge tone="danger">exit {r.exitCode}</Badge> : null}
-              <Button
+              <Button icon={<ClipboardPaste className="size-4" aria-hidden="true" />}
                 size="dense"
                 disabled={!terminalId}
                 onClick={() => {

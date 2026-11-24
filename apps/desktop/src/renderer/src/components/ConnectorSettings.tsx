@@ -1,3 +1,4 @@
+import { Plug, RefreshCw, Save } from 'lucide-react';
 import { Button, cx, SectionLabel } from '@ade/ui';
 import type { SyncSettings } from '@ade/contracts';
 import { useEffect, useState } from 'react';
@@ -54,7 +55,7 @@ export function WorkItemSyncSettings({ workspaceId }: { workspaceId: string }) {
       <p className="m-0 text-[12px] text-ink-muted">For sessions started from a work item in this repository. Off until you choose. Failures show in the session and never stop it.</p>
       <div className="flex flex-wrap items-end gap-2">
         {states ? null : (
-          <Button size="dense" onClick={() => void loadStates()}>
+          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" onClick={() => void loadStates()}>
             Load Shortcut states
           </Button>
         )}
@@ -71,7 +72,7 @@ export function WorkItemSyncSettings({ workspaceId }: { workspaceId: string }) {
         <input type="checkbox" checked={settings.closeIssues} onChange={(e) => setSettings({ ...settings, closeIssues: e.target.checked })} className="size-5 accent-[var(--accent)]" />
         Close GitHub issues when their pull request is merged
       </label>
-      <Button size="dense" variant="primary" className="self-start" onClick={() => void save()}>
+      <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" variant="primary" className="self-start" onClick={() => void save()}>
         Save sync
       </Button>
     </section>
@@ -85,7 +86,7 @@ export function PersonalMcpSettings() {
     <section className="flex flex-col gap-2" aria-label="MCP servers">
       <SectionLabel>MCP servers</SectionLabel>
       <p className="m-0 text-[12px] text-ink-muted">See every server sessions receive (your own, this repository&apos;s and ADE&apos;s), check them, switch them off, and add or remove your own.</p>
-      <Button size="dense" variant="primary" className="self-start" onClick={() => set({ settingsOpen: false, mcpOpen: true })}>
+      <Button icon={<Plug className="size-4" aria-hidden="true" />} size="dense" variant="primary" className="self-start" onClick={() => set({ settingsOpen: false, mcpOpen: true })}>
         Manage MCP servers
       </Button>
     </section>

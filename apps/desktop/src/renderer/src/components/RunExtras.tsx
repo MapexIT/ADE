@@ -1,3 +1,4 @@
+import { Play, Plus, Save, Trash2 } from 'lucide-react';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { EnvSet, Run, ScratchLanguage } from '@ade/contracts';
@@ -42,7 +43,7 @@ export function ScratchpadPanel() {
             </option>
           ))}
         </select>
-        <Button size="dense" variant="primary" onClick={() => void run()}>
+        <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => void run()}>
           Run snippet
         </Button>
         {status ? <Badge tone={status.sandboxed ? 'ok' : 'attention'}>{status.sandboxed ? 'Sandboxed' : 'Not sandboxed'}</Badge> : null}
@@ -75,7 +76,7 @@ export function TestResultsPanel({ run }: { run: Run }) {
         <Badge tone="ok">{summary.passed} passed</Badge>
         {summary.skipped ? <Badge>{summary.skipped} skipped</Badge> : null}
         {summary.failed ? (
-          <Button size="dense" className="ml-auto" onClick={() => again(rerunCommand(summary.framework, run.command, { kind: 'failures', failures: summary.failures }), 'Failed tests')}>
+          <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" className="ml-auto" onClick={() => again(rerunCommand(summary.framework, run.command, { kind: 'failures', failures: summary.failures }), 'Failed tests')}>
             Run only failures
           </Button>
         ) : null}
@@ -97,7 +98,7 @@ export function TestResultsPanel({ run }: { run: Run }) {
                 <span className="min-w-0 flex-1 truncate" title={t.failure}>
                   {t.name}
                 </span>
-                <Button size="dense" variant="ghost" onClick={() => again(rerunCommand(summary.framework, run.command, { kind: 'test', file: t.file, name: t.name }), t.name)}>
+                <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => again(rerunCommand(summary.framework, run.command, { kind: 'test', file: t.file, name: t.name }), t.name)}>
                   Run this test
                 </Button>
               </li>
@@ -167,7 +168,7 @@ export function EnvSetsDialog({ open, onClose, workspaceId }: { open: boolean; o
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={() => void save()}>
+          <Button icon={<Save className="size-4" aria-hidden="true" />} variant="primary" onClick={() => void save()}>
             Save
           </Button>
         </>
@@ -180,7 +181,7 @@ export function EnvSetsDialog({ open, onClose, workspaceId }: { open: boolean; o
               <Field label="Name" htmlFor={`set-${set.id}`}>
                 <input id={`set-${set.id}`} value={set.name} onChange={(e) => patchSet(set.id, { name: e.target.value })} className={inputClass} />
               </Field>
-              <Button size="dense" variant="ghost" className="self-end" onClick={() => setSets((all) => all.filter((s) => s.id !== set.id))}>
+              <Button icon={<Trash2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" className="self-end" onClick={() => setSets((all) => all.filter((s) => s.id !== set.id))}>
                 Remove set
               </Button>
             </div>
@@ -209,7 +210,7 @@ export function EnvSetsDialog({ open, onClose, workspaceId }: { open: boolean; o
                     <input type="checkbox" checked={v.secret} onChange={(e) => patchVar({ secret: e.target.checked, value: e.target.checked ? '' : v.value })} className="size-4 accent-[var(--accent)]" />
                     Secret
                   </label>
-                  <Button
+                  <Button icon={<Trash2 className="size-4" aria-hidden="true" />}
                     size="dense"
                     variant="ghost"
                     aria-label={`Remove ${v.name || 'variable'}`}
@@ -223,12 +224,12 @@ export function EnvSetsDialog({ open, onClose, workspaceId }: { open: boolean; o
                 </div>
               );
             })}
-            <Button size="dense" className="self-start" onClick={() => patchSet(set.id, { vars: [...set.vars, { name: '', value: '', secret: false }] })}>
+            <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" className="self-start" onClick={() => patchSet(set.id, { vars: [...set.vars, { name: '', value: '', secret: false }] })}>
               Add variable
             </Button>
           </section>
         ))}
-        <Button size="dense" className="self-start" onClick={() => setSets((all) => [...all, { id: newId(), name: 'Local', vars: [] }])}>
+        <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" className="self-start" onClick={() => setSets((all) => [...all, { id: newId(), name: 'Local', vars: [] }])}>
           Add environment set
         </Button>
       </div>

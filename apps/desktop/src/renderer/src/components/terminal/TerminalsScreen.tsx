@@ -1,4 +1,4 @@
-import { Plus, SquareTerminal } from 'lucide-react';
+import { History, Plus, RotateCcw, SquareTerminal } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, ShellKind, TerminalInfo } from '@ade/contracts';
@@ -166,7 +166,7 @@ export function TerminalsScreen() {
                 {layout.offer.terminals.length} terminal(s) from your last session, with their scrollback.
               </span>
               <div className="flex gap-2">
-                <Button size="dense" variant="primary" onClick={() => void layout.restore()}>
+                <Button icon={<RotateCcw className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => void layout.restore()}>
                   Restore terminals
                 </Button>
                 <Button size="dense" variant="ghost" onClick={layout.dismiss}>
@@ -175,7 +175,7 @@ export function TerminalsScreen() {
               </div>
             </div>
           ) : null}
-          <Button size="dense" variant="ghost" onClick={() => setHistory(true)}>
+          <Button icon={<History className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => setHistory(true)}>
             Command history
           </Button>
           <NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />

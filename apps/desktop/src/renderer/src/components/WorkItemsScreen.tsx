@@ -1,4 +1,4 @@
-import { FolderGit2, Inbox } from 'lucide-react';
+import { ExternalLink, FolderGit2, Inbox, Play } from 'lucide-react';
 import { Badge, Button, EmptyState, Tabs } from '@ade/ui';
 import type { WorkItem } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -103,11 +103,11 @@ export function WorkItemsScreen() {
                     <span className="font-semibold">{i.title}</span>
                     {i.group ? <span className="text-[12px] text-ink-muted">{i.group}</span> : null}
                     <div className="flex gap-2">
-                      <Button size="dense" variant="primary" onClick={() => set({ newSession: { workItem: i } })}>
+                      <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => set({ newSession: { workItem: i } })}>
                         Start a session
                       </Button>
                       {i.url ? (
-                        <Button size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: i.url! }))}>
+                        <Button icon={<ExternalLink className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: i.url! }))}>
                           Open
                         </Button>
                       ) : null}

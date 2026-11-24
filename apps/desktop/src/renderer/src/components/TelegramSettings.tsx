@@ -1,4 +1,4 @@
-import { Send } from 'lucide-react';
+import { Save, Send, Trash2 } from 'lucide-react';
 import { Badge, Button, cx, SectionLabel } from '@ade/ui';
 import { useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -52,11 +52,11 @@ export function TelegramSettings({ available, stored, onStoredChange }: { availa
           className={`${inputClass} flex-1`}
           disabled={!available}
         />
-        <Button disabled={!available || (key === 'telegram-password' ? values[key].length < 8 : !values[key])} onClick={() => save(key)}>
+        <Button icon={<Save className="size-4" aria-hidden="true" />} disabled={!available || (key === 'telegram-password' ? values[key].length < 8 : !values[key])} onClick={() => save(key)}>
           Save
         </Button>
         {stored.includes(key) ? (
-          <Button variant="ghost" onClick={() => remove(key)} aria-label={`Remove ${label.toLowerCase()}`}>
+          <Button icon={<Trash2 className="size-4" aria-hidden="true" />} variant="ghost" onClick={() => remove(key)} aria-label={`Remove ${label.toLowerCase()}`}>
             Remove
           </Button>
         ) : null}
@@ -102,7 +102,7 @@ export function TelegramSettings({ available, stored, onStoredChange }: { availa
         Sign-ins are kept in memory only, so restarting ADE signs every chat out. Messages include session and workspace names and go through Telegram&apos;s servers.
       </p>
       <div>
-        <Button
+        <Button icon={<Send className="size-4" aria-hidden="true" />}
           size="dense"
           disabled={!on || !status?.chats}
           title={!status?.chats ? 'Sign in a chat with /auth first' : undefined}

@@ -8,27 +8,7 @@ import {
   type FeedKind,
 } from '@ade/session-core';
 import type { Session } from '@ade/contracts';
-import {
-  Activity as ActivityIcon,
-  ArrowRight,
-  Bot,
-  CircleAlert,
-  Coins,
-  FileCode,
-  FilePen,
-  Files,
-  GitCompareArrows,
-  Hand,
-  ListChecks,
-  MessageSquare,
-  Play,
-  Search,
-  SquareTerminal,
-  Timer,
-  User,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
+import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
@@ -125,7 +105,7 @@ export function ObserveScreen() {
         title="No agents to observe yet"
         body="Start a session and watch it here: what the agent is doing, how busy it is, the files it touches and the result."
         action={
-          <Button variant="primary" onClick={() => useStore.getState().set({ newSession: {} })}>
+          <Button icon={<Plus className="size-4" aria-hidden="true" />} variant="primary" onClick={() => useStore.getState().set({ newSession: {} })}>
             New session
           </Button>
         }

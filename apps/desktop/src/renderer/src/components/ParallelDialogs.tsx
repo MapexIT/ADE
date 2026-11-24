@@ -1,3 +1,4 @@
+import { ArrowRightLeft, GitCompareArrows, MessagesSquare } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { AgentId, FileChange, Session } from '@ade/contracts';
 import { isLive, STATE_LABELS } from '@ade/session-core';
@@ -73,10 +74,10 @@ export function CompareDialog() {
               </ul>
               <p className="m-0 line-clamp-6 text-ink-muted whitespace-pre-wrap">{lastMessage[s.id] ?? 'No message yet.'}</p>
               <div className="mt-auto flex gap-2">
-                <Button size="dense" onClick={() => open(s, 'sessions')}>
+                <Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} size="dense" onClick={() => open(s, 'sessions')}>
                   Open session
                 </Button>
-                <Button size="dense" variant="primary" disabled={!files?.length} onClick={() => open(s, 'review')}>
+                <Button icon={<GitCompareArrows className="size-4" aria-hidden="true" />} size="dense" variant="primary" disabled={!files?.length} onClick={() => open(s, 'review')}>
                   Review
                 </Button>
               </div>
@@ -127,7 +128,7 @@ export function HandOffDialog() {
       footer={
         <>
           <Button onClick={() => set({ handOffSessionId: null })}>Cancel</Button>
-          <Button variant="primary" disabled={!agentId || busy} onClick={() => void go()}>
+          <Button icon={<ArrowRightLeft className="size-4" aria-hidden="true" />} variant="primary" disabled={!agentId || busy} onClick={() => void go()}>
             {busy ? 'Handing off…' : 'Hand off'}
           </Button>
         </>

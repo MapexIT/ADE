@@ -1,3 +1,4 @@
+import { CircleStop, Copy, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -80,7 +81,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
           <span className="text-ink-muted">Running</span>
           <span>{running.command}</span>
           <span className="text-ink-muted">since {clock(running.startedAt)}</span>
-          <Button size="dense" className="ml-auto" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
+          <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" className="ml-auto" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
             Stop
           </Button>
         </div>
@@ -129,12 +130,12 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
               {done ? (
                 <div className="flex flex-wrap gap-2 font-sans text-[13px]">
                   {failed ? (
-                    <Button size="dense" variant="primary" onClick={() => void fixWithAgent(b)}>
+                    <Button icon={<Wrench className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => void fixWithAgent(b)}>
                       Fix with agent
                     </Button>
                   ) : null}
                   {failed ? (
-                    <Button
+                    <Button icon={<Play className="size-4" aria-hidden="true" />}
                       size="dense"
                       onClick={() =>
                         setStore({
@@ -150,13 +151,13 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                       Run a workflow
                     </Button>
                   ) : null}
-                  <Button size="dense" onClick={() => (sessionId ? sendChecked(blockAsText(b), () => (attach(sessionId, attachmentText(`Command: ${b.command}`, blockAsText(b))), toast('Attached to the next prompt.'))) : toast('This terminal is not linked to a session.', 'danger'))}>
+                  <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />} size="dense" onClick={() => (sessionId ? sendChecked(blockAsText(b), () => (attach(sessionId, attachmentText(`Command: ${b.command}`, blockAsText(b))), toast('Attached to the next prompt.'))) : toast('This terminal is not linked to a session.', 'danger'))}>
                     Send to agent
                   </Button>
-                  <Button size="dense" onClick={() => runInTerminal(terminalId, b.command)}>
+                  <Button icon={<RotateCcw className="size-4" aria-hidden="true" />} size="dense" onClick={() => runInTerminal(terminalId, b.command)}>
                     Re-run
                   </Button>
-                  <Button size="dense" onClick={() => void navigator.clipboard.writeText(blockAsText(b)).then(() => toast('Copied.'))}>
+                  <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={() => void navigator.clipboard.writeText(blockAsText(b)).then(() => toast('Copied.'))}>
                     Copy output
                   </Button>
                 </div>

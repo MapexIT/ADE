@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react';
+import { ExternalLink, Play, Save, SendHorizontal, SlidersHorizontal } from 'lucide-react';
 import { Badge, Button, EmptyState, SectionLabel, Tabs } from '@ade/ui';
 import type { EnvSet, Run, RunConfig } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
@@ -107,15 +107,15 @@ export function RunScreen() {
             ))}
           </select>
         </Field>
-        <Button variant="ghost" onClick={() => setEditingEnv(true)}>
+        <Button icon={<SlidersHorizontal className="size-4" aria-hidden="true" />} variant="ghost" onClick={() => setEditingEnv(true)}>
           Environment sets
         </Button>
-        <Button variant="primary" disabled={!config} onClick={() => void run()} aria-label="Run the configuration">
+        <Button icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!config} onClick={() => void run()} aria-label="Run the configuration">
           Run
         </Button>
         {config ? <code className="self-center text-[12px] text-ink-muted">{config.command.join(' ')}</code> : null}
         {active?.previewUrl ? (
-          <Button className="self-center" onClick={() => void attempt(() => main('main.openPreview', { url: active.previewUrl! }))}>
+          <Button icon={<ExternalLink className="size-4" aria-hidden="true" />} className="self-center" onClick={() => void attempt(() => main('main.openPreview', { url: active.previewUrl! }))}>
             Open preview
           </Button>
         ) : null}
@@ -172,7 +172,7 @@ export function RunScreen() {
                   Compare
                 </label>
                 {r.sessionId ? (
-                  <Button
+                  <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />}
                     size="dense"
                     onClick={() =>
                       sendChecked(runAsText(r), () => {
@@ -194,7 +194,7 @@ export function RunScreen() {
           <Field label="Command" htmlFor="rc-cmd" hint="Words are split on spaces; no shell is involved.">
             <input id="rc-cmd" value={draft.command} onChange={(e) => setDraft({ ...draft, command: e.target.value })} className={`${inputClass} font-mono`} />
           </Field>
-          <Button
+          <Button icon={<Save className="size-4" aria-hidden="true" />}
             disabled={!draft.name.trim() || !draft.command.trim()}
             onClick={() =>
               void attempt(() => host.call('runs.saveConfig', { workspaceId: workspace.id, name: draft.name.trim(), command: draft.command.trim().split(/\s+/), cwd: '.' })).then((ok) => {

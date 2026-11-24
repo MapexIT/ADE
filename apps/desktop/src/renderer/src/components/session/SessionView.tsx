@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CircleStop, Columns2, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, ScrollText, SendHorizontal, Zap } from 'lucide-react';
+import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
 import { isLive, STATE_LABELS } from '@ade/session-core';
@@ -96,7 +96,7 @@ function OpenInAgentUi({ session, ended }: { session: Session; ended: boolean })
   if (!ui || !agent?.path || ended || !session.worktreePath) return null;
   const wsl = session.containment === 'wsl';
   return (
-    <Button
+    <Button icon={<ExternalLink className="size-4" aria-hidden="true" />}
       size="dense"
       variant="ghost"
       disabled={wsl || isLive(session.state)}
@@ -413,7 +413,7 @@ export function SessionView() {
       <EmptyState icon={<MessagesSquare className="size-5" />}
         title={hasWorkspace ? 'No session selected' : 'Open a repository to begin'}
         body={hasWorkspace ? 'A session is one conversation with one agent in its own Git worktree.' : 'ADE works on Git repositories. Each session gets its own worktree, so your checkout is never touched.'}
-        action={hasWorkspace ? <Button variant="primary" onClick={() => set({ newSession: {} })}>New session</Button> : undefined}
+        action={hasWorkspace ? <Button icon={<Plus className="size-4" aria-hidden="true" />} variant="primary" onClick={() => set({ newSession: {} })}>New session</Button> : undefined}
       />
     );
   }

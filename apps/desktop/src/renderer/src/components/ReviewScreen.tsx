@@ -1,4 +1,4 @@
-import { Archive, Check, FileQuestion, GitCompareArrows, MousePointerClick, Undo2 } from 'lucide-react';
+import { Archive, Check, Columns2, FileInput, FileQuestion, GitCommitHorizontal, GitCompareArrows, History, MessageSquarePlus, MessagesSquare, MousePointerClick, Pencil, Rows2, SendHorizontal, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { DiffEditor } from '@monaco-editor/react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
@@ -123,7 +123,7 @@ export function ReviewScreen() {
     };
   }, [session, active, turnIndex, showingSince]);
 
-  if (!session) return <EmptyState icon={<GitCompareArrows className="size-5" />} title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
+  if (!session) return <EmptyState icon={<GitCompareArrows className="size-5" />} title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
 
   const busy = isLive(session.state);
   const ended = session.state === 'landed' || session.state === 'discarded';
@@ -250,14 +250,14 @@ export function ReviewScreen() {
                     >
                       {activeEntry?.state === 'reviewed' ? 'Mark as not reviewed' : 'Mark as reviewed'}
                     </Button>
-                    <Button size="dense" aria-pressed={!inline} variant={!inline ? 'primary' : 'secondary'} onClick={() => setInline(false)}>
+                    <Button icon={<Columns2 className="size-4" aria-hidden="true" />} size="dense" aria-pressed={!inline} variant={!inline ? 'primary' : 'secondary'} onClick={() => setInline(false)}>
                       Side by side
                     </Button>
-                    <Button size="dense" aria-pressed={inline} variant={inline ? 'primary' : 'secondary'} onClick={() => setInline(true)}>
+                    <Button icon={<Rows2 className="size-4" aria-hidden="true" />} size="dense" aria-pressed={inline} variant={inline ? 'primary' : 'secondary'} onClick={() => setInline(true)}>
                       Inline
                     </Button>
                     {activeEntry?.state === 'changed' ? (
-                      <Button
+                      <Button icon={<History className="size-4" aria-hidden="true" />}
                         size="dense"
                         aria-pressed={showingSince}
                         variant={showingSince ? 'primary' : 'secondary'}
@@ -267,10 +267,10 @@ export function ReviewScreen() {
                         Since my review
                       </Button>
                     ) : null}
-                    <Button size="dense" onClick={() => session.worktreePath && openEditor(joinPath(session.worktreePath, active), session.id)} disabled={busy}>
+                    <Button icon={<Pencil className="size-4" aria-hidden="true" />} size="dense" onClick={() => session.worktreePath && openEditor(joinPath(session.worktreePath, active), session.id)} disabled={busy}>
                       Edit this file
                     </Button>
-                    <Button
+                    <Button icon={<MessageSquarePlus className="size-4" aria-hidden="true" />}
                       size="dense"
                       onClick={() => {
                         const line = editorRef.current?.getModifiedEditor().getPosition()?.lineNumber ?? 1;
@@ -302,10 +302,10 @@ export function ReviewScreen() {
                     </label>
                     <textarea id="line-comment" rows={2} value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} autoFocus className="rounded-[var(--radius)] border border-line bg-bg p-2.5 text-ink focus:border-accent focus:outline-none" />
                     <div className="flex gap-2">
-                      <Button variant="primary" disabled={!comment.text.trim()} onClick={addToReview}>
+                      <Button icon={<MessageSquarePlus className="size-4" aria-hidden="true" />} variant="primary" disabled={!comment.text.trim()} onClick={addToReview}>
                         Add to review
                       </Button>
-                      <Button disabled={!comment.text.trim()} onClick={() => sendComment('now')}>
+                      <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />} disabled={!comment.text.trim()} onClick={() => sendComment('now')}>
                         {busy ? 'Queue as the next prompt' : 'Send now as a prompt'}
                       </Button>
                       <Button variant="ghost" onClick={() => setComment(null)}>
@@ -333,28 +333,28 @@ export function ReviewScreen() {
                     Commit message
                   </label>
                   <textarea id="commit-msg" rows={commitMessage.includes('\n') ? 4 : 1} value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 py-2.5 text-ink focus:border-accent focus:outline-none" />
-                  <Button size="dense" variant="ghost" disabled={busy || drafting || !changes.length} onClick={() => void draftMessage()} title="RV-13: asks this session's agent (adds a turn)">
+                  <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={busy || drafting || !changes.length} onClick={() => void draftMessage()} title="RV-13: asks this session's agent (adds a turn)">
                     {drafting ? 'Drafting…' : 'Draft with the agent'}
                   </Button>
                 </>
               )}
               <div className="ml-auto flex flex-wrap gap-2">
                 {session.inPlace ? (
-                  <Button variant="primary" disabled={busy || !files.length} onClick={() => land('apply')}>
+                  <Button icon={<Check className="size-4" aria-hidden="true" />} variant="primary" disabled={busy || !files.length} onClick={() => land('apply')}>
                     Keep changes
                   </Button>
                 ) : (
                   <>
-                    <Button disabled={busy || !files.length} onClick={() => land('apply')}>
+                    <Button icon={<FileInput className="size-4" aria-hidden="true" />} disabled={busy || !files.length} onClick={() => land('apply')}>
                       Apply to my checkout
                     </Button>
-                    <Button variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
+                    <Button icon={<GitCommitHorizontal className="size-4" aria-hidden="true" />} variant="primary" disabled={busy || !files.length} onClick={() => land('commit')}>
                       Commit to branch
                     </Button>
                     {pr ? null : <PullRequestButton session={session} files={files} message={commitMessage} disabled={busy || !files.length} onOpened={loadPr} />}
                   </>
                 )}
-                <Button
+                <Button icon={<Trash2 className="size-4" aria-hidden="true" />}
                   variant="danger"
                   onClick={() =>
                     ask({

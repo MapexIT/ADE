@@ -1,3 +1,4 @@
+import { ExternalLink, GitMerge, GitPullRequestArrow, ListChecks, RefreshCw, ScanSearch, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Badge, Button, cx, SectionLabel } from '@ade/ui';
 import type { AgentId, BaseStatus, CheckResult, CheckSettings, PullRequestStatus, ReviewAssessment, RunConfig, Session } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
@@ -39,11 +40,11 @@ export function BaseBanner({ session }: { session: Session }) {
       </span>
       <span className="text-ink">{status.conflicts.length ? `Conflicts in ${status.conflicts.join(', ')}.` : 'No conflicts.'}</span>
       <div className="ml-auto flex gap-2">
-        <Button size="dense" disabled={busy || working} onClick={() => void move(false)}>
+        <Button icon={<GitMerge className="size-4" aria-hidden="true" />} size="dense" disabled={busy || working} onClick={() => void move(false)}>
           Move onto it
         </Button>
         {status.conflicts.length ? (
-          <Button size="dense" variant="primary" disabled={busy || working} onClick={() => void move(true)}>
+          <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" variant="primary" disabled={busy || working} onClick={() => void move(true)}>
             Move and ask the agent to resolve
           </Button>
         ) : null}
@@ -95,7 +96,7 @@ export function AssistantPanel({ session, onResult }: { session: Session; onResu
             </option>
           ))}
         </select>
-        <Button size="dense" disabled={!agentId || working} onClick={() => void run()}>
+        <Button icon={<ScanSearch className="size-4" aria-hidden="true" />} size="dense" disabled={!agentId || working} onClick={() => void run()}>
           {working ? 'Reviewing…' : 'Pre-review'}
         </Button>
       </div>
@@ -148,14 +149,14 @@ export function ChecksPanel({ session }: { session: Session }) {
         <SectionLabel>Checks</SectionLabel>
         {results.length ? <Badge tone={failed.length ? 'attention' : 'ok'}>{failed.length ? `${failed.length} failing` : 'All passing'}</Badge> : null}
         <div className="ml-auto flex gap-2">
-          <Button size="dense" variant="ghost" onClick={() => setChoosing((c) => !c)} aria-expanded={choosing}>
+          <Button icon={<ListChecks className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => setChoosing((c) => !c)} aria-expanded={choosing}>
             Choose checks
           </Button>
-          <Button size="dense" disabled={running || busy || !settings.configIds.length} onClick={() => void run()}>
+          <Button icon={<ListChecks className="size-4" aria-hidden="true" />} size="dense" disabled={running || busy || !settings.configIds.length} onClick={() => void run()}>
             {running ? 'Running…' : 'Run checks'}
           </Button>
           {failed.length ? (
-            <Button size="dense" variant="primary" onClick={() => void sendPrompt(session.id, checkFailurePrompt(results), busy)}>
+            <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => void sendPrompt(session.id, checkFailurePrompt(results), busy)}>
               Send failures to the agent
             </Button>
           ) : null}
@@ -213,7 +214,7 @@ export function BatchReviewPanel({ session, comments, onChange }: { session: Ses
         <span className="font-semibold">
           Review · {comments.length} comment{comments.length === 1 ? '' : 's'}
         </span>
-        <Button size="dense" variant="primary" className="ml-auto" onClick={() => void send()}>
+        <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />} size="dense" variant="primary" className="ml-auto" onClick={() => void send()}>
           {busy ? 'Queue review' : 'Send review'}
         </Button>
       </div>
@@ -223,7 +224,7 @@ export function BatchReviewPanel({ session, comments, onChange }: { session: Ses
             {c.path}:{c.line}
           </span>
           <span className="min-w-0 flex-1 whitespace-pre-wrap">{c.text}</span>
-          <Button size="dense" variant="ghost" aria-label={`Remove comment on ${c.path} line ${c.line}`} onClick={() => onChange(comments.filter((_, j) => j !== i))}>
+          <Button icon={<Trash2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" aria-label={`Remove comment on ${c.path} line ${c.line}`} onClick={() => onChange(comments.filter((_, j) => j !== i))}>
             Remove
           </Button>
         </div>
@@ -256,13 +257,13 @@ export function PullRequestPanel({ session, status, onRefresh }: { session: Sess
           {status.checks.length ? (failing.length ? `${failing.length} check(s) failing` : pending.length ? `${pending.length} check(s) running` : 'Checks passing') : 'No checks'}
         </Badge>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: status.url }))}>
+          <Button icon={<ExternalLink className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => void attempt(() => main('main.openExternal', { url: status.url }))}>
             Open on GitHub
           </Button>
-          <Button size="dense" variant="ghost" onClick={onRefresh}>
+          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={onRefresh}>
             Refresh
           </Button>
-          <Button
+          <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />}
             size="dense"
             disabled={!!working}
             onClick={() =>
@@ -274,7 +275,7 @@ export function PullRequestPanel({ session, status, onRefresh }: { session: Sess
           >
             Send review comments
           </Button>
-          <Button
+          <Button icon={<SendHorizontal className="size-4" aria-hidden="true" />}
             size="dense"
             disabled={!!working || !failing.length}
             onClick={() =>
@@ -304,7 +305,7 @@ export function PullRequestPanel({ session, status, onRefresh }: { session: Sess
           Commit message for the update
         </label>
         <input id="push-msg" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Commit message for the new changes" className={cx(inputClass, 'min-h-9 min-w-64 flex-1')} />
-        <Button
+        <Button icon={<Upload className="size-4" aria-hidden="true" />}
           size="dense"
           variant="primary"
           disabled={busy || !!working || !message.trim()}
@@ -353,7 +354,7 @@ export function PullRequestButton({ session, files, message, disabled, onOpened 
   };
   return (
     <>
-      <Button disabled={disabled} onClick={show}>
+      <Button icon={<GitPullRequestArrow className="size-4" aria-hidden="true" />} disabled={disabled} onClick={show}>
         Open pull request
       </Button>
       <Modal
@@ -364,7 +365,7 @@ export function PullRequestButton({ session, files, message, disabled, onOpened 
         footer={
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button variant="primary" disabled={!title.trim() || working} onClick={() => void go()}>
+            <Button icon={<GitPullRequestArrow className="size-4" aria-hidden="true" />} variant="primary" disabled={!title.trim() || working} onClick={() => void go()}>
               {working ? 'Opening…' : 'Push and open'}
             </Button>
           </>
