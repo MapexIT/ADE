@@ -1,6 +1,8 @@
 import { TRANSIENT_EVENTS } from '@ade/contracts';
 import type {
   AvailableCommand,
+  LoopLevel,
+  LoopPattern,
   PermissionDecision,
   PermissionOption,
   PlanEntry,
@@ -54,6 +56,18 @@ export type TimelineItem =
       outcome: 'sent' | 'cancelled' | 'failed' | null;
       approach: string | null;
       calls: number;
+    }
+  /** WA-10: a loop warning. Later findings for the same turn, pattern and subject update it in place. */
+  | {
+      kind: 'loop';
+      key: string;
+      turnId: string;
+      pattern: LoopPattern;
+      subject: string;
+      count: number;
+      level: LoopLevel;
+      detail: string | null;
+      state: 'active' | 'dismissed' | 'ended';
     }
   /** TM-04: a command the agent runs through ADE; `output` grows live until it exits. */
   | {
@@ -172,7 +186,11 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
         (i) => ({ ...(i as Extract<TimelineItem, { kind: 'turn' }>), stopReason: event.stopReason }),
       );
       v.items = (updated ?? v.items).map((i) =>
-        (i.kind === 'agent-message' || i.kind === 'agent-thought') && i.streaming ? { ...i, streaming: false } : i,
+        (i.kind === 'agent-message' || i.kind === 'agent-thought') && i.streaming
+          ? { ...i, streaming: false }
+          : i.kind === 'loop' && i.turnId === event.turnId && i.state === 'active'
+            ? { ...i, state: 'ended' }
+            : i,
       );
       return v;
     }
@@ -344,6 +362,33 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
           (i) => i.kind === 'reasoning' && i.runId === event.runId,
           (i) => ({ ...(i as Extract<TimelineItem, { kind: 'reasoning' }>), outcome: event.outcome, approach: event.approach, calls: event.calls }),
         ) ?? v.items;
+      return v;
+    case 'loop.detected': {
+      const updated = replaceWhere(
+        v.items,
+        (i) => i.kind === 'loop' && i.turnId === event.turnId && i.pattern === event.pattern && i.subject === event.subject,
+        (i) => ({ ...(i as Extract<TimelineItem, { kind: 'loop' }>), count: event.count, level: event.level, detail: event.detail }),
+      );
+      v.items = updated ?? [
+        ...v.items,
+        {
+          kind: 'loop',
+          key: `loop:${event.seq}`,
+          turnId: event.turnId,
+          pattern: event.pattern,
+          subject: event.subject,
+          count: event.count,
+          level: event.level,
+          detail: event.detail,
+          state: 'active',
+        },
+      ];
+      return v;
+    }
+    case 'loop.dismissed':
+      v.items = v.items.map((i) =>
+        i.kind === 'loop' && i.turnId === event.turnId && i.state === 'active' ? { ...i, state: 'dismissed' } : i,
+      );
       return v;
     case 'checkpoint.created':
     case 'session.state_changed':

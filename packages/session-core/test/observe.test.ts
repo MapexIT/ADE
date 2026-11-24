@@ -209,3 +209,24 @@ describe('WA-07 activity', () => {
     expect(rateBuckets(times, T0 + 240_000, 4)).toEqual([0, 0, 0, 0]);
   });
 });
+
+describe('WA-10 loop warning in the activity', () => {
+  const detected = (secs: number, level: 'warning' | 'severe', count: number) =>
+    ev(secs, { sessionId: 's1', type: 'loop.detected', turnId: 't1', pattern: 'repeated-action', subject: 'Read README.md', count, level, detail: null });
+
+  it('is set on detection, keeps its first time, and is cleared by a dismissal or the end of the turn', () => {
+    let a = activityFrom([turn[1]!, detected(5, 'warning', 4)]);
+    expect(a.loop).toEqual({ pattern: 'repeated-action', subject: 'Read README.md', count: 4, level: 'warning', detail: null, since: T0 + 5000 });
+    expect(a.counts.loops).toBe(1);
+    expect(a.feed.at(-1)).toMatchObject({ kind: 'loop', text: 'Repeated the same step 4 times: Read README.md' });
+    a = applyActivity(a, detected(9, 'severe', 8));
+    expect(a.loop).toMatchObject({ count: 8, level: 'severe', since: T0 + 5000 });
+    expect(a.counts.loops).toBe(1);
+    const dismissed = applyActivity(a, ev(10, { sessionId: 's1', type: 'loop.dismissed', turnId: 't1' }));
+    expect(dismissed.loop).toBeNull();
+    expect(dismissed.feed.at(-1)).toMatchObject({ kind: 'loop', text: 'Loop warning dismissed' });
+    expect(applyActivity(a, turn[turn.length - 1]!).loop).toBeNull();
+    expect(applyActivity(a, ev(11, { sessionId: 's1', type: 'session.state_changed', from: 'working', to: 'interrupted', reason: null })).loop).toBeNull();
+    expect(applyActivity(a, ev(11, { sessionId: 's1', type: 'turn.started', turnId: 't2', index: 1 })).loop).toBeNull();
+  });
+});

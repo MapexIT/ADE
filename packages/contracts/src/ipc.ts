@@ -162,12 +162,16 @@ export type ComposerState = z.infer<typeof ComposerState>;
 /** GN-02: the prompt board, shared by every session of a workspace and kept across restarts. */
 export const PromptBoxes = z.array(PromptBox).max(100);
 
+/** WA-10: loop watch. Stored under the settings key `loops`; read with `LoopSettings.parse(value ?? {})`. */
+export const LoopSettings = z.object({ enabled: z.boolean().default(true), stopTurn: z.boolean().default(false) });
+export type LoopSettings = z.infer<typeof LoopSettings>;
+
 export const NeedsYouItem = z.object({
   id: z.string(),
   /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
   sessionId: z.string(),
   sessionTitle: z.string(),
-  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused']),
+  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused', 'loop']),
   /** Set for workflow gates and paused runs. */
   runId: z.string().optional(),
   nodeId: z.string().optional(),

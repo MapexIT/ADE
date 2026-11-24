@@ -105,3 +105,34 @@ describe('GN-01 reasoning in the timeline', () => {
     expect(v.items.find((i) => i.kind === 'reasoning')).toMatchObject({ outcome: 'sent', approach: 'patch' });
   });
 });
+
+describe('WA-10 loop warnings in the timeline', () => {
+  const detected = (turnId: string, count: number, level: 'warning' | 'severe', subject = 'Read README.md') =>
+    ev({ type: 'loop.detected', turnId, pattern: 'repeated-action', subject, count, level, detail: null });
+
+  it('adds a loop item, updates it in place for the same subject, and ends it with the turn', () => {
+    seq = 0;
+    let v = projectSession([ev({ type: 'turn.started', turnId: 't1', index: 0 }), detected('t1', 4, 'warning')]);
+    expect(v.items.filter((i) => i.kind === 'loop')).toEqual([
+      { kind: 'loop', key: 'loop:1', turnId: 't1', pattern: 'repeated-action', subject: 'Read README.md', count: 4, level: 'warning', detail: null, state: 'active' },
+    ]);
+    v = applyEvent(v, detected('t1', 8, 'severe'));
+    v = applyEvent(v, detected('t1', 4, 'warning', 'Read a.ts'));
+    const loops = v.items.filter((i) => i.kind === 'loop');
+    expect(loops.map((i) => i.kind === 'loop' && [i.subject, i.count, i.level, i.key])).toEqual([
+      ['Read README.md', 8, 'severe', 'loop:1'],
+      ['Read a.ts', 4, 'warning', 'loop:3'],
+    ]);
+    v = applyEvent(v, ev({ type: 'turn.ended', turnId: 't1', stopReason: 'end_turn', usage: null }));
+    expect(v.items.filter((i) => i.kind === 'loop').map((i) => i.kind === 'loop' && i.state)).toEqual(['ended', 'ended']);
+  });
+
+  it('marks active warnings of the turn dismissed; they stay dismissed when the turn ends', () => {
+    seq = 0;
+    let v = projectSession([ev({ type: 'turn.started', turnId: 't1', index: 0 }), detected('t1', 4, 'warning')]);
+    v = applyEvent(v, ev({ type: 'loop.dismissed', turnId: 't1' }));
+    expect(v.items.find((i) => i.kind === 'loop')).toMatchObject({ state: 'dismissed' });
+    v = applyEvent(v, ev({ type: 'turn.ended', turnId: 't1', stopReason: 'end_turn', usage: null }));
+    expect(v.items.find((i) => i.kind === 'loop')).toMatchObject({ state: 'dismissed' });
+  });
+});

@@ -9,6 +9,7 @@ import {
   defineTopics,
   emitterPort,
   hostApi,
+  LoopSettings,
   method,
   RpcError,
   serveApi,
@@ -77,5 +78,17 @@ describe('rpc', () => {
     publish('session.event', { type: 'notice', sessionId: 's', seq: 1, ts: 'now', level: 'info', text: 'hi' });
     await new Promise((r) => setTimeout(r, 20));
     expect(got).toHaveLength(1);
+  });
+});
+
+describe('WA-10 loop watch contracts', () => {
+  it('parses both loop events and gives loop settings their defaults', () => {
+    const base = { sessionId: 's', seq: 1, ts: '2026-11-24T10:00:00.000Z' };
+    const detected = { ...base, type: 'loop.detected', turnId: 't', pattern: 'repeated-action', subject: 'Read a', count: 4, level: 'warning', detail: null };
+    expect(SessionEvent.parse(detected).type).toBe('loop.detected');
+    expect(SessionEvent.parse({ ...base, type: 'loop.dismissed', turnId: 't' }).type).toBe('loop.dismissed');
+    expect(() => SessionEvent.parse({ ...detected, pattern: 'other' })).toThrow();
+    expect(LoopSettings.parse({})).toEqual({ enabled: true, stopTurn: false });
+    expect(LoopSettings.parse({ stopTurn: true })).toEqual({ enabled: true, stopTurn: true });
   });
 });

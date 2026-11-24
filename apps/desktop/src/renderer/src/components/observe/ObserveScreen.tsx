@@ -8,7 +8,7 @@ import {
   type FeedKind,
 } from '@ade/session-core';
 import type { Session } from '@ade/contracts';
-import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity as ActivityIcon, ArrowRight, Bot, CircleAlert, Coins, FileCode, FilePen, Files, GitCompareArrows, Hand, ListChecks, MessageSquare, Play, Plus, Repeat2, Search, SquareTerminal, Timer, User, Wrench, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
@@ -54,6 +54,7 @@ const FEED_ICONS: Record<FeedKind, LucideIcon> = {
   turn: Play,
   state: Bot,
   notice: CircleAlert,
+  loop: Repeat2,
 };
 
 /** WA-07: every agent session in the workspace, live, with what it is doing and what it did. */
