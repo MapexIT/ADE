@@ -590,6 +590,8 @@ export const hostApi = defineApi({
   'sessions.unqueue': method(z.object({ sessionId: Id, id: Id }), Ok),
   'sessions.editQueued': method(z.object({ sessionId: Id, id: Id, content: z.array(PromptBlock).min(1) }), Ok),
   'sessions.cancel': method(z.object({ sessionId: Id }), Ok),
+  /** WA-10: "Not a loop": no more loop warnings in the session's current turn. */
+  'sessions.dismissLoop': method(z.object({ sessionId: Id }), Ok),
   /** TM-04: stops a command the agent is running through ADE. `killed` is false when it had already ended. */
   'sessions.killCommand': method(z.object({ sessionId: Id, terminalId: z.string().min(1).max(200) }), z.object({ killed: z.boolean() })),
   'sessions.interrupt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), Ok),

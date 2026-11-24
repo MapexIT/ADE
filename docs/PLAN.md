@@ -187,7 +187,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M9-T01** Feature, decisions and plan for loop watch (WA-10).
 - [x] **M9-T02** Contracts (`loop.detected`, `loop.dismissed`, `LoopSettings`, inbox kind, `sessions.dismissLoop`)
       and the pure detector `applyLoop` with its unit tests.
-- [ ] **M9-T03** Host `LoopWatch`: events, inbox, notification, optional stop, audit; integration tests with the
+- [x] **M9-T03** Host `LoopWatch`: events, inbox, notification, optional stop, audit; integration tests with the
       fake agent.
 - [x] **M9-T04** Projection and activity (`loop` timeline item, `Activity.loop`) with unit tests.
 - [ ] **M9-T05** Renderer: timeline card, redirect draft, header and list badges, Observe section, inbox label,
