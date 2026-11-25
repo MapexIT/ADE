@@ -230,3 +230,20 @@ describe('WA-10 loop warning in the activity', () => {
     expect(applyActivity(a, ev(11, { sessionId: 's1', type: 'turn.started', turnId: 't2', index: 1 })).loop).toBeNull();
   });
 });
+
+describe('RV-16 receipts in the activity feed', () => {
+  it('adds one line per receipt event', () => {
+    const facts = { filesChanged: 1, additions: 1, deletions: 0, editsReported: 1, commands: 0, commandsFailed: 0 };
+    const claim = { category: 'tests' as const, quote: 'All tests pass.', status: 'unseen' as const, evidence: null };
+    const issued = (secs: number, claims: (typeof claim)[]) =>
+      ev(secs, { sessionId: 's1', type: 'receipt.issued', turnId: 't1', turnIndex: 0, facts, claims, findings: [], passed: [] });
+    const a = activityFrom([issued(1, [claim]), issued(2, []), ev(3, { sessionId: 's1', type: 'receipt.checked', turnId: 't1', turnIndex: 0, checks: [{ name: 'Unit', categories: ['tests'], exitCode: 1 }, { name: 'Lint', categories: ['lint'], exitCode: 0 }] }), ev(4, { sessionId: 's1', type: 'receipt.checked', turnId: 't1', turnIndex: 0, checks: [{ name: 'Unit', categories: ['tests'], exitCode: 0 }] }), ev(5, { sessionId: 's1', type: 'receipt.acknowledged', turnId: 't1' })]);
+    expect(a.feed.map((f) => [f.kind, f.text])).toEqual([
+      ['receipt', 'Receipt: 1 to check'],
+      ['receipt', 'Receipt: nothing to flag'],
+      ['receipt', 'Receipt: 1 of 2 checks failed'],
+      ['receipt', 'Receipt: all checks passed'],
+      ['receipt', 'Receipt marked as checked'],
+    ]);
+  });
+});

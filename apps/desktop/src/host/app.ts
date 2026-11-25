@@ -167,6 +167,8 @@ export function createHost(config: HostConfig) {
   });
   const resolveCommand = commandResolver(config.node, config.nodeEnv);
   const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
+  checks.onResults = (sessionId, results) => void receipts.onChecks(sessionId, results).catch(() => undefined);
+  review.receiptWarnings = (sessionId) => receipts.open(sessionId).map((i) => `Turn ${i.turnIndex + 1}: ${i.text}`);
   const runnerLog = (sessionId: string) => join(config.userData, 'runner', `${sessionId}.jsonl`);
   mkdirSync(join(config.userData, 'runner'), { recursive: true });
   /** CR-08: runs the agent made through the runner tool join the run history after each turn. */

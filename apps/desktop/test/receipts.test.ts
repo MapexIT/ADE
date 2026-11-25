@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Session, SessionEvent, SessionEventOf, Turn } from '@ade/contracts';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
 import { git } from '@ade/git';
-import { openItems, receiptsFrom } from '@ade/session-core';
+import { claimVerdict, openItems, receiptsFrom } from '@ade/session-core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import { EventBus } from '../src/host/bus.ts';
@@ -214,6 +214,45 @@ describe('RV-16 turn receipt with the fake agent', () => {
     const turns = host.repos.turns.list(session.id);
     expect(receipts(session.id).map((r) => r.turnId)).toEqual(turns.map((t) => t.id));
   });
+});
+
+describe('RV-16 receipts, checks and landing', () => {
+  it("attaches ADE's checks to the receipt and confirms the claim", async () => {
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    const config = host.repos.runs.saveUser({ workspaceId: ws.id, name: 'Unit tests', command: [process.execPath, '--test', 'pass.test.mjs'], cwd: ws.rootPath });
+    await host.handlers['checks.saveSettings']({ workspaceId: ws.id, settings: { configIds: [config.id], afterTurn: false } });
+    const session = await start('edit a.txt one\nsay All tests pass.');
+    const r = await receiptAfter(session.id);
+    await settle(session.id);
+    expect((await host.handlers['checks.run']({ sessionId: session.id }))[0]!.exitCode).toBe(0);
+    const checked = await waitFor(() => events(session.id).find((e): e is SessionEventOf<'receipt.checked'> => e.type === 'receipt.checked'));
+    expect(checked).toMatchObject({ turnId: r.turnId, turnIndex: 0, checks: [{ name: 'Unit tests', categories: ['tests'], exitCode: 0 }] });
+    const list = receiptsFrom(events(session.id));
+    expect(claimVerdict(list, list[0]!, list[0]!.claims[0]!)).toEqual({ status: 'confirmed', check: 'Unit tests', exitCode: 0 });
+    expect(openItems(list)).toEqual([]);
+  }, 40_000);
+
+  it('closes an earlier claim when a later turn passes the same command', async () => {
+    const session = await start('edit a.txt one\nsay All tests pass.');
+    await receiptAfter(session.id);
+    expect(openItems(receiptsFrom(events(session.id)))).toHaveLength(1);
+    await prompt(session.id, `run ${NODE} --test pass.test.mjs\nsay All tests pass.`, 2);
+    expect((await receiptAfter(session.id, 2)).passed).toEqual(['tests']);
+    const list = receiptsFrom(events(session.id));
+    expect(claimVerdict(list, list[0]!, list[0]!.claims[0]!)).toEqual({ status: 'superseded' });
+    expect(openItems(list)).toEqual([]);
+  }, 40_000);
+
+  it('names open items in the land audit entry and still lands', async () => {
+    const session = await start('edit a.txt one\nsay All tests pass.');
+    await receiptAfter(session.id);
+    await settle(session.id);
+    await host.handlers['sessions.land']({ sessionId: session.id, mode: 'apply', files: ['a.txt'] });
+    expect(host.repos.sessions.require(session.id).state).toBe('landed');
+    expect(host.repos.audit.forSession(session.id, 'session.land.apply')).toEqual([
+      expect.objectContaining({ detail: expect.objectContaining({ receiptWarnings: ['Turn 1: Says the tests pass. ADE saw no test command in this turn.'] }) }),
+    ]);
+  }, 40_000);
 });
 
 describe('RV-16 receipt service failures', () => {

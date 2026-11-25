@@ -1,5 +1,6 @@
 import type { SessionEvent, ToolKind, Usage } from '@ade/contracts';
 import { loopTitle, type LoopFinding } from './loops.ts';
+import { receiptFromEvent, receiptOpenItems } from './receipt.ts';
 
 /**
  * WA-07: live observability of an agent session, derived from its event stream. Pure and agent-neutral:
@@ -29,7 +30,8 @@ export type FeedKind =
   | 'turn'
   | 'state'
   | 'notice'
-  | 'loop';
+  | 'loop'
+  | 'receipt';
 
 export interface FeedEntry {
   id: number;
@@ -372,6 +374,20 @@ export function applyActivity(prev: Activity, e: SessionEvent): Activity {
     case 'loop.dismissed':
       a.loop = null;
       feed(a, at, 'loop', 'Loop warning dismissed');
+      break;
+    case 'receipt.issued': {
+      const r = receiptFromEvent(e);
+      const open = receiptOpenItems([r], r).length;
+      feed(a, at, 'receipt', open ? `Receipt: ${open} to check` : 'Receipt: nothing to flag');
+      break;
+    }
+    case 'receipt.checked': {
+      const failed = e.checks.filter((c) => c.exitCode !== 0).length;
+      feed(a, at, 'receipt', failed ? `Receipt: ${failed} of ${e.checks.length} checks failed` : 'Receipt: all checks passed');
+      break;
+    }
+    case 'receipt.acknowledged':
+      feed(a, at, 'receipt', 'Receipt marked as checked');
       break;
     default:
       break;

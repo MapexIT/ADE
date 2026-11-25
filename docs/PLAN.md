@@ -212,7 +212,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M10-T03** Git helper `ignoredPaths` with tests; fake-agent steps `touch` and `ghost`; host
       `ReceiptService` wired in `app.ts` with settings, notification, `sessions.acknowledgeReceipt` and audit.
       Done when cases 1 to 10, 14 and 15 of `apps/desktop/test/receipts.test.ts` pass on Windows and Ubuntu.
-- [ ] **M10-T04** Checks and landing: `ChecksService.onResults` records `receipt.checked`;
+- [x] **M10-T04** Checks and landing: `ChecksService.onResults` records `receipt.checked`;
       `ReviewService.receiptWarnings` adds open items to the land audit entry; projection (`receipt` timeline
       item placed at the end of its turn, checks and acknowledgement) and Observe feed lines with unit tests.
       Done when cases 11 to 13 and the projection and observe tests pass.

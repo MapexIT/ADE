@@ -15,6 +15,7 @@ import type {
   ToolStatus,
   Usage,
 } from '@ade/contracts';
+import { checkedTarget, receiptFromEvent, type ReceiptState } from './receipt.ts';
 
 export type TimelineItem =
   | { kind: 'user'; key: string; content: PromptBlock[] }
@@ -69,6 +70,8 @@ export type TimelineItem =
       detail: string | null;
       state: 'active' | 'dismissed' | 'ended';
     }
+  /** RV-16: a turn receipt, placed at the end of its turn even when the next turn has started. */
+  | ({ kind: 'receipt'; key: string } & ReceiptState)
   /** TM-04: a command the agent runs through ADE; `output` grows live until it exits. */
   | {
       kind: 'command';
@@ -158,6 +161,18 @@ function upsertText(
   );
   if (updated) return updated;
   return [...items, { kind, key: `${kind}:${messageId}`, messageId, text, streaming: mode === 'append' }];
+}
+
+/**
+ * RV-16: where a receipt goes: at the end of its turn, which is before the next turn's separator, or before the
+ * next turn's prompt (recorded just before its separator). Appended when its turn is the last one or unknown.
+ */
+function receiptPosition(items: TimelineItem[], turnId: string): number {
+  const at = items.findIndex((i) => i.kind === 'turn' && i.turnId === turnId);
+  if (at === -1) return items.length;
+  const next = items.findIndex((i, n) => n > at && i.kind === 'turn');
+  if (next === -1) return items.length;
+  return next - 1 > at && items[next - 1]!.kind === 'user' ? next - 1 : next;
 }
 
 /**
@@ -390,9 +405,24 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
         i.kind === 'loop' && i.turnId === event.turnId && i.state === 'active' ? { ...i, state: 'dismissed' } : i,
       );
       return v;
-    case 'receipt.issued':
-    case 'receipt.checked':
+    case 'receipt.issued': {
+      const item: TimelineItem = { kind: 'receipt', key: `receipt:${event.turnId}`, ...receiptFromEvent(event) };
+      const items = v.items.filter((i) => !(i.kind === 'receipt' && i.turnId === event.turnId));
+      v.items = [...items];
+      v.items.splice(receiptPosition(items, event.turnId), 0, item);
+      return v;
+    }
+    case 'receipt.checked': {
+      const target = checkedTarget(
+        v.items.filter((i): i is Extract<TimelineItem, { kind: 'receipt' }> => i.kind === 'receipt'),
+        event.turnIndex,
+      );
+      if (target) v.items = v.items.map((i) => (i === target ? { ...target, checks: event.checks } : i));
+      return v;
+    }
     case 'receipt.acknowledged':
+      v.items = v.items.map((i) => (i.kind === 'receipt' && i.turnId === event.turnId ? { ...i, acknowledged: true } : i));
+      return v;
     case 'checkpoint.created':
     case 'session.state_changed':
     case 'session.landed':

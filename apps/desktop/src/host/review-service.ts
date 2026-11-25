@@ -132,16 +132,23 @@ export class ReviewService {
     const unreviewed = await this.progress(sessionId)
       .then((p) => unreviewedAmong(p, files))
       .catch(() => files);
-    if (s.inPlace) return this.keepInPlace(s, mode, files, unreviewed);
+    // RV-16 (AC12): the receipts' open items. Never allowed to fail a landing either.
+    let receiptWarnings: string[] = [];
+    try {
+      receiptWarnings = this.receiptWarnings?.(sessionId) ?? [];
+    } catch {
+      receiptWarnings = [];
+    }
+    if (s.inPlace) return this.keepInPlace(s, mode, files, unreviewed, receiptWarnings);
     const workspace = this.repos.workspaces.get(s.workspaceId)!;
     const from = base ?? s.baseCommit;
     if (mode === 'apply') {
       const head = await snapshot(s.worktreePath, null, 'ADE land');
       const how = await applyToCheckout(s.worktreePath, workspace.rootPath, from, head, files);
-      await this.recordLanding(sessionId, 'apply', files, { how, unreviewed }, 'apply');
+      await this.recordLanding(sessionId, 'apply', files, { how, unreviewed, receiptWarnings }, 'apply');
     } else {
       const { commit } = await this.commitForLanding(sessionId, files, message, base);
-      await this.recordLanding(sessionId, 'commit', files, { commit, branch: s.branch, unreviewed }, 'commit');
+      await this.recordLanding(sessionId, 'commit', files, { commit, branch: s.branch, unreviewed, receiptWarnings }, 'commit');
     }
   }
 
@@ -160,6 +167,9 @@ export class ReviewService {
   /** CO-05, CO-08: told about every land (action: apply, commit, keep or merged). Set by the composition root. */
   onLanded: ((session: Session, action: string, detail: Record<string, unknown>) => Promise<void>) | null = null;
 
+  /** RV-16: the session's open receipt items, one line each, for the land audit entry. Set by the composition root. */
+  receiptWarnings: ((sessionId: string) => string[]) | null = null;
+
   /** Records a land in the audit log and the timeline, then ends the session. */
   async recordLanding(sessionId: string, mode: 'apply' | 'commit', files: string[], detail: Record<string, unknown>, action: string): Promise<void> {
     const s = this.repos.sessions.require(sessionId);
@@ -174,7 +184,13 @@ export class ReviewService {
    * changed file back to the snapshot. Committing is left to the user, because the checkout may hold their
    * own uncommitted work too.
    */
-  private async keepInPlace(s: Session & { worktreePath: string; baseCommit: string }, mode: 'apply' | 'commit', files: string[], unreviewed: string[]): Promise<void> {
+  private async keepInPlace(
+    s: Session & { worktreePath: string; baseCommit: string },
+    mode: 'apply' | 'commit',
+    files: string[],
+    unreviewed: string[],
+    receiptWarnings: string[],
+  ): Promise<void> {
     if (mode === 'commit') {
       throw new RpcError('in_place', 'A session in your checkout keeps its changes where they are. Choose "Keep changes" and commit them yourself.');
     }
@@ -184,7 +200,7 @@ export class ReviewService {
     const reverted = changed.filter((f) => !keep.has(f));
     await restoreFiles(s.worktreePath, s.baseCommit, reverted);
     await this.dropSessionRefs(s);
-    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, unreviewed, agent: s.agentId } });
+    this.repos.audit.append({ workspaceId: s.workspaceId, sessionId: s.id, actor: 'user', action: 'session.land.keep', detail: { files, reverted, unreviewed, receiptWarnings, agent: s.agentId } });
     this.sessions.record(s.id, { type: 'session.landed', mode: 'apply', files });
     await this.sessions.finish(s.id, 'land');
     await this.onLanded?.(s, 'keep', { files }).catch(() => undefined);
