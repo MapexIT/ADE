@@ -220,6 +220,11 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       checked, Review section and land warning, settings, palette commands, help tab mapping; and
       `e2e/turn-receipt.spec.ts`. Done when the spec passes on Windows against the production build and the
       development renderer.
-- [ ] **M10-T06** Tick the boxes, record under the tasks what was and was not verified (real agents, Ubuntu CI)
+      The spec passes on Windows against the production build and the development renderer.
+- [x] **M10-T06** Tick the boxes, record under the tasks what was and was not verified (real agents, Ubuntu CI)
       as earlier milestones do, and answer or keep each open question in `docs/DECISIONS.md`. Done when CI is
       green on Windows and Ubuntu.
+      Verified with the fake agent only: unit tests for the fold, claims, Git comparison, verdicts, projection
+      and Observe lines; 15 host tests (`apps/desktop/test/receipts.test.ts`) on Windows; the end-to-end spec on
+      Windows. Not yet verified: CI on Ubuntu (the branch is not pushed) and closing messages and `execute`
+      titles from real Codex, Claude Code and OpenCode sessions (see the open questions).
