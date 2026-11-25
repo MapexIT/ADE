@@ -1,4 +1,5 @@
 import type { CheckResult, ReviewState } from '@ade/contracts';
+import type { OpenItem } from '@ade/session-core';
 
 export interface ReviewComment {
   path: string;
@@ -54,6 +55,22 @@ export function landWarning(selected: readonly string[], states: ReviewStates): 
         ? `1 of the ${selected.length} selected files is not marked as reviewed`
         : `${unreviewed.length} of the ${selected.length} selected files are not marked as reviewed`;
   return `${lead}: ${shown}${more}.`;
+}
+
+const RECEIPT_WARN_LIST = 3;
+
+/**
+ * RV-16 (AC12): the sentence the land confirmation adds while the session's receipts have open items, naming the
+ * first three. Landing is never refused because of it. Empty when nothing is open.
+ */
+export function receiptLandWarning(items: readonly Pick<OpenItem, 'turnIndex' | 'text'>[]): string {
+  if (!items.length) return '';
+  const shown = items.slice(0, RECEIPT_WARN_LIST).map((i) => {
+    const line = `Turn ${i.turnIndex + 1}: ${i.text}`;
+    return /[.!?]$/.test(line) ? line : `${line}.`;
+  });
+  const more = items.length > RECEIPT_WARN_LIST ? ` And ${items.length - RECEIPT_WARN_LIST} more.` : '';
+  return `The agent's receipts still have ${items.length} ${items.length === 1 ? 'thing' : 'things'} to check: ${shown.join(' ')}${more}`;
 }
 
 /** RV-15: what the palette's review commands run; set by the Review screen while it shows a live session. */

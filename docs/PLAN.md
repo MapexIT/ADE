@@ -216,7 +216,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       `ReviewService.receiptWarnings` adds open items to the land audit entry; projection (`receipt` timeline
       item placed at the end of its turn, checks and acknowledgement) and Observe feed lines with unit tests.
       Done when cases 11 to 13 and the projection and observe tests pass.
-- [ ] **M10-T05** Renderer: `ReceiptItem` card, header badge, "Ask for proof" draft, Run checks and Mark as
+- [x] **M10-T05** Renderer: `ReceiptItem` card, header badge, "Ask for proof" draft, Run checks and Mark as
       checked, Review section and land warning, settings, palette commands, help tab mapping; and
       `e2e/turn-receipt.spec.ts`. Done when the spec passes on Windows against the production build and the
       development renderer.

@@ -9,6 +9,7 @@ import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { ScreenshotItem } from '../HistoryTools.tsx';
 import { CommandItem } from './CommandItem.tsx';
 import { LoopItem } from './LoopItem.tsx';
+import { ReceiptItem } from './ReceiptItem.tsx';
 import { ReasoningItem } from './ReasoningItem.tsx';
 
 const TOOL_KIND_LABELS: Record<string, string> = {
@@ -207,6 +208,8 @@ export const TimelineRow = memo(function TimelineRow({ item, sessionId }: { item
       return <ReasoningItem item={item} />;
     case 'loop':
       return <LoopItem item={item} sessionId={sessionId} />;
+    case 'receipt':
+      return <ReceiptItem item={item} sessionId={sessionId} />;
     case 'notice':
       return (
         <div className={cx('rounded-[var(--radius)] border px-3 py-2 whitespace-pre-wrap', item.level === 'error' ? 'border-danger-line bg-danger-tint text-danger' : item.level === 'warning' ? 'border-attention-line text-attention' : 'border-line text-ink-muted')}>

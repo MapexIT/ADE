@@ -1,7 +1,7 @@
 import { Bot, Check, CircleAlert, Download, FolderGit2, FolderOpen, Info, MessagesSquare, Navigation, RefreshCw, Save, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
-import { LoopSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
+import { LoopSettings, ReceiptSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
 import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -162,6 +162,7 @@ export function SettingsDialog() {
   const [runInPlace, setRunInPlace] = useState(false);
   const [keepRunning, setKeepRunning] = useState(true);
   const [loops, setLoops] = useState<LoopSettings>({ enabled: true, stopTurn: false });
+  const [receipts, setReceipts] = useState<ReceiptSettings>({ enabled: true, notify: true });
 
   useEffect(() => {
     if (!open) return;
@@ -175,6 +176,10 @@ export function SettingsDialog() {
       const parsed = LoopSettings.safeParse(v.value ?? {});
       setLoops(parsed.success ? parsed.data : { enabled: true, stopTurn: false });
     });
+    void host.call('settings.get', { key: 'receipts' }).then((v) => {
+      const parsed = ReceiptSettings.safeParse(v.value ?? {});
+      setReceipts(parsed.success ? parsed.data : { enabled: true, notify: true });
+    });
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
@@ -185,6 +190,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'concurrencyCap', value: Math.max(1, Math.min(10, cap)) }));
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
     await attempt(() => host.call('settings.set', { key: 'loops', value: loops }));
+    await attempt(() => host.call('settings.set', { key: 'receipts', value: receipts }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
@@ -221,6 +227,17 @@ export function SettingsDialog() {
               Stop the turn if it carries on
               <span className="block text-[12px] text-ink-muted">ADE cancels the turn at twice the warning level. Nothing is undone and nothing lands.</span>
             </span>
+          </label>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={receipts.enabled} onChange={(e) => setReceipts({ ...receipts, enabled: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Check what agents say against what they did
+              <span className="block text-[12px] text-ink-muted">After each turn ADE compares the agent&apos;s closing message with the commands it ran and the files Git says changed.</span>
+            </span>
+          </label>
+          <label className={cx('flex min-h-11 items-start gap-2', !receipts.enabled && 'opacity-60')}>
+            <input type="checkbox" checked={receipts.notify} disabled={!receipts.enabled} onChange={(e) => setReceipts({ ...receipts, notify: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>Notify me when a finished turn has something to check</span>
           </label>
           <label className="flex min-h-11 items-start gap-2">
             <input type="checkbox" checked={keepRunning} onChange={(e) => setKeepRunning(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />

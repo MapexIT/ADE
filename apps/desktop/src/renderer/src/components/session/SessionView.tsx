@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, Repeat2, ScrollText, SendHorizontal, Zap } from 'lucide-react';
+import { ArrowRightLeft, CircleStop, Columns2, ExternalLink, LayoutGrid, ListPlus, LoaderCircle, MessageSquareText, MessagesSquare, Paperclip, Plus, ReceiptText, Repeat2, ScrollText, SendHorizontal, Zap } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { PromptBlock, Session } from '@ade/contracts';
 import { intensity, isBusy, isLive, loopTitle, STATE_LABELS } from '@ade/session-core';
@@ -11,6 +11,7 @@ import { agentLabel, attachmentText, elapsed, joinPath, PROFILE_LABELS, SANDBOX_
 import { attempt, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { agentUiCommand } from '../../lib/agent-ui.ts';
 import { useTerminals } from '../../lib/terminals.ts';
+import { useReceipts } from '../../lib/receipts.ts';
 import { sendChecked } from '../../lib/guards.ts';
 import { FilePicker } from '../FilePicker.tsx';
 import { defaultComposer, useComposer } from '../../lib/composer.ts';
@@ -28,6 +29,7 @@ export function SessionHeader({ session }: { session: Session }) {
   const view = useStore((s) => s.views[session.id]);
   const agent = useStore((s) => s.agents.find((a) => a.id === session.agentId));
   const loop = useStore((s) => s.activity[session.id]?.loop ?? null);
+  const { open: receiptOpen } = useReceipts(session.id);
   const set = useStore((s) => s.set);
   const ended = session.state === 'landed' || session.state === 'discarded';
   const [, tick] = useState(0);
@@ -51,6 +53,12 @@ export function SessionHeader({ session }: { session: Session }) {
         <Badge tone="attention" title={loopTitle(loop)}>
           <Repeat2 className="size-3.5" aria-hidden="true" />
           May be looping
+        </Badge>
+      ) : null}
+      {receiptOpen.length ? (
+        <Badge tone="attention" title={receiptOpen.map((i) => `Turn ${i.turnIndex + 1}: ${i.text}`).join('\n')}>
+          <ReceiptText className="size-3.5" aria-hidden="true" />
+          {receiptOpen.length} to check
         </Badge>
       ) : null}
       <Badge>
