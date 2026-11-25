@@ -274,6 +274,132 @@ textarea,
   border: 1px solid var(--line);
 }
 
+/*
+ * Workflow steps: the outline says what kind of step it is and each kind has its own texture. The shape layer is the
+ * outline colour; the fill layer sits inside it by the outline width, cut to the same shape, and carries the texture.
+ */
+.react-flow__node-step {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.ade-step {
+  position: relative;
+  min-height: 72px;
+  color: var(--ink);
+  transition: filter 160ms var(--ease);
+  --step-shape: none;
+  --step-radius: 10px;
+  --step-pad: 10px 12px;
+}
+.ade-step-shape,
+.ade-step-fill {
+  position: absolute;
+  clip-path: var(--step-shape);
+  border-radius: var(--step-radius);
+}
+.ade-step-shape {
+  inset: 0;
+  background: var(--step-line);
+}
+.ade-step-fill {
+  inset: var(--step-edge);
+  border-radius: max(0px, calc(var(--step-radius) - var(--step-edge)));
+  background: var(--step-texture, none), var(--step-base);
+}
+.ade-step-content {
+  position: relative;
+  padding: var(--step-pad);
+}
+.ade-step .react-flow__handle {
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  background: var(--accent-soft);
+  border: 2px solid var(--surface-sunken);
+}
+.react-flow__node-step.selected .ade-step,
+.react-flow__node-step:focus-visible .ade-step {
+  filter: drop-shadow(0 0 6px rgb(139 92 246 / 0.45));
+}
+.react-flow__node-step:focus-visible {
+  outline: none;
+}
+
+/* Agent: a soft rounded card with a violet glow and a fine grain, the one step that thinks. */
+.ade-step-agent {
+  --step-radius: 20px;
+  --step-pad: 11px 16px;
+  --step-texture: radial-gradient(circle at 12% 0%, rgb(139 92 246 / 0.38), transparent 62%),
+    radial-gradient(circle, rgb(196 181 253 / 0.13) 1px, transparent 1.3px) 0 0 / 7px 7px;
+}
+/* Command: a squared-off terminal with scan lines and a title bar. */
+.ade-step-command {
+  --step-radius: 3px;
+  --step-pad: 20px 12px 10px;
+  --step-base-command: #0a0a0d;
+  --step-texture: linear-gradient(var(--surface-raised), var(--surface-raised)) top / 100% 12px no-repeat,
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.04) 0 1px, transparent 1px 4px);
+}
+/* Gate: an octagon, like a stop sign, with diagonal hazard stripes: a run waits here for you. */
+.ade-step-gate {
+  --step-radius: 0px;
+  --step-pad: 12px 18px;
+  --step-shape: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+  --step-base-gate: var(--attention-tint);
+  --step-texture: repeating-linear-gradient(-45deg, rgb(167 139 250 / 0.16) 0 7px, transparent 7px 15px);
+}
+/* Loop: a stadium with ripples running out from its end. */
+.ade-step-loop {
+  --step-radius: 999px;
+  --step-pad: 11px 24px;
+  --step-texture: repeating-radial-gradient(circle at 100% 50%, rgb(139 92 246 / 0.16) 0 2px, transparent 2px 11px);
+}
+/* Branch: a pointed hexagon, the stretched decision diamond, with a crosshatch. */
+.ade-step-branch {
+  --step-radius: 0px;
+  --step-pad: 11px 26px;
+  --step-shape: polygon(20px 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 20px 100%, 0 50%);
+  --step-texture: repeating-linear-gradient(45deg, rgb(196 181 253 / 0.09) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(-45deg, rgb(196 181 253 / 0.09) 0 1px, transparent 1px 9px);
+}
+/* Connector: a parallelogram, the flowchart shape for data in and out, with a dotted circuit fading to violet. */
+.ade-step-connector {
+  --step-radius: 0px;
+  --step-pad: 11px 26px;
+  --step-shape: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+  --step-texture: radial-gradient(circle, rgb(255 255 255 / 0.13) 1.2px, transparent 1.5px) 0 0 / 10px 10px,
+    linear-gradient(90deg, transparent, rgb(139 92 246 / 0.22));
+}
+/* Land: an arrow into the branch, solid violet with fine vertical lines: where work arrives. */
+.ade-step-land {
+  --step-radius: 0px;
+  --step-pad: 11px 30px 11px 14px;
+  --step-shape: polygon(0 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 0 100%);
+  --step-base-land: #241843;
+  --step-texture: repeating-linear-gradient(90deg, rgb(196 181 253 / 0.09) 0 1px, transparent 1px 6px),
+    linear-gradient(135deg, rgb(139 92 246 / 0.35), transparent 70%);
+}
+/* A running step breathes a violet glow that follows its outline. */
+.ade-step-running {
+  animation: ade-step-breathe 1.6s ease-in-out infinite;
+}
+@keyframes ade-step-breathe {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgb(139 92 246 / 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgb(139 92 246 / 0.75));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ade-step-running {
+    animation: none;
+    filter: drop-shadow(0 0 6px rgb(139 92 246 / 0.6));
+  }
+}
+
 /* WA-07: the observability status orb. Rings ripple out while busy; it breathes while waiting for you. */
 .ade-orb {
   position: relative;

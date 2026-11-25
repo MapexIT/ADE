@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { duration } from '../../lib/format.ts';
 import { attempt, useStore } from '../../lib/store.ts';
-import { EDGE_TYPES, buildGraph, STATUS } from './graph.tsx';
+import { EDGE_TYPES, NODE_KINDS, buildGraph, STATUS, useCanvasState } from './graph.tsx';
 
 export const RUN_STATUS: Record<
   WorkflowRunView['status'],
@@ -36,6 +36,7 @@ function budgetLine(run: WorkflowRunView): string {
 /** WF-06: node status, the session behind each node, time per node, and the decisions the run waits for. */
 export function RunView({ run }: { run: WorkflowRunView }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const { sizes, onNodesChange } = useCanvasState();
   const selectSession = useStore((s) => s.selectSession);
   const set = useStore((s) => s.set);
   const graph = useMemo(
@@ -44,9 +45,9 @@ export function RunView({ run }: { run: WorkflowRunView }) {
         run.nodes,
         // WF-17: cycle edges show the rounds this run has used.
         run.edges.map((e, i) => (e.cycle ? { ...e, rounds: run.rounds?.[String(i)] ?? 0 } : e)),
-        { selected: selected ?? run.current },
+        { selected: selected ?? run.current, sizes },
       ),
-    [run, selected],
+    [run, selected, sizes],
   );
   const node = run.nodes.find((n) => n.id === (selected ?? run.current)) ?? null;
   // WF-16: several branches can wait at gates at once; each gets its own decision.
@@ -72,7 +73,10 @@ export function RunView({ run }: { run: WorkflowRunView }) {
           nodes={graph.nodes}
           edges={graph.edges}
           fitView
+          fitViewOptions={{ maxZoom: 1.1, padding: '10%' }}
           edgeTypes={EDGE_TYPES}
+          nodeTypes={NODE_KINDS}
+          onNodesChange={onNodesChange}
           nodesConnectable={false}
           nodesDraggable={false}
           onNodeClick={(_, n) => setSelected(n.id)}

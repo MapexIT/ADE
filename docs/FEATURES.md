@@ -183,7 +183,7 @@ Linux.
 
 | ID | Feature | Phase | Description |
 | --- | --- | --- | --- |
-| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. "New workflow" starts one from scratch (an empty canvas) or from a template; an empty workflow saves but cannot run until it has a first step. Clicking a connection opens its settings (when it applies, round limit, delete). |
+| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. "New workflow" starts one from scratch (an empty canvas) or from a template; an empty workflow saves but cannot run until it has a first step. Clicking a connection opens its settings (when it applies, round limit, delete). Each step type has its own outline, texture and icon, so the kind of step reads without its label: a rounded, glowing card for an agent, a terminal with scan lines for a command, a striped octagon for a gate, a rippled stadium for a loop, a cross-hatched pointed hexagon for a branch, a dotted parallelogram for a connector and a solid violet arrow for land; a running step glows. Dragging a step moves it smoothly, without the canvas redrawing. |
 | WF-02 | Workflow picker | v1 | Choose a workflow instead of a single agent when starting a session or work item. |
 | WF-03 | Workflow files | v1 | YAML in `.ade/workflows/`, versioned with the code. |
 | WF-04 | Templates | v1 | Plan-build-review, fix failing tests, cross-review, spec first, story to pull request. |

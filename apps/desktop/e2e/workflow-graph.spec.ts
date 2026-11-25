@@ -69,3 +69,38 @@ test('WF-01/16/17: a workflow from scratch with parallel steps, a join and a cyc
   expect(yaml.match(/to: gate/g)).toHaveLength(2);
   await app.close();
 });
+
+test('WF-01: each step type has its own shape, and dragging a step never hides the canvas', async () => {
+  const repo = makeRepo();
+  const { app, page } = await launch(userDataDir());
+  await page.getByRole('button', { name: 'Done' }).click();
+  await stubDirectoryPicker(app, repo);
+  await page.keyboard.press('Control+o');
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
+  await page.keyboard.press('Control+3');
+  await page.getByRole('button', { name: 'New workflow' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New workflow' });
+  await dialog.getByLabel('Name').fill('Shapes');
+  await dialog.getByRole('button', { name: 'Create workflow' }).click();
+
+  const types = ['Agent', 'Command', 'Gate', 'Loop', 'Branch', 'Connector', 'Land'];
+  const toolbar = page.getByRole('toolbar', { name: 'Add a step' });
+  for (const type of types) await toolbar.getByRole('button', { name: type, exact: true }).click();
+  for (const type of types) await expect(page.locator(`.ade-step-${type.toLowerCase()}`)).toHaveCount(1);
+  await page.waitForTimeout(500);
+  if (process.env.ADE_SHOTS) await page.screenshot({ path: `${process.env.ADE_SHOTS}/workflow-shapes.png` });
+
+  // Mid-drag, every step stays visible: nodes keep their measured size while the canvas rebuilds them.
+  const box = (await page.locator('.react-flow__node[data-id="agent"]').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 12);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) {
+    await page.mouse.move(box.x + box.width / 2 + i * 12, box.y + 12 + i * 6);
+    const hidden = await page.$$eval('.react-flow__node', (ns) => ns.filter((n) => getComputedStyle(n).visibility === 'hidden').length);
+    expect(hidden).toBe(0);
+  }
+  await page.mouse.up();
+  const moved = (await page.locator('.react-flow__node[data-id="agent"]').boundingBox())!;
+  expect(moved.x).toBeGreaterThan(box.x + 40);
+  await app.close();
+});
