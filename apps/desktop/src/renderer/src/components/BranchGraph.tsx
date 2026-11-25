@@ -212,7 +212,7 @@ export function BranchGraph({
                 aria-label={`${c.subject}, ${c.hash.slice(0, 7)}`}
                 aria-selected={selected === c.hash}
                 onClick={() => setSelected(c.hash)}
-                className={cx('absolute left-0 flex w-full cursor-pointer items-center gap-2 pr-2 text-[12px] hover:bg-surface-raised', selected === c.hash && 'bg-accent-tint shadow-[inset_3px_0_0_var(--accent)]')}
+                className={cx('absolute left-0 flex w-full cursor-pointer items-center gap-2 pr-2 pl-3.5 text-[12px] hover:bg-surface-raised', selected === c.hash && 'bg-accent-tint shadow-[inset_3px_0_0_var(--accent)]')}
                 style={{ height: ROW, transform: `translateY(${v.start}px)` }}
               >
                 <Lanes row={row} width={width} />

@@ -19,6 +19,9 @@ test('HI-12: the Git page is the branch graph; moving through it shows each comm
   run('merge', '-q', '--no-ff', '-m', 'Merge feature/login', 'feature/login');
 
   const { app, page } = await launch(userDataDir());
+  // Leaving a diff must not leave Monaco with disposed models (it throws "TextModel got disposed…").
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
   await page.getByRole('button', { name: 'Done' }).click();
   await stubDirectoryPicker(app, repo);
   await page.keyboard.press('Control+o');
@@ -60,10 +63,15 @@ test('HI-12: the Git page is the branch graph; moving through it shows each comm
   await expect(details.getByRole('heading', { name: 'Merge feature/login' })).toBeVisible();
   await page.keyboard.press('End');
   await expect(details.getByRole('heading', { name: 'init' })).toBeVisible();
+  // The selected row's indicator sits in its own gutter, clear of the first lane.
+  const rowBox = (await selected.boundingBox())!;
+  const lanes = (await selected.locator('svg').first().boundingBox())!;
+  expect(lanes.x - rowBox.x).toBeGreaterThanOrEqual(12);
 
   // The Inspector keeps its own Branches tab.
   await page.keyboard.press('Control+1');
   await page.getByRole('tab', { name: 'Branches' }).click();
   await expect(page.getByRole('listbox', { name: 'Commit graph' })).toContainText('Expand the readme');
+  expect(errors.filter((m) => m.includes('TextModel'))).toEqual([]);
   await app.close();
 });
