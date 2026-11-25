@@ -1,6 +1,8 @@
-import { BaseEdge, MarkerType, Position, type Edge, type EdgeProps, type Node } from '@xyflow/react';
-import { palette } from '@ade/ui';
+import { BaseEdge, Handle, MarkerType, Position, type Edge, type EdgeProps, type Node, type NodeProps, type OnNodesChange } from '@xyflow/react';
+import { Bot, GitMerge, Hand, Plug, Repeat, Split, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { cx, palette } from '@ade/ui';
 import type { WorkflowRunView } from '@ade/contracts';
+import { useCallback, useState, type CSSProperties } from 'react';
 
 export interface GraphNode {
   id: string;
@@ -72,6 +74,91 @@ export const TYPE_LABELS: Record<string, string> = {
   land: 'Land',
 };
 
+/** One icon per step type, shared by the canvas and the toolbar. */
+export const STEP_ICONS: Record<string, LucideIcon> = {
+  agent: Bot,
+  command: SquareTerminal,
+  gate: Hand,
+  loop: Repeat,
+  branch: Split,
+  connector: Plug,
+  land: GitMerge,
+};
+
+type XY = { x: number; y: number };
+type Size = { width: number; height: number };
+
+/**
+ * The canvas's own state: where steps were dragged and the size React Flow measured for each. Every node passed to
+ * React Flow carries its measured size, so rebuilding the nodes (on every drag frame, or when a run changes) never
+ * hides them for a re-measure. Without this the whole canvas flashes while a step is dragged.
+ */
+export function useCanvasState() {
+  const [sizes, setSizes] = useState<Record<string, Size>>({});
+  const [positions, setPositions] = useState<Record<string, XY>>({});
+  const onNodesChange = useCallback<OnNodesChange>((changes) => {
+    const size: Record<string, Size> = {};
+    const moved: Record<string, XY> = {};
+    for (const c of changes) {
+      if (c.type === 'dimensions' && c.dimensions) size[c.id] = c.dimensions;
+      if (c.type === 'position' && c.position) moved[c.id] = c.position;
+    }
+    if (Object.keys(size).length) setSizes((o) => ({ ...o, ...size }));
+    if (Object.keys(moved).length) setPositions((o) => ({ ...o, ...moved }));
+  }, []);
+  /** Forgets dragged positions, for when another workflow opens. */
+  const reset = useCallback(() => setPositions({}), []);
+  return { sizes, positions, onNodesChange, reset };
+}
+
+export interface StepData extends Record<string, unknown> {
+  type: string;
+  title: string;
+  detail: string;
+  start: boolean;
+  fan: string;
+  status: string | null;
+  line: string;
+  base: string;
+  dim: boolean;
+  running: boolean;
+}
+
+/**
+ * A step on the canvas. Its outline says what kind of step it is (a rounded card for an agent, a terminal for a
+ * command, an octagon for a gate, a stadium for a loop, a pointed hexagon for a branch, a parallelogram for a
+ * connector, an arrow for land), and each kind has its own texture, all in the three palette hues.
+ */
+export function StepNode({ data, selected }: NodeProps<Node<StepData, 'step'>>) {
+  const Icon = STEP_ICONS[data.type] ?? SquareTerminal;
+  const style = {
+    '--step-line': selected ? 'var(--accent-soft)' : data.line,
+    '--step-base': data.base,
+    '--step-edge': selected ? '2.5px' : '1.5px',
+  } as CSSProperties;
+  return (
+    <div className={cx('ade-step', `ade-step-${data.type}`, data.dim && 'opacity-60', data.running && 'ade-step-running')} style={style}>
+      <div className="ade-step-shape" aria-hidden="true" />
+      <div className="ade-step-fill" aria-hidden="true" />
+      <Handle type="target" position={Position.Left} />
+      <div className="ade-step-content flex flex-col gap-0.5 text-left">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+          <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden="true" />
+          {TYPE_LABELS[data.type] ?? data.type}
+          {data.start ? ' · start' : ''}
+        </span>
+        <span className={cx('font-semibold text-ink', data.type === 'command' && 'font-mono text-[12px]')}>{data.title}</span>
+        <span className="truncate text-[11px] text-ink-muted">{data.detail}</span>
+        {data.fan ? <span className="text-[11px] text-accent-soft">{data.fan}</span> : null}
+        {data.status ? <span className="text-[11px] font-semibold text-ink">{data.status}</span> : null}
+      </div>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+export const NODE_KINDS = { step: StepNode };
+
 /** Every status has a word as well as a colour (UI rule), and only the three palette hues are used. */
 export const STATUS: Record<
   NonNullable<GraphNode['status']>,
@@ -113,7 +200,8 @@ export function buildGraph(
     problemNodes?: Set<string>;
     selected?: string | null;
     selectedEdge?: number | null;
-    positions?: Record<string, { x: number; y: number }>;
+    positions?: Record<string, XY>;
+    sizes?: Record<string, Size>;
   } = {},
 ): { nodes: Node[]; edges: Edge[] } {
   // Cycle edges go backwards; leave them out of the layering so steps stay in reading order.
@@ -126,44 +214,34 @@ export function buildGraph(
     const row = rows.get(col) ?? 0;
     rows.set(col, row + 1);
     const status = n.status ? STATUS[n.status] : null;
-    const gate = n.type === 'gate';
-    const border = opts.problemNodes?.has(n.id)
+    const line = opts.problemNodes?.has(n.id)
       ? 'var(--danger-line)'
-      : (status?.border ??
-        (gate ? 'var(--attention-line)' : n.type === 'agent' ? 'var(--accent)' : 'var(--line)'));
+      : (status?.border ?? (n.type === 'gate' ? 'var(--attention-line)' : n.type === 'agent' || n.type === 'land' ? 'var(--accent)' : 'var(--line-strong)'));
+    const ins = inputs(n.id);
+    const outs = outputs(n.id);
+    const size = opts.sizes?.[n.id];
+    const data: StepData = {
+      type: n.type,
+      title: n.title,
+      detail: n.detail,
+      start: index === 0,
+      fan: [ins > 1 ? `waits for ${ins} inputs` : '', outs > 1 ? `${outs} next steps` : ''].filter(Boolean).join(' · '),
+      status: status?.label ?? null,
+      line,
+      // A status with its own tint shows under the step's texture; otherwise each kind keeps its own base.
+      base: status && status.background !== 'var(--surface)' ? status.background : `var(--step-base-${n.type}, var(--surface))`,
+      dim: n.status === 'skipped',
+      running: n.status === 'running',
+    };
     return {
       id: n.id,
-      position: opts.positions?.[n.id] ?? { x: col * 240, y: row * 130 },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      type: 'step',
+      position: opts.positions?.[n.id] ?? { x: col * 250, y: row * 140 },
+      ...(size ? { measured: size } : {}),
       selected: opts.selected === n.id,
       ariaLabel: `${TYPE_LABELS[n.type] ?? n.type} step ${n.title}${status ? `, ${status.label}` : ''}`,
-      data: {
-        label: (
-          <div className="flex flex-col gap-0.5 text-left">
-            <span className="text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
-              {TYPE_LABELS[n.type] ?? n.type}
-              {index === 0 ? ' · start' : ''}
-            </span>
-            <span className="font-semibold text-ink">{n.title}</span>
-            <span className="truncate text-[11px] text-ink-muted">{n.detail}</span>
-            {inputs(n.id) > 1 || outputs(n.id) > 1 ? (
-              <span className="text-[11px] text-accent-soft">
-                {[inputs(n.id) > 1 ? `waits for ${inputs(n.id)} inputs` : '', outputs(n.id) > 1 ? `${outputs(n.id)} next steps` : ''].filter(Boolean).join(' · ')}
-              </span>
-            ) : null}
-            {status ? <span className="text-[11px] font-semibold text-ink">{status.label}</span> : null}
-          </div>
-        ),
-      },
-      style: {
-        width: 200,
-        background: status?.background ?? (gate ? 'var(--attention-tint)' : 'var(--surface)'),
-        border: `${opts.selected === n.id ? 2 : 1}px solid ${opts.selected === n.id ? 'var(--accent-soft)' : border}`,
-        borderRadius: 10,
-        color: 'var(--ink)',
-        padding: 10,
-      },
+      data,
+      style: { width: 210 },
     };
   });
   // The lowest step's bottom edge, for routing cycles underneath; each further cycle runs a little lower.

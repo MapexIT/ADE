@@ -1,5 +1,5 @@
 import { Copy, FilePlus2, Play, Plus, Save, Undo2, Workflow } from 'lucide-react';
-import { Background, Controls, ReactFlow, type OnNodesChange, type ReactFlowInstance } from '@xyflow/react';
+import { Background, Controls, ReactFlow, type ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Badge, Button, cx, EmptyState, palette, SectionLabel } from '@ade/ui';
 import type { AgentId, WorkflowRunView, WorkflowSummary } from '@ade/contracts';
@@ -23,12 +23,15 @@ import {
   type Draft,
 } from '../../lib/workflow-draft.ts';
 import { describeNode as detailOf } from '@ade/workflow-engine';
-import { buildGraph, EDGE_TYPES } from './graph.tsx';
+import { buildGraph, EDGE_TYPES, NODE_KINDS, STEP_ICONS, useCanvasState } from './graph.tsx';
 import { NodeSettings } from './NodeSettings.tsx';
 import { EdgeSettings } from './EdgeSettings.tsx';
 import { NewWorkflowDialog } from './NewWorkflowDialog.tsx';
 import { RUN_STATUS, RunView } from './RunView.tsx';
 import { StartRunDialog, type StartRequest } from './StartRunDialog.tsx';
+
+/** React Flow 13 reads a bare number as pixels, so the margin round a fitted graph is a percentage. */
+const FIT_PADDING = '10%';
 
 type View = { kind: 'workflow'; id: string } | { kind: 'run'; id: string } | null;
 
@@ -47,7 +50,7 @@ export function WorkflowsScreen() {
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const flow = useRef<ReactFlowInstance | null>(null);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const { positions, sizes, onNodesChange, reset: resetPositions } = useCanvasState();
   const [dialog, setDialog] = useState<'run' | 'test' | null>(null);
   const [skillNames, setSkillNames] = useState<string[]>([]);
   useEffect(() => {
@@ -90,14 +93,14 @@ export function WorkflowsScreen() {
   useEffect(() => {
     setSelectedNode(null);
     setSelectedEdge(null);
-    setPositions({});
+    resetPositions();
     if (view?.kind !== 'workflow' || !workspaceId) return setDraft(null);
     void attempt(() => host.call('workflows.get', { workspaceId, workflowId: view.id })).then((d) => {
       const next = d ? toDraft(d.definition) : null;
       setDraft(next);
       setSaved(next);
     });
-  }, [view, workspaceId]);
+  }, [view, workspaceId, resetPositions]);
 
   const problems = useMemo(
     () =>
@@ -117,9 +120,9 @@ export function WorkflowsScreen() {
         const info = edgeInfo(draft, i);
         return { ...e, cycle: info.cycle, maxRounds: info.cycle ? info.maxRounds : null };
       }),
-      { problemNodes, selected: selectedNode, selectedEdge, positions },
+      { problemNodes, selected: selectedNode, selectedEdge, positions, sizes },
     );
-  }, [draft, errors, selectedNode, selectedEdge, positions]);
+  }, [draft, errors, selectedNode, selectedEdge, positions, sizes]);
 
   const edit = (next: Draft) => setDraft(next);
   // Keep every step in view when steps or connections change: both move the layout (and a canvas started empty
@@ -128,7 +131,7 @@ export function WorkflowsScreen() {
   const edgeCount = draft?.edges.length ?? 0;
   useEffect(() => {
     if (!stepCount) return;
-    const t = setTimeout(() => void flow.current?.fitView({ maxZoom: 1.1, padding: 0.2, duration: 150 }), 30);
+    const t = setTimeout(() => void flow.current?.fitView({ maxZoom: 1.1, padding: FIT_PADDING, duration: 150 }), 30);
     return () => clearTimeout(t);
   }, [stepCount, edgeCount]);
   const node = draft?.nodes.find((n) => n.id === selectedNode) ?? null;
@@ -181,15 +184,10 @@ export function WorkflowsScreen() {
     setView({ kind: 'run', id: run.id });
   };
 
-  const onNodesChange: OnNodesChange = (changes) => {
-    for (const c of changes) {
-      if (c.type === 'position' && c.position) setPositions((p) => ({ ...p, [c.id]: c.position! }));
-    }
-  };
-
   if (!workspaceId)
     return (
-      <EmptyState icon={<Workflow className="size-5" />}
+      <EmptyState
+        icon={<Workflow className="size-5" />}
         title="Open a repository first"
         body="Workflows live in .ade/workflows/ inside a repository."
       />
@@ -214,22 +212,38 @@ export function WorkflowsScreen() {
         {dirty ? <Badge tone="attention">Unsaved changes</Badge> : null}
         <span className="flex-1" />
         {summary && readOnly ? (
-          <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={copyToRepository}>
+          <Button
+            icon={<Copy className="size-4" aria-hidden="true" />}
+            size="dense"
+            onClick={copyToRepository}
+          >
             Copy to repository to edit
           </Button>
         ) : null}
         {summary && !readOnly ? (
           <>
-            <Button icon={<Undo2 className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={!dirty} onClick={() => setDraft(saved)}>
+            <Button
+              icon={<Undo2 className="size-4" aria-hidden="true" />}
+              size="dense"
+              variant="ghost"
+              disabled={!dirty}
+              onClick={() => setDraft(saved)}
+            >
               Discard changes
             </Button>
-            <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" disabled={!dirty || !fileOf} onClick={() => fileOf && void save(fileOf)}>
+            <Button
+              icon={<Save className="size-4" aria-hidden="true" />}
+              size="dense"
+              disabled={!dirty || !fileOf}
+              onClick={() => fileOf && void save(fileOf)}
+            >
               Save
             </Button>
           </>
         ) : null}
         {summary ? (
-          <Button icon={<Play className="size-4" aria-hidden="true" />}
+          <Button
+            icon={<Play className="size-4" aria-hidden="true" />}
             size="dense"
             variant="primary"
             disabled={errors.length > 0 || dirty}
@@ -245,7 +259,11 @@ export function WorkflowsScreen() {
           aria-label="Workflows"
           className="flex w-64 flex-col gap-3 overflow-auto border-r border-line bg-surface p-3"
         >
-          <Button variant="primary" icon={<FilePlus2 className="size-4" aria-hidden="true" />} onClick={() => setCreating(true)}>
+          <Button
+            variant="primary"
+            icon={<FilePlus2 className="size-4" aria-hidden="true" />}
+            onClick={() => setCreating(true)}
+          >
             New workflow
           </Button>
           {(['repository', 'template'] as const).map((source) => {
@@ -320,22 +338,27 @@ export function WorkflowsScreen() {
                   className="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-3 py-2"
                 >
                   <span className="mr-1 text-[12px] text-ink-muted">Add a step:</span>
-                  {NODE_TYPES.map((t) => (
-                    <Button
-                      key={t.type}
-                      size="dense"
-                      variant="ghost"
-                      onClick={() => {
-                        const res = addNode(draft, t.type);
-                        edit(res.wf);
-                        setSelectedNode(res.id);
-                      }}
-                    >
-                      {t.label}
-                    </Button>
-                  ))}
+                  {NODE_TYPES.map((t) => {
+                    const Icon = STEP_ICONS[t.type]!;
+                    return (
+                      <Button
+                        key={t.type}
+                        size="dense"
+                        variant="ghost"
+                        icon={<Icon className="size-4" aria-hidden="true" />}
+                        onClick={() => {
+                          const res = addNode(draft, t.type);
+                          edit(res.wf);
+                          setSelectedNode(res.id);
+                        }}
+                      >
+                        {t.label}
+                      </Button>
+                    );
+                  })}
                   <span className="ml-auto text-[12px] text-ink-muted">
-                    Drag between steps to connect; a step can have several inputs and next steps. Click a connection for its settings.
+                    Drag between steps to connect; a step can have several inputs and next steps. Click a
+                    connection for its settings.
                   </span>
                 </div>
               ) : null}
@@ -352,8 +375,9 @@ export function WorkflowsScreen() {
                     nodes={graph.nodes}
                     edges={graph.edges}
                     fitView
-                    fitViewOptions={{ maxZoom: 1.1, padding: 0.2 }}
+                    fitViewOptions={{ maxZoom: 1.1, padding: FIT_PADDING }}
                     edgeTypes={EDGE_TYPES}
+                    nodeTypes={NODE_KINDS}
                     onInit={(instance) => (flow.current = instance)}
                     nodesConnectable={!readOnly}
                     nodesDraggable
@@ -382,7 +406,8 @@ export function WorkflowsScreen() {
                     <Controls showInteractive={false} />
                   </ReactFlow>
                 ) : (
-                  <EmptyState icon={<Workflow className="size-5" />}
+                  <EmptyState
+                    icon={<Workflow className="size-5" />}
                     title="Nothing to draw"
                     body={errors[0]?.message ?? 'Pick a workflow on the left.'}
                   />
