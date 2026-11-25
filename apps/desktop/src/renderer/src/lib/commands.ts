@@ -1,5 +1,6 @@
-import { isLive } from '@ade/session-core';
+import { isLive, openItems } from '@ade/session-core';
 import { redirectLoop } from './loops.ts';
+import { askForProof, receiptsOf } from './receipts.ts';
 import { host, main } from './bridge.ts';
 import { PAGES } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
@@ -71,6 +72,20 @@ export function buildCommands(): Command[] {
       cmds.push(
         { id: 'session.loop.redirect', title: 'Redirect the looping agent', group: 'Session', run: () => redirectLoop(session.id, loop) },
         { id: 'session.loop.dismiss', title: 'Dismiss the loop warning', group: 'Session', run: () => void attempt(() => host.call('sessions.dismissLoop', { sessionId: session.id })) },
+      );
+    }
+    // RV-16: only while the session's receipts have something to check.
+    const receiptOpen = openItems(receiptsOf(s.views[session.id]?.items ?? []));
+    const latest = receiptOpen.at(-1);
+    if (latest) {
+      cmds.push(
+        { id: 'session.receipt.proof', title: 'Ask the agent for proof', group: 'Session', run: () => askForProof(session.id, receiptOpen) },
+        {
+          id: 'session.receipt.checked',
+          title: 'Mark the latest receipt as checked',
+          group: 'Session',
+          run: () => void attempt(() => host.call('sessions.acknowledgeReceipt', { sessionId: session.id, turnId: latest.turnId })),
+        },
       );
     }
     cmds.push(

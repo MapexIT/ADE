@@ -1,7 +1,8 @@
-import { ExternalLink, GitMerge, GitPullRequestArrow, ListChecks, RefreshCw, ScanSearch, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Check, ExternalLink, GitMerge, GitPullRequestArrow, ListChecks, MessageSquareQuote, ReceiptText, RefreshCw, ScanSearch, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Badge, Button, cx, SectionLabel } from '@ade/ui';
 import type { AgentId, BaseStatus, CheckResult, CheckSettings, PullRequestStatus, ReviewAssessment, RunConfig, Session } from '@ade/contracts';
-import { isLive } from '@ade/session-core';
+import { isLive, type OpenItem } from '@ade/session-core';
+import { askForProof } from '../lib/receipts.ts';
 import { useCallback, useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
 import { agentLabel } from '../lib/format.ts';
@@ -112,6 +113,46 @@ export function AssistantPanel({ session, onResult }: { session: Session; onResu
 }
 
 /** RV-10: the workspace's checks for this session. */
+/** RV-16: the open items of the session's turn receipts, per turn, with the same two answers as the card. */
+export function OpenReceipts({ session, items }: { session: Session; items: OpenItem[] }) {
+  if (!items.length) return null;
+  const turns = [...new Set(items.map((i) => i.turnId))].map((turnId) => items.filter((i) => i.turnId === turnId));
+  return (
+    <section aria-label="Receipts to check" className="flex flex-col gap-2 rounded-[var(--radius)] border border-attention-line bg-attention-tint p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <ReceiptText className="size-4 text-attention" aria-hidden="true" />
+        <SectionLabel>Receipts to check</SectionLabel>
+        <Badge tone="attention">{items.length} to check</Badge>
+      </div>
+      {turns.map((group) => (
+        <div key={group[0]!.turnId} className="flex flex-col gap-1.5">
+          <span className="font-semibold">Turn {group[0]!.turnIndex + 1}</span>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0 pl-1">
+            {group.map((i, n) => (
+              <li key={n} className="break-words text-ink">
+                {i.text}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <Button size="dense" variant="primary" icon={<MessageSquareQuote className="size-4" aria-hidden="true" />} onClick={() => askForProof(session.id, group)}>
+              Ask for proof
+            </Button>
+            <Button
+              size="dense"
+              variant="ghost"
+              icon={<Check className="size-4" aria-hidden="true" />}
+              onClick={() => void attempt(() => host.call('sessions.acknowledgeReceipt', { sessionId: session.id, turnId: group[0]!.turnId }))}
+            >
+              Mark as checked
+            </Button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function ChecksPanel({ session }: { session: Session }) {
   const workspaceId = session.workspaceId;
   const [results, setResults] = useState<CheckResult[]>([]);

@@ -136,3 +136,50 @@ describe('WA-10 loop warnings in the timeline', () => {
     expect(v.items.find((i) => i.kind === 'loop')).toMatchObject({ state: 'dismissed' });
   });
 });
+
+describe('RV-16 receipts in the timeline', () => {
+  const facts = { filesChanged: 1, additions: 1, deletions: 0, editsReported: 1, commands: 0, commandsFailed: 0 };
+  const claims = [{ category: 'tests' as const, quote: 'All tests pass.', status: 'unseen' as const, evidence: null }];
+  const issued = (turnId: string, turnIndex: number) => ev({ type: 'receipt.issued', turnId, turnIndex, facts, claims, findings: [], passed: [] });
+  const user = (text: string) => ev({ type: 'user.message', content: [{ type: 'text', text }], queued: false });
+  const started = (turnId: string, index: number) => ev({ type: 'turn.started', turnId, index });
+  const message = (id: string) => ev({ type: 'agent.message', messageId: id, text: id });
+  const endTurn = (turnId: string) => ev({ type: 'turn.ended', turnId, stopReason: 'end_turn', usage: null });
+  const keys = (events: SessionEvent[]) => projectSession(events).items.map((i) => i.key);
+
+  it('goes at the end of its turn, before the next prompt, also when the next turn has started', () => {
+    seq = 0;
+    const events = [user('one'), started('t1', 0), message('m1'), endTurn('t1'), user('two'), started('t2', 1), message('m2'), issued('t1', 0)];
+    expect(keys(events)).toEqual(['user:0', 'turn:t1', 'agent-message:m1', 'receipt:t1', 'user:4', 'turn:t2', 'agent-message:m2']);
+    seq = 0;
+    // Without a prompt item before the next separator, it goes right before it.
+    const noPrompt = [started('t1', 0), message('m1'), endTurn('t1'), started('t2', 1), issued('t1', 0)];
+    expect(keys(noPrompt)).toEqual(['turn:t1', 'agent-message:m1', 'receipt:t1', 'turn:t2']);
+    seq = 0;
+    expect(keys([started('t1', 0), message('m1'), endTurn('t1'), issued('t1', 0)])).toEqual(['turn:t1', 'agent-message:m1', 'receipt:t1']);
+  });
+
+  it('attaches checks to the latest receipt at or before their turn, records acknowledgement and replaces a second receipt', () => {
+    seq = 0;
+    const events = [
+      started('t1', 0),
+      endTurn('t1'),
+      issued('t1', 0),
+      started('t2', 1),
+      endTurn('t2'),
+      issued('t2', 1),
+      ev({ type: 'receipt.checked', turnId: 't3', turnIndex: 2, checks: [{ name: 'Unit', categories: ['tests'], exitCode: 0 }] }),
+      ev({ type: 'receipt.acknowledged', turnId: 't1' }),
+    ];
+    const live = events.reduce(applyEvent, emptyView());
+    const receipts = live.items.filter((i) => i.kind === 'receipt');
+    expect(receipts.map((r) => r.kind === 'receipt' && [r.turnId, r.acknowledged, r.checks?.length ?? null])).toEqual([
+      ['t1', true, null],
+      ['t2', false, 1],
+    ]);
+    // Rebuilding from the stored events gives the same view (AC6).
+    expect(projectSession(events)).toEqual(live);
+    const again = applyEvent(live, issued('t2', 1));
+    expect(again.items.filter((i) => i.kind === 'receipt')).toHaveLength(2);
+  });
+});

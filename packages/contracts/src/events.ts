@@ -77,6 +77,50 @@ export type LoopPattern = z.infer<typeof LoopPattern>;
 export const LoopLevel = z.enum(['warning', 'severe']);
 export type LoopLevel = z.infer<typeof LoopLevel>;
 
+/** RV-16: what a claim is about. `verified` is a general "I verified/tested it". */
+export const VerifyCategory = z.enum(['tests', 'build', 'lint', 'types', 'verified']);
+export type VerifyCategory = z.infer<typeof VerifyCategory>;
+export const ClaimStatus = z.enum(['supported', 'stale', 'contradicted', 'unseen']);
+export type ClaimStatus = z.infer<typeof ClaimStatus>;
+export const ReceiptClaim = z.object({
+  category: VerifyCategory,
+  /** The agent's sentence, cleaned and redacted. */
+  quote: z.string().max(240),
+  status: ClaimStatus,
+  /** For example "npm test (exit 1)"; null when no such command was seen. */
+  evidence: z.string().max(300).nullable(),
+});
+export type ReceiptClaim = z.infer<typeof ReceiptClaim>;
+export const ReceiptFindingKind = z.enum(['phantom-edit', 'tests-skipped', 'tests-deleted', 'unreported-change']);
+export type ReceiptFindingKind = z.infer<typeof ReceiptFindingKind>;
+export const ReceiptFinding = z.object({
+  kind: ReceiptFindingKind,
+  /** `unreported-change` is a note; the rest are warnings. */
+  level: z.enum(['warning', 'note']),
+  paths: z.array(z.string().max(400)).max(20),
+  /** Paths beyond the 20 listed. */
+  more: z.number().int().nonnegative(),
+  detail: z.string().max(300).nullable(),
+});
+export type ReceiptFinding = z.infer<typeof ReceiptFinding>;
+export const ReceiptFacts = z.object({
+  /** Null when a checkpoint of the turn is missing. */
+  filesChanged: z.number().int().nonnegative().nullable(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  editsReported: z.number().int().nonnegative(),
+  commands: z.number().int().nonnegative(),
+  commandsFailed: z.number().int().nonnegative(),
+});
+export type ReceiptFacts = z.infer<typeof ReceiptFacts>;
+/** RV-16: one of ADE's own checks (RV-10) as a receipt records it. */
+export const ReceiptCheck = z.object({
+  name: z.string().max(200),
+  categories: z.array(VerifyCategory).max(4),
+  exitCode: z.number().int().nullable(),
+});
+export type ReceiptCheck = z.infer<typeof ReceiptCheck>;
+
 export const ReasoningStepStatus = z.enum(['running', 'done', 'failed']);
 
 const base = { sessionId: z.string(), seq: z.number().int().nonnegative(), ts: z.string() };
@@ -205,6 +249,22 @@ export const SessionEvent = z.discriminatedUnion('type', [
   }),
   /** WA-10: the user said it is not a loop; no more loop events in this turn. */
   z.object({ ...base, type: z.literal('loop.dismissed'), turnId: z.string() }),
+  /** RV-16: what the agent said set against what ADE saw and Git changed, recorded when a turn ends normally. */
+  z.object({
+    ...base,
+    type: z.literal('receipt.issued'),
+    turnId: z.string(),
+    turnIndex: z.number().int(),
+    facts: ReceiptFacts,
+    claims: z.array(ReceiptClaim).max(8),
+    findings: z.array(ReceiptFinding).max(8),
+    /** Categories (never `verified`) whose latest run in this turn passed after the last reported change. */
+    passed: z.array(VerifyCategory).max(4),
+  }),
+  /** RV-16: ADE's own checks finished; they cover every turn up to `turnIndex`. */
+  z.object({ ...base, type: z.literal('receipt.checked'), turnId: z.string(), turnIndex: z.number().int(), checks: z.array(ReceiptCheck).max(20) }),
+  /** RV-16: the user marked that turn's receipt as checked. */
+  z.object({ ...base, type: z.literal('receipt.acknowledged'), turnId: z.string() }),
   z.object({ ...base, type: z.literal('notice'), level: z.enum(['info', 'warning', 'error']), text: z.string() }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEvent>;

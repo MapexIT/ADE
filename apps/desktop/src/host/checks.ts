@@ -30,6 +30,9 @@ export class ChecksService {
     this.repos.settings.set(checksKey(workspaceId), settings);
   }
 
+  /** RV-16: told about every finished run of the checks. Set by the composition root. */
+  onResults: ((sessionId: string, results: CheckResult[]) => void) | null = null;
+
   last(sessionId: string): CheckResult[] {
     return this.results.get(sessionId) ?? [];
   }
@@ -74,6 +77,7 @@ export class ChecksService {
         text: failed.length ? `Checks: ${failed.length} of ${out.length} failed (${failed.map((f) => f.name).join(', ')}).` : `Checks: all ${out.length} passed.`,
       });
       this.results.set(sessionId, out);
+      this.onResults?.(sessionId, out);
       return out;
     } finally {
       this.running.delete(sessionId);

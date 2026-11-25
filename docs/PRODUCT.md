@@ -44,6 +44,7 @@ codebase.
 | Skill | An Agent Skills folder (`SKILL.md` plus files) that can be attached to an agent node. |
 | Connector | An MCP server plus a native panel: Shortcut, GitHub, GitHub Projects. |
 | Work item | A Shortcut story or a GitHub issue or project item. |
+| Turn receipt | ADE's comparison, made when a turn ends, of what the agent said with the commands it ran and the files Git says changed. |
 
 ## Session states
 

@@ -195,3 +195,36 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       production build and the development renderer, and CI is green on Windows and Ubuntu.
       The spec passes on Windows against the production build and the development renderer; CI on Ubuntu has
       not run yet (the branch is not pushed).
+
+## M10 - Turn receipt
+
+- [x] **M10-T01** Feature, decisions and plan for the turn receipt (RV-16): the RV-16 row and the count in
+      `docs/FEATURES.md`, the decision row and open questions in `docs/DECISIONS.md`, the new events in
+      `docs/ARCHITECTURE.md` section 4, the glossary entry in `docs/PRODUCT.md`, screens 1 and 3 in
+      `docs/UI.md`, this milestone in `docs/PLAN.md`. Done when `apps/desktop/test/help.test.ts` passes with
+      158 features.
+- [x] **M10-T02** Contracts (`VerifyCategory`, `ReceiptClaim`, `ReceiptFinding`, `ReceiptFacts`,
+      `receipt.issued`, `receipt.checked`, `receipt.acknowledged`, `ReceiptSettings`,
+      `sessions.acknowledgeReceipt`) and the pure module `packages/session-core/src/receipt.ts`
+      (`applyEvidence`, `classifyCommand`, `extractClaims`, `judgeClaim`, `buildReceipt`, `claimVerdict`,
+      `openItems`, copy helpers) with `test/receipt.test.ts`. Projection and activity get the minimum needed to
+      compile. Done when every unit case for `receipt.ts` in the test plan passes.
+- [x] **M10-T03** Git helper `ignoredPaths` with tests; fake-agent steps `touch` and `ghost`; host
+      `ReceiptService` wired in `app.ts` with settings, notification, `sessions.acknowledgeReceipt` and audit.
+      Done when cases 1 to 10, 14 and 15 of `apps/desktop/test/receipts.test.ts` pass on Windows and Ubuntu.
+- [x] **M10-T04** Checks and landing: `ChecksService.onResults` records `receipt.checked`;
+      `ReviewService.receiptWarnings` adds open items to the land audit entry; projection (`receipt` timeline
+      item placed at the end of its turn, checks and acknowledgement) and Observe feed lines with unit tests.
+      Done when cases 11 to 13 and the projection and observe tests pass.
+- [x] **M10-T05** Renderer: `ReceiptItem` card, header badge, "Ask for proof" draft, Run checks and Mark as
+      checked, Review section and land warning, settings, palette commands, help tab mapping; and
+      `e2e/turn-receipt.spec.ts`. Done when the spec passes on Windows against the production build and the
+      development renderer.
+      The spec passes on Windows against the production build and the development renderer.
+- [x] **M10-T06** Tick the boxes, record under the tasks what was and was not verified (real agents, Ubuntu CI)
+      as earlier milestones do, and answer or keep each open question in `docs/DECISIONS.md`. Done when CI is
+      green on Windows and Ubuntu.
+      Verified with the fake agent only: unit tests for the fold, claims, Git comparison, verdicts, projection
+      and Observe lines; 15 host tests (`apps/desktop/test/receipts.test.ts`) on Windows; the end-to-end spec on
+      Windows. Not yet verified: CI on Ubuntu (the branch is not pushed) and closing messages and `execute`
+      titles from real Codex, Claude Code and OpenCode sessions (see the open questions).

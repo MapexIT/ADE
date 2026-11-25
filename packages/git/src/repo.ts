@@ -98,6 +98,13 @@ export async function untrackedFiles(cwd: string): Promise<string[]> {
   return out.split('\0').filter(Boolean);
 }
 
+/** RV-16: which of `paths` (relative to `cwd`, forward slashes) Git ignores. Exit code 1 means none. */
+export async function ignoredPaths(cwd: string, paths: string[]): Promise<string[]> {
+  if (!paths.length) return [];
+  const out = await git(['check-ignore', '-z', '--stdin'], { cwd, input: `${paths.join('\0')}\0`, okCodes: [1] });
+  return out.split('\0').filter(Boolean);
+}
+
 /** CN-03: apply the checkout's uncommitted and untracked changes to a new worktree. */
 export async function bringChanges(fromRepo: string, toWorktree: string): Promise<{ files: string[] }> {
   const patch = await git(['diff', 'HEAD', '--binary'], { cwd: fromRepo, binary: true });

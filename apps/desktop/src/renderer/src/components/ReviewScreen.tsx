@@ -10,8 +10,9 @@ import { agentLabel, joinPath, languageOf } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, selectedSession, useStore } from '../lib/store.ts';
 import { TurnPicker, useChanges } from './Inspector.tsx';
-import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, PullRequestButton, PullRequestPanel } from './ReviewExtras.tsx';
-import { landWarning, nextUnreviewed, reviewActions, type ReviewComment, type ReviewStates } from '../lib/review.ts';
+import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, OpenReceipts, PullRequestButton, PullRequestPanel } from './ReviewExtras.tsx';
+import { landWarning, nextUnreviewed, receiptLandWarning, reviewActions, type ReviewComment, type ReviewStates } from '../lib/review.ts';
+import { useReceipts } from '../lib/receipts.ts';
 import { ReviewBadge, useReviewProgress } from './ReviewProgress.tsx';
 
 const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
@@ -39,6 +40,7 @@ export function ReviewScreen() {
   const sessionId = session?.id ?? null;
   // RV-15: review state across all turns, reloaded with the changes list.
   const { progress, setProgress } = useReviewProgress(sessionId, changes);
+  const { open: receiptOpen } = useReceipts(sessionId);
   const reviewStates: ReviewStates = useMemo(() => new Map((progress?.files ?? []).map((f) => [f.path, f.state])), [progress]);
   const loadPr = useCallback(() => {
     if (!sessionId) return;
@@ -128,7 +130,7 @@ export function ReviewScreen() {
   const busy = isLive(session.state);
   const ended = session.state === 'landed' || session.state === 'discarded';
   const files = [...selected];
-  const warning = landWarning(files, reviewStates);
+  const warning = [landWarning(files, reviewStates), receiptLandWarning(receiptOpen)].filter(Boolean).join(' ');
   const withWarning = (body: string) => (warning ? `${body} ${warning}` : body);
 
   const addToReview = () => {
@@ -321,6 +323,7 @@ export function ReviewScreen() {
 
             {pr ? <PullRequestPanel session={session} status={pr} onRefresh={loadPr} /> : null}
             <BatchReviewPanel session={session} comments={pending} onChange={setPending} />
+            <OpenReceipts session={session} items={receiptOpen} />
             <ChecksPanel session={session} />
             <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-line bg-surface p-3">
               <span className="font-semibold">
