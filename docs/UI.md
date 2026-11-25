@@ -55,9 +55,9 @@ Default to three visible regions at most. Everything else opens on demand and re
 
 | # | Screen | Purpose |
 | --- | --- | --- |
-| 1 | Main workspace | Sessions list, timeline with plan, approval card, composer (Chat or Board, generation method), inspector, terminal strip |
+| 1 | Main workspace | Sessions list, timeline with plan, approval card, turn receipt, composer (Chat or Board, generation method), inspector, terminal strip |
 | 2 | Smart terminal | Terminal list, command blocks, suggested command, status bar, agent terminal with attention ring, plain terminal |
-| 3 | Review and land | Changed files, per-turn selector, side-by-side diff, comment to agent, review assistant, landing actions |
+| 3 | Review and land | Changed files, per-turn selector, side-by-side diff, comment to agent, review assistant, receipts to check, landing actions |
 | 4 | Workflow canvas | Node palette, skills list, node graph, run strip, node settings with skills |
 | 5 | Work items and new session | Shortcut and GitHub items by state, new-session form with a preview of what is sent |
 | 6 | First-run setup | Git, shells, agents, connectors, sandbox state per agent |
