@@ -1,5 +1,5 @@
 import { ExternalLink, FolderGit2, Inbox, Play } from 'lucide-react';
-import { Badge, Button, EmptyState, Tabs } from '@ade/ui';
+import { Badge, Button, EmptyState, Tabs, Waiting } from '@ade/ui';
 import type { WorkItem } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -84,7 +84,7 @@ export function WorkItemsScreen() {
         ) : checked && !sourceConnected ? (
           <ConnectionGuide key={source} source={source} onChecked={refresh} />
         ) : items === null ? (
-          <p className="text-ink-muted">Loading…</p>
+          <Waiting>Loading…</Waiting>
         ) : items.length === 0 ? (
           <EmptyState icon={<Inbox className="size-5" />} title="Nothing assigned to you" body="Work items assigned to you appear here, grouped by state." />
         ) : (

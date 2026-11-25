@@ -1,6 +1,6 @@
 import { Check, Copy, FileDiff, GitCommitHorizontal, GitFork } from 'lucide-react';
 import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
-import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
+import { Badge, Button, cx, EmptyState, SectionLabel, Waiting } from '@ade/ui';
 import type { DiffText, FileChange, GitCommitDetail } from '@ade/contracts';
 import { useEffect, useState } from 'react';
 import { host } from '../lib/bridge.ts';
@@ -180,7 +180,7 @@ function CommitDiff({ workspaceId, detail, file }: { workspaceId: string; detail
       {/* Monaco needs a box with a real size: the editor fills this relative box absolutely. */}
       <div role="region" aria-label={`Diff of ${file.path}`} className="relative min-h-60 flex-1 overflow-hidden rounded-[var(--radius)] border border-line">
         {!diff ? (
-          <p className="m-3 text-ink-muted">Loading the diff…</p>
+          <Waiting className="m-3">Loading the diff…</Waiting>
         ) : diff.binary ? (
           <p className="m-3 text-ink-muted">Binary or very large file; no text diff.</p>
         ) : (

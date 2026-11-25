@@ -1,3 +1,4 @@
+import { Waiting } from '@ade/ui';
 import { DiffEditor, type DiffEditorProps } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import { useEffect, useRef } from 'react';
@@ -31,6 +32,7 @@ export function SafeDiffEditor({ onMount, ...props }: DiffEditorProps) {
   }, []);
   return (
     <DiffEditor
+      loading={<Waiting>Loading the editor…</Waiting>}
       {...props}
       keepCurrentOriginalModel
       keepCurrentModifiedModel

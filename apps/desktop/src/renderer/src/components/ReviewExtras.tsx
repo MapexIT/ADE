@@ -97,7 +97,7 @@ export function AssistantPanel({ session, onResult }: { session: Session; onResu
             </option>
           ))}
         </select>
-        <Button icon={<ScanSearch className="size-4" aria-hidden="true" />} size="dense" disabled={!agentId || working} onClick={() => void run()}>
+        <Button busy={working} icon={<ScanSearch className="size-4" aria-hidden="true" />} size="dense" disabled={!agentId || working} onClick={() => void run()}>
           {working ? 'Reviewing…' : 'Pre-review'}
         </Button>
       </div>
@@ -193,7 +193,7 @@ export function ChecksPanel({ session }: { session: Session }) {
           <Button icon={<ListChecks className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => setChoosing((c) => !c)} aria-expanded={choosing}>
             Choose checks
           </Button>
-          <Button icon={<ListChecks className="size-4" aria-hidden="true" />} size="dense" disabled={running || busy || !settings.configIds.length} onClick={() => void run()}>
+          <Button busy={running} icon={<ListChecks className="size-4" aria-hidden="true" />} size="dense" disabled={running || busy || !settings.configIds.length} onClick={() => void run()}>
             {running ? 'Running…' : 'Run checks'}
           </Button>
           {failed.length ? (
@@ -406,7 +406,7 @@ export function PullRequestButton({ session, files, message, disabled, onOpened 
         footer={
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button icon={<GitPullRequestArrow className="size-4" aria-hidden="true" />} variant="primary" disabled={!title.trim() || working} onClick={() => void go()}>
+            <Button busy={working} icon={<GitPullRequestArrow className="size-4" aria-hidden="true" />} variant="primary" disabled={!title.trim() || working} onClick={() => void go()}>
               {working ? 'Opening…' : 'Push and open'}
             </Button>
           </>

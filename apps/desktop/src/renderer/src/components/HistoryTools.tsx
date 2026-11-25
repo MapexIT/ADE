@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react';
-import { Badge, Button, cx, SectionLabel } from '@ade/ui';
+import { Badge, Button, cx, SectionLabel, Waiting } from '@ade/ui';
 import type { InstructionStatus, SessionSearchResult } from '@ade/contracts';
 import { useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -16,7 +16,7 @@ export function InstructionFiles({ workspaceId }: { workspaceId: string }) {
   return (
     <section aria-label="Instruction files" className="flex flex-col gap-2">
       <SectionLabel>Instruction files</SectionLabel>
-      {!status ? <span className="text-ink-muted">Checking…</span> : null}
+      {!status ? <Waiting>Checking…</Waiting> : null}
       {status?.problems.map((p) => (
         <p key={p} className="m-0 rounded-[var(--radius)] border border-attention-line bg-attention-tint px-2.5 py-1.5 text-[12px] text-attention">
           {p}
@@ -125,7 +125,7 @@ export function ScreenshotItem({ url, file }: { url: string; file: string }) {
   return (
     <figure className="m-0 flex flex-col gap-1 rounded-[var(--radius)] border border-line p-2">
       <figcaption className="text-[12px] text-ink-muted">Preview screenshot{url ? ` of ${url}` : ''}</figcaption>
-      {src ? <img src={src} alt={`Screenshot of ${url || 'the preview'}`} className="max-h-96 max-w-full self-start rounded" /> : <span className="text-ink-muted">Loading…</span>}
+      {src ? <img src={src} alt={`Screenshot of ${url || 'the preview'}`} className="max-h-96 max-w-full self-start rounded" /> : <Waiting>Loading…</Waiting>}
     </figure>
   );
 }

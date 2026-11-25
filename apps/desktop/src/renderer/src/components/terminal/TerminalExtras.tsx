@@ -88,7 +88,7 @@ export function AskBar({ terminal }: { terminal: TerminalInfo }) {
           </option>
         ))}
       </select>
-      <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" type="submit" disabled={working || !question.trim()}>
+      <Button busy={working} icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" type="submit" disabled={working || !question.trim()}>
         {working ? 'Drafting…' : 'Draft'}
       </Button>
     </form>

@@ -128,7 +128,7 @@ export function HandOffDialog() {
       footer={
         <>
           <Button onClick={() => set({ handOffSessionId: null })}>Cancel</Button>
-          <Button icon={<ArrowRightLeft className="size-4" aria-hidden="true" />} variant="primary" disabled={!agentId || busy} onClick={() => void go()}>
+          <Button busy={busy} icon={<ArrowRightLeft className="size-4" aria-hidden="true" />} variant="primary" disabled={!agentId || busy} onClick={() => void go()}>
             {busy ? 'Handing off…' : 'Hand off'}
           </Button>
         </>

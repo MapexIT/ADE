@@ -336,7 +336,7 @@ export function ReviewScreen() {
                     Commit message
                   </label>
                   <textarea id="commit-msg" rows={commitMessage.includes('\n') ? 4 : 1} value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder={`Commit message (default: ${session.title})`} className="min-h-11 min-w-64 flex-1 rounded-[var(--radius)] border border-line bg-bg px-3 py-2.5 text-ink focus:border-accent focus:outline-none" />
-                  <Button icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={busy || drafting || !changes.length} onClick={() => void draftMessage()} title="RV-13: asks this session's agent (adds a turn)">
+                  <Button busy={drafting} icon={<Sparkles className="size-4" aria-hidden="true" />} size="dense" variant="ghost" disabled={busy || drafting || !changes.length} onClick={() => void draftMessage()} title="RV-13: asks this session's agent (adds a turn)">
                     {drafting ? 'Drafting…' : 'Draft with the agent'}
                   </Button>
                 </>

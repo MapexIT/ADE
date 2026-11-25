@@ -1,5 +1,5 @@
 import { CircleAlert, ExternalLink, Play, RefreshCw, Settings } from 'lucide-react';
-import { Badge, Button, cx, EmptyState } from '@ade/ui';
+import { Badge, Button, cx, EmptyState, Waiting } from '@ade/ui';
 import type { Board, BoardSettings } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
 import { useCallback, useEffect, useState } from 'react';
@@ -63,7 +63,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
               </label>
             </>
           ) : null}
-          <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading} onClick={() => void load()}>
+          <Button busy={loading} icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading} onClick={() => void load()}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
         </div>
@@ -113,7 +113,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
           </div>
         </>
       ) : (
-        <p className="m-0 text-ink-muted">Loading…</p>
+        <Waiting>Loading…</Waiting>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react';
-import { Badge, Button, cx, Tabs } from '@ade/ui';
+import { Badge, Button, cx, Tabs, Waiting } from '@ade/ui';
 import type { AgentId, ContainmentStatus, PermissionProfile, WorkflowSummary } from '@ade/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReasoningSettings } from '@ade/contracts';
@@ -236,7 +236,7 @@ export function NewSessionDialog() {
           <>
             {compareDisabledReason ? <span className="mr-auto self-center text-ink-muted">{compareDisabledReason}</span> : null}
             <Button onClick={() => set({ newSession: null })}>Cancel</Button>
-            <Button icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!compareDisabledReason || busy} onClick={() => void startCompare()}>
+            <Button busy={busy} icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!compareDisabledReason || busy} onClick={() => void startCompare()}>
               {busy ? 'Starting…' : `Start ${compareIds.length || ''} sessions`.replace('  ', ' ')}
             </Button>
           </>
@@ -246,7 +246,7 @@ export function NewSessionDialog() {
               <span className="mr-auto self-center text-ink-muted">{runDisabledReason}</span>
             ) : null}
             <Button onClick={() => set({ newSession: null })}>Cancel</Button>
-            <Button icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!runDisabledReason || busy} onClick={() => void startRun()}>
+            <Button busy={busy} icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!runDisabledReason || busy} onClick={() => void startRun()}>
               {busy ? 'Starting…' : 'Start run'}
             </Button>
           </>
@@ -256,7 +256,7 @@ export function NewSessionDialog() {
               <span className="mr-auto self-center text-ink-muted">{startDisabledReason}</span>
             ) : null}
             <Button onClick={() => set({ newSession: null })}>Cancel</Button>
-            <Button icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!startDisabledReason || busy} onClick={() => void start()}>
+            <Button busy={busy} icon={<Play className="size-4" aria-hidden="true" />} variant="primary" disabled={!!startDisabledReason || busy} onClick={() => void start()}>
               {busy ? 'Starting…' : 'Start session'}
             </Button>
           </>
@@ -375,7 +375,7 @@ export function NewSessionDialog() {
           <div className="flex flex-col gap-4">
             <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
               <legend className="mb-1.5 text-[12px] font-semibold text-ink-muted">{mode === 'compare' ? 'Agents (two or three)' : 'Agent'}</legend>
-              {agents.length === 0 ? <span className="text-ink-muted">Checking agents…</span> : null}
+              {agents.length === 0 ? <Waiting>Checking agents…</Waiting> : null}
               {agents.map((a) => (
                 <label
                   key={a.id}

@@ -133,7 +133,7 @@ export function ReceiptItem({ item, sessionId }: { item: Item; sessionId: string
             Ask for proof
           </Button>
           {hasChecks ? (
-            <Button size="dense" icon={<ListChecks className="size-4" aria-hidden="true" />} disabled={running || turnRunning} onClick={() => void runChecks()}>
+            <Button busy={running} size="dense" icon={<ListChecks className="size-4" aria-hidden="true" />} disabled={running || turnRunning} onClick={() => void runChecks()}>
               {running ? 'Running…' : 'Run checks'}
             </Button>
           ) : null}
