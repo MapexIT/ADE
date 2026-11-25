@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { agentLabel } from '../../lib/format.ts';
 import { useStore } from '../../lib/store.ts';
-import { AnimatedNumber, DrawnCheck, Orb, PHASE_STYLE, PhaseBar, Sparkline } from './visuals.tsx';
+import { AnimatedNumber, DrawnCheck, Orb, PHASE_STYLE, PhaseBar, Sparkline, useSteadyPhase } from './visuals.tsx';
 import { AgentTeams, LoopingAgents, QuietAgents } from './Teams.tsx';
 import { useTeams } from '../../lib/teams.ts';
 
@@ -235,8 +235,8 @@ function AgentCard({
   onSelect: () => void;
 }) {
   const live = LIVE_STATES.has(session.state);
-  const busy = live && isBusy(a.phase);
-  const phase = live ? a.phase : a.phase === 'stopped' ? 'stopped' : 'idle';
+  const phase = useSteadyPhase(live ? a.phase : a.phase === 'stopped' ? 'stopped' : 'idle');
+  const busy = live && isBusy(phase);
   const since = a.turnStartedAt ?? a.startedAt ?? Date.parse(session.createdAt);
   const elapsedMs = (live ? now : (a.lastEventAt ?? now)) - since;
   return (
@@ -309,7 +309,7 @@ function Stat({ icon: Icon, value, label }: { icon: LucideIcon; value: number; l
 function Detail({ session, activity: a, now }: { session: Session; activity: Activity; now: number }) {
   const set = useStore((s) => s.set);
   const live = LIVE_STATES.has(session.state);
-  const phase = live ? a.phase : a.phase === 'stopped' ? 'stopped' : 'idle';
+  const phase = useSteadyPhase(live ? a.phase : a.phase === 'stopped' ? 'stopped' : 'idle');
   const end = live ? now : (a.lastEventAt ?? now);
   const totals = phaseTotals(a.segments, end);
   const totalMs = Object.values(totals).reduce((x, y) => x + (y ?? 0), 0);

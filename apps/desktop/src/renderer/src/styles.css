@@ -401,7 +401,14 @@ textarea,
 }
 
 /* WA-07: the observability status orb. Rings ripple out while busy; it breathes while waiting for you. */
+/* Registered as a colour so a phase change fades instead of flashing. */
+@property --orb-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #71717a;
+}
 .ade-orb {
+  transition: --orb-color 600ms var(--ease);
   position: relative;
   display: inline-block;
   flex-shrink: 0;

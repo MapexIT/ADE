@@ -1,7 +1,7 @@
 import { cx } from '@ade/ui';
 import type { ActivityPhase, PhaseSegment } from '@ade/session-core';
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /** Phase colours: shades of violet, white and grey only (three-colour palette). */
 export const PHASE_STYLE: Record<ActivityPhase, { label: string; color: string; striped?: boolean }> = {
@@ -49,6 +49,27 @@ export function Orb({ phase, size = 14 }: { phase: ActivityPhase; size?: number 
       }}
     />
   );
+}
+
+/**
+ * The phase to show: each one stays for at least `holdMs`, so an agent switching steps many times a second does not
+ * make its orb, edge and label flicker. The latest phase always shows once the hold is over.
+ */
+export function useSteadyPhase(phase: ActivityPhase, holdMs = 800): ActivityPhase {
+  const [shown, setShown] = useState(phase);
+  const since = useRef(0);
+  useEffect(() => {
+    if (phase === shown) return;
+    const apply = () => {
+      since.current = Date.now();
+      setShown(phase);
+    };
+    const wait = since.current + holdMs - Date.now();
+    if (wait <= 0) return apply();
+    const t = setTimeout(apply, wait);
+    return () => clearTimeout(t);
+  }, [phase, shown, holdMs]);
+  return shown;
 }
 
 /** A number that glides to its new value instead of jumping. */
