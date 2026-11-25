@@ -14,6 +14,7 @@ import {
   discardWorktree,
   fileAt,
   git,
+  ignoredPaths,
   isGitRepo,
   restoreSnapshot,
   revParse,
@@ -57,6 +58,18 @@ async function newWorktree() {
   await createWorktree({ repo, baseCommit: base, branch: 'agent/session-1', path: wt });
   return base;
 }
+
+describe('ignoredPaths (RV-16)', () => {
+  it('lists the ignored paths, including one with spaces', async () => {
+    writeFileSync(join(repo, '.gitignore'), 'node_modules/\n*.log\nmy dir/\n');
+    expect(await ignoredPaths(repo, ['node_modules/a.js', 'src/a.ts', 'debug.log', 'my dir/x y.txt'])).toEqual(['node_modules/a.js', 'debug.log', 'my dir/x y.txt']);
+  });
+
+  it('returns nothing when none is ignored (exit 1) or the list is empty', async () => {
+    expect(await ignoredPaths(repo, ['src/a.ts', 'keep.txt'])).toEqual([]);
+    expect(await ignoredPaths(repo, [])).toEqual([]);
+  });
+});
 
 describe('worktrees', () => {
   it('creates a worktree on a new branch outside the repository', async () => {

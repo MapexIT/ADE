@@ -197,6 +197,18 @@ export class EventStore {
       .map((r) => JSON.parse(r.payload_json) as SessionEvent);
   }
 
+  /** Only the events of the given types, in order (RV-16 reads its receipts without the rest of the log). */
+  listOfTypes(sessionId: string, types: readonly SessionEvent['type'][]): SessionEvent[] {
+    if (!types.length) return [];
+    return this.db
+      .all<{ payload_json: string }>(
+        `SELECT payload_json FROM events WHERE session_id = ? AND type IN (${types.map(() => '?').join(', ')}) ORDER BY seq`,
+        sessionId,
+        ...types,
+      )
+      .map((r) => JSON.parse(r.payload_json) as SessionEvent);
+  }
+
   lastSeq(sessionId: string): number {
     return this.db.get<{ n: number | null }>('SELECT MAX(seq) AS n FROM events WHERE session_id = ?', sessionId)?.n ?? -1;
   }

@@ -7,6 +7,8 @@
  *   read <path>                     tool call (kind read) that completes
  *   edit <path> <content>           write a file in cwd and report a diff tool call
  *   delete <path>                   delete a file in cwd
+ *   touch <path> <content>          write a file in cwd and report nothing (like a command that writes files)
+ *   ghost <path> <content>          report an edit with a diff but write nothing (an edit that never reached disk)
  *   ask <command>                   permission request for an execute tool call
  *   question <text> | <a> | <b>     a question, answered by picking an option
  *   plan <a>; <b>; <c>              plan with the first entry in progress
@@ -26,6 +28,10 @@ export type Step =
   | { op: 'read'; path: string }
   | { op: 'edit'; path: string; content: string }
   | { op: 'delete'; path: string }
+  /** RV-16: writes a file without reporting it. */
+  | { op: 'touch'; path: string; content: string }
+  /** RV-16: reports an edit without writing it. */
+  | { op: 'ghost'; path: string; content: string }
   | { op: 'ask'; command: string }
   | { op: 'question'; text: string; answers: string[] }
   | { op: 'plan'; entries: string[] }
@@ -83,11 +89,13 @@ export function parseScript(text: string): Step[] {
       case 'read':
         steps.push({ op: 'read', path: arg });
         break;
-      case 'edit': {
+      case 'edit':
+      case 'touch':
+      case 'ghost': {
         const space = arg.indexOf(' ');
         const path = space === -1 ? arg : arg.slice(0, space);
         const content = space === -1 ? '' : arg.slice(space + 1).replace(/\\n/g, '\n');
-        steps.push({ op: 'edit', path, content });
+        steps.push({ op: head, path, content });
         break;
       }
       case 'delete':

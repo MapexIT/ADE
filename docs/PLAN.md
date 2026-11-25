@@ -209,7 +209,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       (`applyEvidence`, `classifyCommand`, `extractClaims`, `judgeClaim`, `buildReceipt`, `claimVerdict`,
       `openItems`, copy helpers) with `test/receipt.test.ts`. Projection and activity get the minimum needed to
       compile. Done when every unit case for `receipt.ts` in the test plan passes.
-- [ ] **M10-T03** Git helper `ignoredPaths` with tests; fake-agent steps `touch` and `ghost`; host
+- [x] **M10-T03** Git helper `ignoredPaths` with tests; fake-agent steps `touch` and `ghost`; host
       `ReceiptService` wired in `app.ts` with settings, notification, `sessions.acknowledgeReceipt` and audit.
       Done when cases 1 to 10, 14 and 15 of `apps/desktop/test/receipts.test.ts` pass on Windows and Ubuntu.
 - [ ] **M10-T04** Checks and landing: `ChecksService.onResults` records `receipt.checked`;

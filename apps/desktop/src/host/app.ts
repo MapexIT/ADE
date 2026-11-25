@@ -35,7 +35,9 @@ import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { ComposerState, LoopSettings, PromptBoxes, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
+import { ComposerState, LoopSettings, PromptBoxes, ReceiptSettings, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
+import { changedFiles, diffPatch, ignoredPaths } from '@ade/git';
+import { RECEIPT_EVENTS, ReceiptService } from './receipts.ts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -149,6 +151,20 @@ export function createHost(config: HostConfig) {
     refreshInbox: () => sessions.refreshInbox(),
   });
   sessions.inboxSources.push(() => loops.inbox());
+  // RV-16: turn receipts are session events too, issued by the host when a turn ends.
+  const receipts = new ReceiptService({
+    bus,
+    record: (sessionId, event, turnId) => sessions.record(sessionId, event, turnId ?? null),
+    settings: () => {
+      const parsed = ReceiptSettings.safeParse(repos.settings.raw('receipts') ?? {});
+      return parsed.success ? parsed.data : ReceiptSettings.parse({});
+    },
+    session: (sessionId) => repos.sessions.get(sessionId),
+    turns: (sessionId) => repos.turns.list(sessionId),
+    receiptEvents: (sessionId) => repos.events.listOfTypes(sessionId, RECEIPT_EVENTS),
+    git: { changedFiles, diffPatch, ignoredPaths },
+    audit: (entry) => repos.audit.append(entry),
+  });
   const resolveCommand = commandResolver(config.node, config.nodeEnv);
   const checks = new ChecksService(repos, sessions, resolveCommand, () => sessions.sandbox);
   const runnerLog = (sessionId: string) => join(config.userData, 'runner', `${sessionId}.jsonl`);
@@ -334,8 +350,10 @@ export function createHost(config: HostConfig) {
       loops.dismiss(sessionId);
       return { ok: true };
     },
-    // RV-16: wired to the receipt service in M10-T03.
-    'sessions.acknowledgeReceipt': () => ({ ok: true }),
+    'sessions.acknowledgeReceipt': ({ sessionId, turnId }) => {
+      receipts.acknowledge(sessionId, turnId);
+      return { ok: true };
+    },
     'sessions.interrupt': async ({ sessionId, content }) => {
       await sessions.interrupt(sessionId, content);
       return { ok: true };
@@ -728,6 +746,7 @@ export function createHost(config: HostConfig) {
     async dispose() {
       clearInterval(mergeTimer);
       loops.dispose();
+      receipts.dispose();
       telegram.dispose();
       await lsp.dispose();
       await preview.dispose();

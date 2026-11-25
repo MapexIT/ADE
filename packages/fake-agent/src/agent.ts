@@ -136,6 +136,25 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
           });
           break;
         }
+        case 'touch': {
+          const full = inside(s, step.path);
+          mkdirSync(dirname(full), { recursive: true });
+          writeFileSync(full, step.content);
+          break;
+        }
+        case 'ghost': {
+          const toolCallId = randomUUID();
+          const full = inside(s, step.path);
+          const oldText = existsSync(full) ? readFileSync(full, 'utf8') : null;
+          await send(client, s, { sessionUpdate: 'tool_call', toolCallId, title: `Edit ${step.path}`, kind: 'edit', status: 'in_progress', locations: [{ path: step.path }] });
+          await send(client, s, {
+            sessionUpdate: 'tool_call_update',
+            toolCallId,
+            status: 'completed',
+            content: [{ type: 'diff', path: step.path, oldText, newText: step.content }],
+          });
+          break;
+        }
         case 'delete': {
           const toolCallId = randomUUID();
           rmSync(inside(s, step.path), { force: true });
