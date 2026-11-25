@@ -75,4 +75,7 @@ Default to three visible regions at most. Everything else opens on demand and re
 - Keyboard: every action is reachable from the command palette; the Needs-you inbox is fully keyboard-driven.
 - Motion: 120 to 200 ms ease-out for panels, cards and rings; none for streaming text. Respect
   `prefers-reduced-motion`.
+- Waiting (WA-11): `Button busy` swaps the icon for `Spinner` (an arc in the text colour, 0.9 s a turn);
+  loading lines use `Waiting` (three breathing violet dots, fading in after 150 ms). Both stand still under
+  reduced motion. Do not add other loading animations.
 - Empty states say what the area is for and offer the one obvious next action.

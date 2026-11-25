@@ -1,6 +1,6 @@
 import { Eye, FileCode, FileSearch, Play, Save } from 'lucide-react';
 import Editor from '@monaco-editor/react';
-import { Badge, Button, EmptyState } from '@ade/ui';
+import { Badge, Button, EmptyState, Waiting } from '@ade/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import { interpreterFor } from '../lib/runner.ts';
@@ -222,7 +222,7 @@ export function EditorPanel() {
       <div className="min-h-0 flex-1">
         {missing ? <p className="m-3 text-ink-muted">This file does not exist yet.</p> : null}
         {content === null ? null : (
-          <Editor theme="ade-dark" path={editor.path} value={content} language={languageOf(editor.path)} onChange={(v) => setContent(v ?? '')} onMount={(e) => {
+          <Editor theme="ade-dark" loading={<Waiting>Loading the editor…</Waiting>} path={editor.path} value={content} language={languageOf(editor.path)} onChange={(v) => setContent(v ?? '')} onMount={(e) => {
               monacoRef.current = e;
               setMounted((n) => n + 1);
             }} options={EDITOR_OPTIONS} />

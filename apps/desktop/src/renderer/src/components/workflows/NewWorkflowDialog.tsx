@@ -60,7 +60,7 @@ export function NewWorkflowDialog({
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="primary" disabled={busy} icon={<FilePlus2 className="size-4" aria-hidden="true" />} onClick={() => void create()}>
+          <Button busy={busy} variant="primary" disabled={busy} icon={<FilePlus2 className="size-4" aria-hidden="true" />} onClick={() => void create()}>
             {busy ? 'Creating…' : 'Create workflow'}
           </Button>
         </>

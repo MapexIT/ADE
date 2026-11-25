@@ -1,7 +1,7 @@
 import { Play, Plus, Save, Trash2 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
-import { Badge, Button, cx } from '@ade/ui';
+import { Badge, Button, cx, Waiting } from '@ade/ui';
 import type { EnvSet, Run, ScratchLanguage } from '@ade/contracts';
 import { useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -51,7 +51,7 @@ export function ScratchpadPanel() {
         {status?.note ? <span className="text-[12px] text-ink-muted">{status.note}</span> : null}
       </div>
       <div className="min-h-64 flex-1 overflow-hidden rounded-[var(--radius)] border border-line">
-        <Editor theme="ade-dark" language={SAMPLES[language].monaco} value={code[language]} onChange={(v) => setCode((c) => ({ ...c, [language]: v ?? '' }))} options={EDITOR_OPTIONS} />
+        <Editor theme="ade-dark" loading={<Waiting>Loading the editor…</Waiting>} language={SAMPLES[language].monaco} value={code[language]} onChange={(v) => setCode((c) => ({ ...c, [language]: v ?? '' }))} options={EDITOR_OPTIONS} />
       </div>
       <span className="text-[12px] text-ink-muted">Each run gets a new temporary folder. C# needs the .NET 10 SDK; TypeScript needs Node 22.18 or later.</span>
     </section>

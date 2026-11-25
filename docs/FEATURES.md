@@ -1,6 +1,6 @@
 # Features
 
-158 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+159 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -29,6 +29,7 @@ Linux.
 | WA-08 | Agent teams, live | v1 | Observe shows every working agent in a team named after who started it: you, a comparison, a workflow run, or a session's reasoning run (whose read-only agents appear while they work). Each team is an animated constellation: the starter in the middle, its agents around it. Motion follows real activity: the orbit speeds up with the team's activity, each agent pulses and glows with its own recent event rate, dashes flow along a working agent's link, and waiting agents hold still. The top bar shows one pulsing dot per working agent, grouped by team (click for Observe), and a session's header shows a thin wave while it or its reasoning works. With reduced motion, everything is shown without moving. |
 | WA-09 | Quiet agents | v1 | An agent that should be working but has sent nothing for a while (3 minutes while working or thinking, 5 while starting or in a tool, 10 while running a command) is called quiet: Observe lists it with how long it has been silent, with Open and Cancel turn; its dot in the constellation and the top bar turns hollow. Waiting for you never counts as quiet. |
 | WA-10 | Loop watch | v1 | ADE warns when a working agent seems to go round in circles within one turn: the same step repeated (4 times with no new edit in between), the same command failing (5 times), or a file switched back to a version it already had (twice). Built only from ACP events, so it is the same for every agent. The warning is a card in the timeline with what was repeated and how often, an entry in the Needs-you inbox, a "May be looping" badge on the session and in Observe, and one notification per turn (desktop and Telegram). From the card: Redirect the agent (fills the message box with a suggested instruction to edit and send with Interrupt and send), Cancel turn, or Not a loop (no more warnings in that turn). ADE never stops a turn by itself unless "Stop the turn if it carries on" is switched on in Settings; then it cancels the turn at twice the warning level, says so in the timeline and the audit log, and undoes nothing. Warnings can be switched off. |
+| WA-11 | Waiting motion | v1 | While ADE waits for something, it shows it quietly. A button that started work shows a small turning arc in place of its icon and ignores further clicks until the work is done. Loading lines (files, diffs, the board, agents being checked, the code editor starting) show three softly breathing violet dots beside what ADE is waiting for; they fade in after a moment, so a quick load never flashes them. With reduced motion switched on, the arc and dots stay still. |
 
 ## Steer (SR)
 

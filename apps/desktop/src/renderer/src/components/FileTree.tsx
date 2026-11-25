@@ -22,7 +22,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { cx } from '@ade/ui';
+import { cx, Waiting } from '@ade/ui';
 import type { FileChange, FileEntry } from '@ade/contracts';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -319,7 +319,7 @@ export function FileTree({ root, sessionId, changes = [] }: { root: string; sess
         className="relative min-h-0 flex-1 overflow-auto outline-none focus-visible:outline-none"
       >
         {entries === null ? (
-          <p className="m-0 p-2 text-ink-muted">Loading files…</p>
+          <Waiting className="p-2">Loading files…</Waiting>
         ) : rows.length === 0 ? (
           <p className="m-0 p-2 text-ink-muted">{changedOnly ? 'No changed files match.' : filter ? 'No files match.' : 'No files.'}</p>
         ) : (

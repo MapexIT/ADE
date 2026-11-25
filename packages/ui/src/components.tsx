@@ -20,11 +20,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   icon?: ReactNode;
+  /** While true the icon becomes a spinner and the button ignores clicks (WA-11). */
+  busy?: boolean;
 }
 
 /** Real `button` elements only (accessibility rule). Dense toolbars use 36 px, elsewhere 44 px. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'normal', icon, className, children, type = 'button', ...rest },
+  { variant = 'secondary', size = 'normal', icon, busy = false, className, children, type = 'button', ...rest },
   ref,
 ) {
   return (
@@ -37,15 +39,50 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         'active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45',
         size === 'dense' ? 'min-h-9' : 'min-h-11',
         VARIANTS[variant],
+        busy && 'pointer-events-none',
         className,
       )}
+      aria-busy={busy || undefined}
       {...rest}
     >
-      {icon}
+      {busy ? <Spinner /> : icon}
       {children}
     </button>
   );
 });
+
+/** WA-11: a small turning arc for something that is working. Static under reduced motion. */
+export function Spinner({ className, label }: { className?: string; label?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx('ade-spinner size-4 shrink-0', className)}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
+      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.22" strokeWidth="2" />
+      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="11 27" />
+    </svg>
+  );
+}
+
+/**
+ * WA-11: a waiting line: three softly breathing dots and what ADE is waiting for. It fades in after a moment, so a
+ * quick load never flashes it.
+ */
+export function Waiting({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span role="status" className={cx('ade-waiting inline-flex items-center gap-2 text-ink-muted', className)}>
+      <span className="ade-dots inline-flex gap-[3px]" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+      <span>{children}</span>
+    </span>
+  );
+}
 
 type Tone = 'neutral' | 'accent' | 'attention' | 'danger' | 'ok';
 const TONES: Record<Tone, string> = {
@@ -119,18 +156,6 @@ export function EmptyState({ title, body, action, icon }: { title: string; body:
       <p className="max-w-md text-ink-muted">{body}</p>
       {action}
     </div>
-  );
-}
-
-export function Spinner({ label }: { label: string }) {
-  return (
-    <span role="status" className="inline-flex items-center gap-2 text-ink-muted">
-      <span
-        aria-hidden="true"
-        className="inline-block size-3 animate-spin rounded-full border-2 border-line border-t-accent"
-      />
-      {label}
-    </span>
   );
 }
 
