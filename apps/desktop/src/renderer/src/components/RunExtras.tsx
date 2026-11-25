@@ -1,5 +1,6 @@
 import { Play, Plus, Save, Trash2 } from 'lucide-react';
-import Editor, { DiffEditor } from '@monaco-editor/react';
+import Editor from '@monaco-editor/react';
+import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
 import { Badge, Button, cx } from '@ade/ui';
 import type { EnvSet, Run, ScratchLanguage } from '@ade/contracts';
 import { useEffect, useState } from 'react';

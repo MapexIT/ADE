@@ -1,5 +1,5 @@
 import { Check, Copy, FileDiff, GitCommitHorizontal, GitFork } from 'lucide-react';
-import { DiffEditor } from '@monaco-editor/react';
+import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { DiffText, FileChange, GitCommitDetail } from '@ade/contracts';
 import { useEffect, useState } from 'react';
