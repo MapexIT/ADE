@@ -1,5 +1,5 @@
 import { Archive, Check, Columns2, FileInput, FileQuestion, GitCommitHorizontal, GitCompareArrows, History, MessageSquarePlus, MessagesSquare, MousePointerClick, Pencil, Rows2, SendHorizontal, Sparkles, Trash2, Undo2 } from 'lucide-react';
-import { DiffEditor } from '@monaco-editor/react';
+import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
