@@ -334,6 +334,8 @@ export function createHost(config: HostConfig) {
       loops.dismiss(sessionId);
       return { ok: true };
     },
+    // RV-16: wired to the receipt service in M10-T03.
+    'sessions.acknowledgeReceipt': () => ({ ok: true }),
     'sessions.interrupt': async ({ sessionId, content }) => {
       await sessions.interrupt(sessionId, content);
       return { ok: true };

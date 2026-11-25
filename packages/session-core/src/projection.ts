@@ -390,6 +390,9 @@ export function applyEvent(view: SessionView, event: SessionEvent): SessionView 
         i.kind === 'loop' && i.turnId === event.turnId && i.state === 'active' ? { ...i, state: 'dismissed' } : i,
       );
       return v;
+    case 'receipt.issued':
+    case 'receipt.checked':
+    case 'receipt.acknowledged':
     case 'checkpoint.created':
     case 'session.state_changed':
     case 'session.landed':

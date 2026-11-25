@@ -203,7 +203,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       `docs/ARCHITECTURE.md` section 4, the glossary entry in `docs/PRODUCT.md`, screens 1 and 3 in
       `docs/UI.md`, this milestone in `docs/PLAN.md`. Done when `apps/desktop/test/help.test.ts` passes with
       158 features.
-- [ ] **M10-T02** Contracts (`VerifyCategory`, `ReceiptClaim`, `ReceiptFinding`, `ReceiptFacts`,
+- [x] **M10-T02** Contracts (`VerifyCategory`, `ReceiptClaim`, `ReceiptFinding`, `ReceiptFacts`,
       `receipt.issued`, `receipt.checked`, `receipt.acknowledged`, `ReceiptSettings`,
       `sessions.acknowledgeReceipt`) and the pure module `packages/session-core/src/receipt.ts`
       (`applyEvidence`, `classifyCommand`, `extractClaims`, `judgeClaim`, `buildReceipt`, `claimVerdict`,

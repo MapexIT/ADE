@@ -166,6 +166,10 @@ export const PromptBoxes = z.array(PromptBox).max(100);
 export const LoopSettings = z.object({ enabled: z.boolean().default(true), stopTurn: z.boolean().default(false) });
 export type LoopSettings = z.infer<typeof LoopSettings>;
 
+/** RV-16: turn receipts. Stored under the settings key `receipts`; read with `ReceiptSettings.parse(value ?? {})`. */
+export const ReceiptSettings = z.object({ enabled: z.boolean().default(true), notify: z.boolean().default(true) });
+export type ReceiptSettings = z.infer<typeof ReceiptSettings>;
+
 export const NeedsYouItem = z.object({
   id: z.string(),
   /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
@@ -592,6 +596,8 @@ export const hostApi = defineApi({
   'sessions.cancel': method(z.object({ sessionId: Id }), Ok),
   /** WA-10: "Not a loop": no more loop warnings in the session's current turn. */
   'sessions.dismissLoop': method(z.object({ sessionId: Id }), Ok),
+  /** RV-16: "Mark as checked": closes every open item of that turn's receipt. */
+  'sessions.acknowledgeReceipt': method(z.object({ sessionId: Id, turnId: z.string().min(1).max(200) }), Ok),
   /** TM-04: stops a command the agent is running through ADE. `killed` is false when it had already ended. */
   'sessions.killCommand': method(z.object({ sessionId: Id, terminalId: z.string().min(1).max(200) }), z.object({ killed: z.boolean() })),
   'sessions.interrupt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), Ok),

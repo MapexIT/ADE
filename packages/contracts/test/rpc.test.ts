@@ -11,6 +11,7 @@ import {
   hostApi,
   LoopSettings,
   method,
+  ReceiptSettings,
   RpcError,
   serveApi,
   SessionEvent,
@@ -90,5 +91,30 @@ describe('WA-10 loop watch contracts', () => {
     expect(() => SessionEvent.parse({ ...detected, pattern: 'other' })).toThrow();
     expect(LoopSettings.parse({})).toEqual({ enabled: true, stopTurn: false });
     expect(LoopSettings.parse({ stopTurn: true })).toEqual({ enabled: true, stopTurn: true });
+  });
+});
+
+describe('RV-16 turn receipt contracts', () => {
+  it('parses the three receipt events and gives receipt settings their defaults', () => {
+    const base = { sessionId: 's', seq: 1, ts: '2026-11-25T10:00:00.000Z' };
+    const facts = { filesChanged: 1, additions: 1, deletions: 0, editsReported: 1, commands: 0, commandsFailed: 0 };
+    const claim = { category: 'tests', quote: 'All tests pass.', status: 'unseen', evidence: null };
+    const issued = {
+      ...base,
+      type: 'receipt.issued',
+      turnId: 't',
+      turnIndex: 0,
+      facts,
+      claims: [claim],
+      findings: [{ kind: 'phantom-edit', level: 'warning', paths: ['b.txt'], more: 0, detail: null }],
+      passed: [],
+    };
+    expect(SessionEvent.parse(issued).type).toBe('receipt.issued');
+    expect(() => SessionEvent.parse({ ...issued, claims: [{ ...claim, status: 'maybe' }] })).toThrow();
+    const checked = { ...base, type: 'receipt.checked', turnId: 't', turnIndex: 0, checks: [{ name: 'Test', categories: ['tests'], exitCode: 0 }] };
+    expect(SessionEvent.parse(checked).type).toBe('receipt.checked');
+    expect(SessionEvent.parse({ ...base, type: 'receipt.acknowledged', turnId: 't' }).type).toBe('receipt.acknowledged');
+    expect(ReceiptSettings.parse({})).toEqual({ enabled: true, notify: true });
+    expect(ReceiptSettings.parse({ notify: false })).toEqual({ enabled: true, notify: false });
   });
 });
