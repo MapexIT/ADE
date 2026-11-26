@@ -209,6 +209,24 @@ export class EventStore {
       .map((r) => JSON.parse(r.payload_json) as SessionEvent);
   }
 
+  /**
+   * AP-09: the newest `limit` events of the given types across a workspace's sessions, returned oldest first.
+   */
+  forWorkspace(workspaceId: string, types: readonly SessionEvent['type'][], limit: number): SessionEvent[] {
+    if (!types.length || limit <= 0) return [];
+    return this.db
+      .all<{ payload_json: string }>(
+        `SELECT e.payload_json FROM events e JOIN sessions s ON s.id = e.session_id
+         WHERE s.workspace_id = ? AND e.type IN (${types.map(() => '?').join(', ')})
+         ORDER BY e.ts DESC, e.seq DESC LIMIT ?`,
+        workspaceId,
+        ...types,
+        limit,
+      )
+      .map((r) => JSON.parse(r.payload_json) as SessionEvent)
+      .reverse();
+  }
+
   lastSeq(sessionId: string): number {
     return this.db.get<{ n: number | null }>('SELECT MAX(seq) AS n FROM events WHERE session_id = ?', sessionId)?.n ?? -1;
   }

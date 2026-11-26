@@ -45,6 +45,7 @@ import { WorkflowService } from './workflow-service.ts';
 import { SkillService } from './skills.ts';
 import { ContainmentService, type Exec } from './containment.ts';
 import { rulesKey } from './workspace-rules.ts';
+import { RULE_HISTORY_EVENTS, RuleAdviceService } from './rule-advice.ts';
 import { homedir } from 'node:os';
 
 export interface HostConfig {
@@ -295,6 +296,20 @@ export function createHost(config: HostConfig) {
   const rootOrNull = (workspaceId: string | null) => (workspaceId ? workspaceRoot(workspaceId) : null);
   const startedAt = new Date().toISOString();
 
+  // AP-09: rule suggestions and rehearsal over the stored permission events.
+  const ruleAdvice = new RuleAdviceService({
+    decisions: (workspaceId) => repos.events.forWorkspace(workspaceId, ['permission.requested', 'permission.decided'], RULE_HISTORY_EVENTS),
+    sessionMeta: (sessionId) => {
+      const s = repos.sessions.get(sessionId);
+      return s ? { title: s.title, agentId: s.agentId } : null;
+    },
+    rules: (workspaceId) => sessions.rules(workspaceId),
+    saveRules: (workspaceId, rules) => repos.settings.set(rulesKey(workspaceId), rules),
+    settings: repos.settings,
+    audit: (entry) => repos.audit.append(entry),
+    now: () => Date.now(),
+  });
+
   const workspaceRoot = (workspaceId: string) => {
     const ws = repos.workspaces.get(workspaceId);
     if (!ws) throw new RpcError('not_found', 'Unknown workspace');
@@ -324,8 +339,28 @@ export function createHost(config: HostConfig) {
     },
     'rules.save': ({ workspaceId, rules }) => {
       workspaceRoot(workspaceId);
+      const previous = sessions.rules(workspaceId);
       repos.settings.set(rulesKey(workspaceId), rules);
+      ruleAdvice.stamp(workspaceId, previous, rules);
       repos.audit.append({ workspaceId, sessionId: null, actor: 'user', action: 'rules.saved', detail: { rules } });
+      return { ok: true };
+    },
+    'rules.advice': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return ruleAdvice.advice(workspaceId);
+    },
+    'rules.rehearse': ({ workspaceId, rule }) => {
+      workspaceRoot(workspaceId);
+      return ruleAdvice.rehearse(workspaceId, rule);
+    },
+    'rules.adopt': ({ workspaceId, key, rule }) => {
+      workspaceRoot(workspaceId);
+      ruleAdvice.adopt(workspaceId, key, rule);
+      return { ok: true };
+    },
+    'rules.dismissSuggestion': ({ workspaceId, key, forever }) => {
+      workspaceRoot(workspaceId);
+      ruleAdvice.dismiss(workspaceId, key, forever);
       return { ok: true };
     },
     'sessions.list': ({ workspaceId }) => repos.sessions.list(workspaceId),

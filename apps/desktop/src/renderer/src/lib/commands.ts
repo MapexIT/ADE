@@ -56,6 +56,10 @@ export function buildCommands(): Command[] {
     },
     { id: 'app.help', title: 'Open the help centre', group: 'App', shortcut: 'F1', run: () => s.set({ helpOpen: true }) },
     { id: 'app.settings', title: 'Settings', group: 'App', shortcut: 'Ctrl ,', run: () => s.set({ settingsOpen: true }) },
+    // AP-09: only while the open workspace has rule suggestions.
+    ...(s.workspaceId && s.ruleAdvice[s.workspaceId]?.suggestions.length
+      ? [{ id: 'workspace.rules.suggestions', title: 'Review rule suggestions', group: 'Workspace' as const, run: () => s.set({ settingsOpen: true, settingsSection: 'suggested-rules' as const }) }]
+      : []),
     { id: 'app.mcp', title: 'MCP servers', group: 'App', run: () => s.set({ mcpOpen: true }) },
     { id: 'sessions.search', title: 'Search sessions', group: 'Session', run: () => s.set({ sessionSearchOpen: true }) },
     { id: 'app.setup', title: 'First-run setup', group: 'App', run: () => s.set({ firstRunOpen: true }) },

@@ -1,10 +1,12 @@
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { Button, cx, SectionLabel } from '@ade/ui';
-import type { PermissionRule } from '@ade/contracts';
-import { useEffect, useState } from 'react';
+import { RuleAdviceSettings, type PermissionRule } from '@ade/contracts';
+import { useEffect, useRef, useState } from 'react';
 import { host } from '../lib/bridge.ts';
-import { attempt, useStore } from '../lib/store.ts';
+import { newRuleId } from '../lib/rule-advice.ts';
+import { attempt, EMPTY, useStore } from '../lib/store.ts';
 import { inputClass } from './Modal.tsx';
+import { RuleInsight, SuggestedRules } from './RuleAdvice.tsx';
 
 const KINDS: { id: PermissionRule['kind']; label: string }[] = [
   { id: 'any', label: 'Any request' },
@@ -14,7 +16,6 @@ const KINDS: { id: PermissionRule['kind']; label: string }[] = [
   { id: 'fetch', label: 'Web requests' },
 ];
 
-const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 36);
 
 /**
  * AP-06: allow and deny rules for this repository. A matching request is answered without asking; deny wins
@@ -24,13 +25,30 @@ export function WorkspaceRules({ workspaceId }: { workspaceId: string }) {
   const toast = useStore((s) => s.toast);
   const [rules, setRules] = useState<PermissionRule[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [adviceOn, setAdviceOn] = useState(true);
+  const advice = useStore((s) => s.ruleAdvice[workspaceId]);
+  const refreshAdvice = useStore((s) => s.refreshRuleAdvice);
+  // A rule added from a suggestion while Settings is open shows up here too.
+  const ruleCount = advice?.usage.length ?? 0;
+
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
+    if (dirtyRef.current) return;
     void attempt(() => host.call('rules.list', { workspaceId })).then((r) => {
       setRules(r ?? []);
       setDirty(false);
     });
-  }, [workspaceId]);
+  }, [workspaceId, ruleCount]);
+
+  useEffect(() => {
+    refreshAdvice(workspaceId);
+    void host.call('settings.get', { key: 'ruleAdvice' }).then((v) => {
+      const parsed = RuleAdviceSettings.safeParse(v.value ?? {});
+      setAdviceOn(parsed.success ? parsed.data.enabled : true);
+    });
+  }, [workspaceId, refreshAdvice]);
 
   const update = (next: PermissionRule[]) => {
     setRules(next);
@@ -43,6 +61,7 @@ export function WorkspaceRules({ workspaceId }: { workspaceId: string }) {
       setRules(valid);
       setDirty(false);
       toast('Workspace rules saved.');
+      refreshAdvice(workspaceId);
     }
   };
 
@@ -50,11 +69,12 @@ export function WorkspaceRules({ workspaceId }: { workspaceId: string }) {
     <section className="flex flex-col gap-2" aria-label="Workspace rules">
       <SectionLabel>Workspace rules</SectionLabel>
       <p className="m-0 text-[12px] text-ink-muted">
-        Answer matching requests in this repository without asking. The pattern is matched against the request and its command, ignoring case; * matches anything. Deny wins over allow, and every automatic answer is logged.
+        Answer matching requests in this repository without asking. The pattern is matched against the request and its command, ignoring case; * matches anything. Deny wins over allow, and every automatic answer is logged. An allow rule covers a command with several steps only when every step is allowed.
       </p>
+      {adviceOn ? <SuggestedRules workspaceId={workspaceId} suggestions={advice?.suggestions ?? EMPTY} /> : null}
       {rules.length === 0 ? <span className="text-ink-muted">No rules. Every request follows the session's permission profile.</span> : null}
       {rules.map((r, i) => (
-        <div key={r.id} className="flex flex-wrap items-center gap-2">
+        <div key={r.id} className="flex flex-wrap items-center gap-2" aria-label={`Rule ${i + 1}`} role="group">
           <label htmlFor={`rule-decision-${r.id}`} className="sr-only">
             Rule {i + 1} decision
           </label>
@@ -83,17 +103,18 @@ export function WorkspaceRules({ workspaceId }: { workspaceId: string }) {
           <input
             id={`rule-pattern-${r.id}`}
             value={r.pattern}
-            placeholder="npm test*"
+            placeholder="npm test *"
             onChange={(e) => patch(r.id, { pattern: e.target.value })}
             className={cx(inputClass, 'min-w-40 flex-1 font-mono')}
           />
           <Button icon={<Trash2 className="size-4" aria-hidden="true" />} variant="ghost" size="dense" onClick={() => update(rules.filter((x) => x.id !== r.id))} aria-label={`Remove rule ${i + 1}`}>
             Remove
           </Button>
+          <RuleInsight workspaceId={workspaceId} rule={r} usage={advice?.usage.find((u) => u.ruleId === r.id)} />
         </div>
       ))}
       <div className="flex gap-2">
-        <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" onClick={() => update([...rules, { id: newId(), decision: 'allow', kind: 'execute', pattern: '' }])}>
+        <Button icon={<Plus className="size-4" aria-hidden="true" />} size="dense" onClick={() => update([...rules, { id: newRuleId(), decision: 'allow', kind: 'execute', pattern: '' }])}>
           Add rule
         </Button>
         <Button icon={<Save className="size-4" aria-hidden="true" />} size="dense" variant="primary" disabled={!dirty} onClick={() => void save()}>

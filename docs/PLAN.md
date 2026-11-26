@@ -228,3 +228,35 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       and Observe lines; 15 host tests (`apps/desktop/test/receipts.test.ts`) on Windows; the end-to-end spec on
       Windows. Not yet verified: CI on Ubuntu (the branch is not pushed) and closing messages and `execute`
       titles from real Codex, Claude Code and OpenCode sessions (see the open questions).
+
+## M12 - Rule suggestions and rehearsal
+
+- [x] **M12-T01** Feature, decisions and plan for rule suggestions (AP-09): the AP-09 row, the AP-06
+      sentence and the count in `docs/FEATURES.md`; the decision row, the changed AP-06 row and open
+      questions in `docs/DECISIONS.md`; the rules paragraph in `docs/ARCHITECTURE.md`; glossary entries in
+      `docs/PRODUCT.md`; screen 1 and the component rule in `docs/UI.md`; this milestone in `docs/PLAN.md`.
+      Done when `apps/desktop/test/help.test.ts` passes with the new feature count.
+- [x] **M12-T02** Pure module `packages/session-core/src/rule-advice.ts`: `commandAnatomy`, `ruleRegExp`
+      (moved), `decideByRules`, `shapeOfStep`, with their unit tests; `workspace-rules.ts` delegates to it.
+      Done when the anatomy, matching and shape cases pass and `rules-inplace.test.ts` passes with the new
+      chained-command case.
+- [x] **M12-T03** Contracts (`RuleRisk`, `RuleRehearsal`, `RuleSuggestion`, `RuleUsage`,
+      `RuleAdviceSettings`, the four `rules.*` methods) and the pure `foldDecisions`, `suggest`, `rehearse`,
+      `usage` and copy helpers with unit tests. Done when every unit case in the test plan passes.
+- [x] **M12-T04** Host: the `events_type` index migration, `EventRepo.forWorkspace`, `RuleAdviceService`,
+      the handlers in `app.ts`, rule creation stamps in `rules.save`, audit entries. Done when the cases
+      of `apps/desktop/test/rule-advice.test.ts` pass on Windows and Ubuntu.
+- [x] **M12-T05** Renderer: store slice and refresh, the hint under decided approval cards, the suggestion
+      dialog, Suggested rules and rule insight in Settings, the setting, the palette command; and
+      `e2e/rule-suggestions.spec.ts`. Done when the spec passes on Windows against the production build and
+      the development renderer.
+- [ ] **M12-T06** Tick the boxes, record under the tasks what was and was not verified (real agents' request
+      titles and command text, Ubuntu CI), and answer or keep each open question in `docs/DECISIONS.md`.
+      Done when CI is green on Windows and Ubuntu.
+      Verified with the fake agent only, on Windows: unit tests for the anatomy, matcher, shapes, folds and copy
+      (`packages/session-core/test/rule-advice*.test.ts`); 11 host tests covering the 14 planned cases
+      (`apps/desktop/test/rule-advice.test.ts`, 4,000 events in about 40 ms); the chained-command case in
+      `rules-inplace.test.ts`; `e2e/rule-suggestions.spec.ts` against the production build and the development
+      renderer. What the Claude Code and Codex adapters send was read from the installed packages (see the facts
+      in `docs/DECISIONS.md`). Not yet verified: CI on Ubuntu (the branch is not pushed), OpenCode's request
+      text, and real sessions' command phrasing against the thresholds (open questions kept).

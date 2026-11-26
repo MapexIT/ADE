@@ -45,6 +45,8 @@ codebase.
 | Connector | An MCP server plus a native panel: Shortcut, GitHub, GitHub Projects. |
 | Work item | A Shortcut story or a GitHub issue or project item. |
 | Turn receipt | ADE's comparison, made when a turn ends, of what the agent said with the commands it ran and the files Git says changed. |
+| Workspace rule | An allow or deny pattern that answers matching permission requests in a repository without asking. |
+| Rehearsal | A rule replayed over the repository's past permission requests to show what it would have answered. |
 
 ## Session states
 
