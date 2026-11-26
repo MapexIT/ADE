@@ -213,6 +213,21 @@ export const MIGRATIONS: string[] = [
   `
   CREATE INDEX events_type ON events(type, session_id);
   `,
+  // M11-T03: problems in a block (SM-18). The newest 3 runs per workspace, scope (session or checkout) and command.
+  `
+  CREATE TABLE problem_snapshots (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    session_id TEXT,
+    command_key TEXT NOT NULL,
+    exit_code INTEGER,
+    turn_count INTEGER,
+    cut INTEGER NOT NULL DEFAULT 0,
+    problems_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX problem_snapshots_key ON problem_snapshots(workspace_id, command_key, created_at);
+  `,
 ];
 
 export function migrate(db: Database): number {

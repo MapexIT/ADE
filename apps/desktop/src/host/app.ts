@@ -563,6 +563,13 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'history.search': ({ workspaceId, query }) => repos.history.search(query, workspaceId),
+    'problems.record': ({ workspaceId, sessionId, commandKey, exitCode, turnCount, cut, problems }) => {
+      const previous = repos.problems.latest(workspaceId, sessionId, commandKey);
+      const checkout = sessionId ? repos.problems.latest(workspaceId, null, commandKey) : null;
+      // A command that never had a problem (ls, git status) leaves no rows.
+      if (problems.length || previous) repos.problems.record({ workspaceId, sessionId, commandKey, exitCode, turnCount, cut, problems });
+      return { previous, checkout };
+    },
     'terminal.draftCommand': async ({ agentId, question, cwd, shell }) => {
       const where = files.assertAllowed(cwd);
       const runtime = runtimes.get(agentId);

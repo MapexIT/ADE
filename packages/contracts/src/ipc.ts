@@ -811,6 +811,23 @@ export const hostApi = defineApi({
     z.object({ workspaceId: Id.nullable(), sessionId: Id.nullable(), command: z.string().min(1).max(10_000), cwd: z.string().max(4096).nullable(), exitCode: z.number().int().nullable() }),
     Ok,
   ),
+  /**
+   * SM-18: stores the problems of a finished block and returns the previous snapshot of the same command in the same
+   * scope, read before this one is stored, and (for a session) the checkout's latest. Stores nothing for a command
+   * that has no problems and never had any.
+   */
+  'problems.record': method(
+    z.object({
+      workspaceId: Id,
+      sessionId: Id.nullable(),
+      commandKey: z.string().trim().min(1).max(500),
+      exitCode: z.number().int().nullable(),
+      turnCount: z.number().int().nonnegative().nullable(),
+      cut: z.boolean(),
+      problems: z.array(Problem).max(500),
+    }),
+    z.object({ previous: ProblemSnapshot.nullable(), checkout: ProblemSnapshot.nullable() }),
+  ),
   'history.search': method(z.object({ workspaceId: Id.optional(), query: z.string().max(500) }), z.array(HistoryEntry)),
   /** SM-10: an agent drafts one command for a question, read-only; it is never run without the user. */
   'terminal.draftCommand': method(

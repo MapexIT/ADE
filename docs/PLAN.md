@@ -239,7 +239,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       and the pure module `packages/shell-integration/src/problems.ts` behind the `./problems` export,
       with `test/problems.test.ts`; `BlockBuilder` sets `truncated`. Done when unit cases 1 to 41 pass on
       Windows and Ubuntu.
-- [ ] **M11-T03** Host: migration `problem_snapshots`, `ProblemSnapshotRepo`, the `problems.record`
+- [x] **M11-T03** Host: migration `problem_snapshots`, `ProblemSnapshotRepo`, the `problems.record`
       handler and removal with a session. Done when cases 42 to 49 pass on Windows and Ubuntu.
 - [ ] **M11-T04** Renderer logic: `lib/problems.ts` (`recordBlock`, per-block state), the extended
       `onBlockFinished` listener in `App.tsx`, `openEditor` with a line. Done when a block with problems
