@@ -353,6 +353,30 @@ function anatomyOf(text: string): Anatomy {
   return a;
 }
 
+const joinedCache = new WeakMap<Anatomy, string[]>();
+/** Each step's tokens joined with single spaces, which is what rules match a step against. */
+function stepTexts(a: Anatomy): string[] {
+  let joined = joinedCache.get(a);
+  if (!joined) {
+    joined = a.steps.map((s) => s.join(' '));
+    joinedCache.set(a, joined);
+  }
+  return joined;
+}
+
+/** Whether a rule matches any whole text of the request or, for commands, any step. Cheap; used to skip work. */
+export function ruleTouches(rule: PermissionRule, req: RequestText): boolean {
+  if (!fits(rule, req.kind)) return false;
+  const re = ruleRegExp(rule.pattern);
+  for (const text of requestTexts(req)) {
+    if (re.test(text)) return true;
+    if (!chainSafe(req.kind)) continue;
+    const a = anatomyOf(text);
+    if (!a.opaque && stepTexts(a).some((s) => re.test(s))) return true;
+  }
+  return false;
+}
+
 export type Coverage = 'answers' | 'held-back' | 'no-match';
 const RANK: Record<Coverage, number> = { 'no-match': 0, 'held-back': 1, answers: 2 };
 
@@ -389,10 +413,7 @@ export function allowCoverage(rules: PermissionRule[], req: RequestText): { cove
       offer('answers', whole);
       continue;
     }
-    const stepRules = a.steps.map((s) => {
-      const joined = s.join(' ');
-      return allows.find((r) => ruleRegExp(r.pattern).test(joined)) ?? null;
-    });
+    const stepRules = stepTexts(a).map((joined) => allows.find((r) => ruleRegExp(r.pattern).test(joined)) ?? null);
     if (a.steps.length && stepRules.every((r) => r !== null)) offer('answers', whole ?? stepRules[0]!);
     else if (whole) offer('held-back', whole);
   }
@@ -410,7 +431,7 @@ export function denyMatch(rules: PermissionRule[], req: RequestText): Permission
       if (re.test(text)) return rule;
       if (!chainSafe(req.kind)) continue;
       const a = anatomyOf(text);
-      if (!a.opaque && a.steps.some((s) => re.test(s.join(' ')))) return rule;
+      if (!a.opaque && stepTexts(a).some((s) => re.test(s))) return rule;
     }
   }
   return null;
@@ -618,6 +639,8 @@ const distinct = (xs: string[], max = 10) => [...new Set(xs.filter(Boolean))].sl
 
 /** Whether the candidate rule answers this request, given the other rules. */
 function candidateAnswer(candidate: PermissionRule, others: PermissionRule[], req: RequestText): 'allow' | 'deny' | 'held-back' | null {
+  // A rule that matches neither a whole text nor a step changes nothing.
+  if (!ruleTouches(candidate, req)) return null;
   const full = [candidate, ...others];
   const deny = denyMatch(full, req);
   if (deny) return deny.id === candidate.id ? 'deny' : null;
@@ -628,20 +651,48 @@ function candidateAnswer(candidate: PermissionRule, others: PermissionRule[], re
   return alone === 'held-back' ? 'held-back' : null;
 }
 
+const preparedCache = new WeakMap<readonly Decided[], { users: Decided[]; exact: Map<string, Decided[]> }>();
+
+/** The user's decisions in order, and an index from each lower-cased text and step to the decisions that have it. */
+function prepared(history: readonly Decided[]) {
+  let p = preparedCache.get(history);
+  if (p) return p;
+  const users = history.filter(isUser);
+  const exact = new Map<string, Decided[]>();
+  for (const d of users) {
+    const keys = new Set<string>();
+    for (const text of requestTexts(d.req)) {
+      keys.add(text.toLowerCase());
+      if (!chainSafe(d.req.kind)) continue;
+      const a = anatomyOf(text);
+      if (!a.opaque) for (const st of stepTexts(a)) keys.add(st.toLowerCase());
+    }
+    for (const k of keys) {
+      const list = exact.get(k);
+      if (list) list.push(d);
+      else exact.set(k, [d]);
+    }
+  }
+  p = { users, exact };
+  preparedCache.set(history, p);
+  return p;
+}
+
 /**
  * Replays a rule over the requests the user decided by hand. The candidate replaces any rule with its id; a deny
  * rule among the others shadows it. Example texts are redacted and cut to 300 characters.
  */
 export function rehearse(candidate: PermissionRule, rules: PermissionRule[], history: readonly Decided[]): RuleRehearsal {
   const others = rules.filter((r) => r.id !== candidate.id);
-  let considered = 0;
+  const { users, exact } = prepared(history);
+  // A rule without `*` can only touch requests with a text or step equal to it, so look those up.
+  const pool = candidate.pattern.includes('*') ? users : (exact.get(candidate.pattern.trim().toLowerCase()) ?? []);
+  const considered = users.length;
   let agree = 0;
   let heldBack = 0;
   const conflicts: RuleConflict[] = [];
   const answered: Decided[] = [];
-  for (const d of history) {
-    if (!isUser(d)) continue;
-    considered++;
+  for (const d of pool) {
     const a = candidateAnswer(candidate, others, d.req);
     if (a === 'held-back') heldBack++;
     if (a !== 'allow' && a !== 'deny') continue;
@@ -732,13 +783,13 @@ export function suggest(history: readonly Decided[], rules: PermissionRule[], di
       // An existing rule already answers this step.
       if (decideByRules(rules, { kind: 'execute', title: newest.text, detail: newest.text })) continue;
       const key = `${decision}:${g.shape.key}`.slice(0, 200);
+      const count = g.allowed.length + g.rejected.length;
+      const d = dismissed[key];
+      if (d && (d.forever || count < d.at + threshold)) continue;
       const candidate: PermissionRule = { id: `suggestion:${key}`.slice(0, 200), decision, kind: 'execute', pattern };
       const rehearsal = rehearse(candidate, rules, history);
       if (rehearsal.conflict > 0) continue;
       if (wider && rehearse({ ...candidate, pattern: wider }, rules, history).conflict > 0) wider = null;
-      const count = g.allowed.length + g.rejected.length;
-      const d = dismissed[key];
-      if (d && (d.forever || count < d.at + threshold)) continue;
       const all = [...g.allowed, ...g.rejected].map((e) => e.decided);
       out.push({
         key,

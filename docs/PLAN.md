@@ -243,7 +243,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M12-T03** Contracts (`RuleRisk`, `RuleRehearsal`, `RuleSuggestion`, `RuleUsage`,
       `RuleAdviceSettings`, the four `rules.*` methods) and the pure `foldDecisions`, `suggest`, `rehearse`,
       `usage` and copy helpers with unit tests. Done when every unit case in the test plan passes.
-- [ ] **M12-T04** Host: the `events_type` index migration, `EventRepo.forWorkspace`, `RuleAdviceService`,
+- [x] **M12-T04** Host: the `events_type` index migration, `EventRepo.forWorkspace`, `RuleAdviceService`,
       the handlers in `app.ts`, rule creation stamps in `rules.save`, audit entries. Done when the cases
       of `apps/desktop/test/rule-advice.test.ts` pass on Windows and Ubuntu.
 - [ ] **M12-T05** Renderer: store slice and refresh, the hint under decided approval cards, the suggestion

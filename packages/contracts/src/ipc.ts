@@ -660,6 +660,11 @@ export const hostApi = defineApi({
   'commands.save': method(z.object({ workspaceId: Id, commands: z.array(SavedCommand).max(100) }), Ok),
   'rules.list': method(z.object({ workspaceId: Id }), z.array(PermissionRule)),
   'rules.save': method(z.object({ workspaceId: Id, rules: z.array(PermissionRule).max(200) }), Ok),
+  /** AP-09: rule suggestions from the user's decisions, and each rule's usage and rehearsal. */
+  'rules.advice': method(z.object({ workspaceId: Id }), RuleAdvice),
+  'rules.rehearse': method(z.object({ workspaceId: Id, rule: PermissionRule }), RuleRehearsal),
+  'rules.adopt': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), rule: PermissionRule }), Ok),
+  'rules.dismissSuggestion': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), forever: z.boolean() }), Ok),
 
   'sessions.list': method(z.object({ workspaceId: Id }), z.array(Session)),
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),

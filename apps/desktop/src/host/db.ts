@@ -209,6 +209,10 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (session_id, path)
   );
   `,
+  // M12-T04: rule advice (AP-09) reads one event type across a workspace's sessions.
+  `
+  CREATE INDEX events_type ON events(type, session_id);
+  `,
 ];
 
 export function migrate(db: Database): number {
