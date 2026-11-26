@@ -92,8 +92,9 @@ test('M6-T03: copy a template, add a step, save it to the repository', async () 
   await page.getByRole('toolbar', { name: 'Add a step' }).getByRole('button', { name: 'Command' }).click();
   const settings = page.getByRole('complementary', { name: 'Step settings' });
   await expect(settings.getByText('Command step')).toBeVisible();
-  // An unconnected step is a problem, shown before saving.
-  await expect(page.getByText(/1 problem/)).toBeVisible();
+  // An unconnected step is a start of its own (WF-18): not an error, but the editor warns before saving.
+  await expect(page.getByRole('region', { name: 'Problems' })).toContainText('command is not connected to any other step');
+  await expect(page.getByText('Valid', { exact: true })).toBeVisible();
   await settings.getByLabel('Title').fill('Lint');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Unsaved changes')).toBeHidden();

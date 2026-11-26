@@ -181,6 +181,9 @@ XML) and scratchpads are v1.
 
 - A workflow is a YAML file in `.ade/workflows/`. Nodes: `agent`, `command`, `gate`, `loop`, `branch`,
   `fanout`, `connector`, `land`. Edges carry an optional condition (`pass`, `fail`).
+- A run starts at every node whose only incoming edges, if any, are back edges of cycles (WF-18), all at once;
+  with none, the first node listed starts. A node with several incoming forward edges waits for each one to
+  deliver a result or a skip (an edge not taken), so joins after several starts or parallel branches terminate.
 - A run is a state machine persisted in `workflow_runs` and `workflow_node_runs`. Each agent node runs as a
   normal session, so everything in sections 4 and 5 applies to it.
 - Hand-off packet between nodes: previous summary, diff, check output, work item fields.

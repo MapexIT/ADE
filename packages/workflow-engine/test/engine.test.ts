@@ -66,8 +66,9 @@ describe('validation', () => {
     expect(validate(good).filter((p) => p.level === 'error')).toEqual([]);
   });
 
-  it('reports unknown nodes, several first nodes and unreachable nodes', () => {
-    expect(() => parseWorkflow('name: t\nnodes:\n  - { id: a, type: gate }\n  - { id: b, type: gate }\nedges: []')).toThrow(WorkflowError);
+  it('reports duplicate and unknown nodes and invalid YAML; unconnected steps are starts, not errors (WF-18)', () => {
+    expect(() => parseWorkflow('name: t\nnodes:\n  - { id: a, type: gate }\n  - { id: b, type: gate }\nedges: []')).not.toThrow();
+    expect(() => parseWorkflow('name: t\nnodes:\n  - { id: a, type: gate }\n  - { id: a, type: gate }\nedges: []')).toThrow(WorkflowError);
     expect(() => parseWorkflow('name: t\nnodes:\n  - { id: a, type: gate }\nedges:\n  - { from: a, to: zz }')).toThrow(/unknown node zz/);
     expect(() => parseWorkflow('name: [unclosed')).toThrow(/YAML is invalid/);
   });

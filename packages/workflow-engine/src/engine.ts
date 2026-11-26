@@ -1,4 +1,4 @@
-import { backEdges, incoming, outgoing, roundLimit, startNode, type Workflow, type WorkflowNode } from './schema.ts';
+import { backEdges, incoming, outgoing, roundLimit, startNodes, type Workflow, type WorkflowNode } from './schema.ts';
 
 /** WF-05: what one node hands the next: summary, diff, check output and work item fields. */
 export interface HandOff {
@@ -244,7 +244,12 @@ function propagate(wf: Workflow, s: RunState, nodeId: string, result: Token | nu
   const out = outgoing(wf, nodeId);
   const taken = (e: (typeof out)[number]) => !!result && (e.when ? e.when === result.outcome : result.outcome === 'pass');
   if (result && result.outcome === 'fail' && !out.some(taken)) state = { ...state, failedBranch: true, log: [...state.log, `${nodeId}: failed with no next step`] };
+  // Going back round a cycle means this step will send again after the next round, so the edges it did not take
+  // are not ruled out yet: a join after it keeps waiting instead of running without it.
+  const back = backEdges(wf);
+  const cycling = out.some((e) => taken(e) && back.has(e.index));
   for (const e of out) {
+    if (cycling && !taken(e)) continue;
     const step = deliver(wf, state, e.index, taken(e) ? result : null, at);
     state = step.state;
     effects.push(...step.effects);
@@ -260,8 +265,8 @@ function finish(wf: Workflow, s: RunState, nodeId: string, outcome: 'pass' | 'fa
 }
 
 /**
- * The run state machine (M6-T01, WF-16, WF-17): a pure reducer from events to state plus effects. Results travel
- * as tokens along edges: a node may send to several next steps at once (they run in parallel), a node with several
+ * The run state machine (M6-T01, WF-16, WF-17, WF-18): a pure reducer from events to state plus effects. Every step
+ * nothing leads into (apart from back edges) starts when the run starts. Results travel as tokens along edges: a node may send to several next steps at once (they run in parallel), a node with several
  * inputs waits for each of them (an input not taken arrives as a skip), and a back edge sends the run round its
  * cycle at most `maxRounds` times. The runner persists every state, so a run survives a restart (WF-08).
  */
@@ -269,10 +274,16 @@ export function reduce(wf: Workflow, s0: RunState, e: RunEvent): Step {
   const s = upgradeState(wf, s0);
   switch (e.type) {
     case 'start': {
-      const first = startNode(wf);
-      if (!first) throw new RunError('The workflow has no steps yet.');
+      const starts = startNodes(wf);
+      if (!starts.length) throw new RunError('The workflow has no steps yet.');
       const packet = { ...emptyHandOff(), ...e.packet, workItem: e.workItem ?? {} };
-      return settle(enter(wf, { ...initialState(wf), packet }, first.id, { packet, outcome: 'pass' }, e.at));
+      // WF-18: every start begins with the same packet; joins after them wait for each, as for parallel branches.
+      let step: Step = { state: { ...initialState(wf), packet }, effects: [] };
+      for (const n of starts) {
+        const next = enter(wf, step.state, n.id, { packet, outcome: 'pass' }, e.at);
+        step = { state: next.state, effects: [...step.effects, ...next.effects] };
+      }
+      return settle(step);
     }
     case 'node.started': {
       const nr = s.nodes[e.nodeId];
@@ -327,6 +338,22 @@ export function reduce(wf: Workflow, s0: RunState, e: RunEvent): Step {
       // Every node after the retried one starts over; their pending inputs are dropped.
       for (const id of reset) nodes[id] = { ...blankNode(), input: s.nodes[id]?.input ?? null };
       const inbox = Object.fromEntries(Object.entries(s.inbox).filter(([id]) => !reset.has(id)));
+      // A join after the retried step keeps what its other inputs already sent: steps outside the retried part do
+      // not run again, so their results (or skips) are filled back in from what they finished with.
+      const back = backEdges(wf);
+      for (const id of reset) {
+        if (id === target.id) continue;
+        for (const x of incoming(wf, id)) {
+          const from = s.nodes[x.from];
+          if (back.has(x.index) || reset.has(x.from) || !from) continue;
+          if (from.status === 'skipped') inbox[id] = { ...inbox[id], [String(x.index)]: null };
+          if ((from.status === 'passed' || from.status === 'failed') && from.output) {
+            const outcome = from.status === 'passed' ? 'pass' : 'fail';
+            const taken = x.when ? x.when === outcome : outcome === 'pass';
+            inbox[id] = { ...inbox[id], [String(x.index)]: taken ? { packet: from.output, outcome } : null };
+          }
+        }
+      }
       const packet = s.nodes[target.id]?.input ?? s.packet;
       const fresh = withActive({ ...s, nodes, inbox, status: 'running', pauseReason: null, blocked: [], failedBranch: false, log: [...s.log, `retry from ${target.id}`] }, s.active.filter((x) => !reset.has(x)));
       return settle(enter(wf, fresh, target.id, { packet, outcome: 'pass' }, e.at));

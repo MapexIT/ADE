@@ -46,7 +46,15 @@ test('WF-01/16/17: a workflow from scratch with parallel steps, a join and a cyc
   await connect(page, 'command', 'gate');
   await connect(page, 'command-2', 'gate');
   await connect(page, 'gate', 'agent');
-  if (process.env.ADE_SHOTS) await page.screenshot({ path: `${process.env.ADE_SHOTS}/wf-connected.png` });
+  if (process.env.ADE_SHOTS) {
+    await page.screenshot({ path: `${process.env.ADE_SHOTS}/wf-connected.png` });
+    // A hovered connection point lights up violet.
+    await page.locator('.react-flow__node[data-id="command"] .react-flow__handle-right').hover();
+    await page.waitForTimeout(300);
+    const box = (await page.locator('.react-flow__node[data-id="command"]').boundingBox())!;
+    await page.screenshot({ path: `${process.env.ADE_SHOTS}/wf-handle-hover.png`, clip: { x: box.x - 30, y: box.y - 20, width: box.width + 60, height: box.height + 40 } });
+    await page.mouse.move(0, 0);
+  }
   await expect(page.locator('.react-flow__node[data-id="gate"]')).toContainText('waits for 2 inputs');
   await expect(page.locator('.react-flow__node[data-id="agent"]')).toContainText('2 next steps');
 
@@ -89,6 +97,21 @@ test('WF-01: each step type has its own shape, and dragging a step never hides t
   for (const type of types) await expect(page.locator(`.ade-step-${type.toLowerCase()}`)).toHaveCount(1);
   await page.waitForTimeout(500);
   if (process.env.ADE_SHOTS) await page.screenshot({ path: `${process.env.ADE_SHOTS}/workflow-shapes.png` });
+
+  // Connection points are a 14px dot with a 24px hit area, outside every clipped outline: the pointer just beside
+  // the dot still lands on the handle, on every step type. (The canvas is fitted, so measure at the current zoom.)
+  for (const type of types) {
+    const handle = page.locator(`.ade-step-${type.toLowerCase()} .react-flow__handle-right`);
+    const size = await handle.evaluate((node) => {
+      const el = node as HTMLElement;
+      const zoom = el.getBoundingClientRect().width / el.offsetWidth;
+      const r = el.getBoundingClientRect();
+      const reach = 11 * zoom;
+      const hit = document.elementFromPoint(r.x + r.width / 2 + reach, r.y + r.height / 2);
+      return { dot: el.offsetWidth, area: parseFloat(getComputedStyle(el, '::before').width), hit: hit === el };
+    });
+    expect(size).toEqual({ dot: 14, area: 24, hit: true });
+  }
 
   // Mid-drag, every step stays visible: nodes keep their measured size while the canvas rebuilds them.
   const box = (await page.locator('.react-flow__node[data-id="agent"]').boundingBox())!;

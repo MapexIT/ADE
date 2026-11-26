@@ -195,7 +195,7 @@ edges:
     expect(host.sessions.inbox().some((i) => i.runId === started.id)).toBe(false);
   }, 60_000);
 
-  it('fans out to parallel checks, waits at a gate while the cycle goes round once, then pauses (WF-16, WF-17)', async () => {
+  it('fans out to parallel checks; the gate waits for both while the cycle goes round once, then pauses (WF-16, WF-17)', async () => {
     writeWorkflow(
       'fan',
       `
@@ -222,10 +222,10 @@ edges:
     expect(node(r, 'a').attempts).toBe(2);
     expect(node(r, 'b').attempts).toBe(2);
     expect(r.rounds).toEqual({ '4': 1 });
-    // The gate waits for a decision even though the run is paused; both show in the inbox.
-    expect(node(r, 'review').status).toBe('waiting');
+    // b went back round instead of passing, so the gate still waits for it: it never opened on a's result alone.
+    expect(node(r, 'review').status).toBe('pending');
     const items = host.sessions.inbox().filter((i) => i.runId === started.id);
-    expect(items.map((i) => i.kind).sort()).toEqual(['gate', 'paused']);
+    expect(items.map((i) => i.kind)).toEqual(['paused']);
     await host.handlers['workflows.cancel']({ runId: started.id });
   }, 60_000);
 

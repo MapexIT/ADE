@@ -2,9 +2,11 @@ import { parseWorkflow, TEMPLATES } from '@ade/workflow-engine';
 import { describe, expect, it } from 'vitest';
 import {
   addNode,
+  canStartHere,
   connect,
   cycleEdge,
   fileNameFor,
+  isStart,
   makeStart,
   problemsOf,
   removeEdge,
@@ -53,6 +55,21 @@ describe('workflow drafts (WF-01)', () => {
     wf = connect(wf, 'review', 'land');
     expect(problemsOf(wf).some((p) => p.level === 'error')).toBe(true);
     expect(makeStart(wf, 'gate').nodes[0]!.id).toBe('gate');
+  });
+
+  it('a run starts at every step nothing leads into; "Start here" only applies on a cycle no start leads into (WF-18)', () => {
+    let wf = toDraft({ name: 'x', nodes: [{ id: 'a', type: 'gate' }, { id: 'b', type: 'gate' }, { id: 'c', type: 'gate' }] })!;
+    expect(['a', 'b', 'c'].map((id) => isStart(wf, id))).toEqual([true, true, true]);
+    wf = connect(connect(wf, 'a', 'c'), 'b', 'c');
+    expect(['a', 'b', 'c'].map((id) => isStart(wf, id))).toEqual([true, true, false]);
+    // c waits for a and b: listing it first cannot make it a start.
+    expect(canStartHere(wf, 'c')).toBe(false);
+    expect(canStartHere(wf, 'a')).toBe(false);
+    // A ring with no way in: the step listed first is where the run enters, and any other step can take its place.
+    const ring = connect(connect(toDraft({ name: 'r', nodes: [{ id: 'x', type: 'gate' }, { id: 'y', type: 'gate' }] })!, 'x', 'y'), 'y', 'x');
+    expect(isStart(ring, 'x')).toBe(true);
+    expect(canStartHere(ring, 'y')).toBe(true);
+    expect(isStart(makeStart(ring, 'y'), 'y')).toBe(true);
   });
 
   it('reads definitions and names files', () => {

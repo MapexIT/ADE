@@ -1,6 +1,6 @@
 # Features
 
-161 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+162 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -187,7 +187,7 @@ Linux.
 
 | ID | Feature | Phase | Description |
 | --- | --- | --- | --- |
-| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. "New workflow" starts one from scratch (an empty canvas) or from a template; an empty workflow saves but cannot run until it has a first step. Clicking a connection opens its settings (when it applies, round limit, delete). Each step type has its own outline, texture and icon, so the kind of step reads without its label: a rounded, glowing card for an agent, a terminal with scan lines for a command, a striped octagon for a gate, a rippled stadium for a loop, a cross-hatched pointed hexagon for a branch, a dotted parallelogram for a connector and a solid violet arrow for land; a running step glows. Dragging a step moves it smoothly, without the canvas redrawing. |
+| WF-01 | Node canvas | v1 | Drag nodes from a palette, connect them, pan and zoom, watch nodes light up as they run. "New workflow" starts one from scratch (an empty canvas) or from a template; an empty workflow saves but cannot run until it has a first step. Clicking a connection opens its settings (when it applies, round limit, delete). Each step type has its own outline, texture and icon, so the kind of step reads without its label: a rounded, glowing card for an agent, a terminal with scan lines for a command, a striped octagon for a gate, a rippled stadium for a loop, a cross-hatched pointed hexagon for a branch, a dotted parallelogram for a connector and a solid violet arrow for land; a running step glows. Dragging a step moves it smoothly, without the canvas redrawing. Connection points are large enough to hit easily (a 14px dot with a 24px hit area) and light up violet on hover. |
 | WF-02 | Workflow picker | v1 | Choose a workflow instead of a single agent when starting a session or work item. |
 | WF-03 | Workflow files | v1 | YAML in `.ade/workflows/`, versioned with the code. |
 | WF-04 | Templates | v1 | Plan-build-review, fix failing tests, cross-review, spec first, story to pull request. |
@@ -200,6 +200,7 @@ Linux.
 | WF-11 | Test a node | v1 | Run one node on sample input. |
 | WF-16 | Several inputs and several next steps | v1 | A step may connect to several next steps and receive from several steps. Next steps whose condition matches all run, at the same time; a step with several inputs waits until each input has either arrived or been ruled out (its step took another path), then runs once with the inputs merged (summaries, diffs and check output joined). Steps that use the run's worktree (agents, commands, landing) take turns, so parallel branches never write over each other; gates and connectors run alongside. Several gates can wait for you at once, each with its own decision; the run view says which steps run in parallel. A branch that fails with nowhere to go fails the run once the other branches stop. |
 | WF-17 | Round limits on cycles | v1 | A connection that closes a cycle is marked on the canvas (dashed, with its limit) and has a "Maximum rounds" setting: how many times a run may go back round that cycle. The default is 1. When the limit is reached the run pauses until you resume it, which grants the rounds again. A cycle that has a loop step and no limit of its own uses the loop step's limit. The run view shows the rounds used. |
+| WF-18 | Several starting points | v1 | A run starts at every step nothing leads into, all at once with the same work item; a connection that closes a cycle does not count, so the first step of a retry cycle can be a start. When every step has an input, the first step listed starts. A step fed by several starts waits for all of them (or for each to be ruled out), as for any join. The canvas marks each start and lines them up in the first column; a step with no connections at all is a start of its own and the editor warns about it. "Start here" only appears where it has an effect: on a cycle no start leads into. |
 | WF-12 | Fan-out and join | Later | Parallel nodes with a compare view. |
 | WF-13 | Scheduled and external triggers | Later | Schedule, story state, issue label. |
 | WF-14 | Shared library | Later | Export and import workflows and skills. |

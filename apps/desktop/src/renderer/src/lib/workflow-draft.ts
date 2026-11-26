@@ -1,4 +1,4 @@
-import { backEdges, cycles, incoming, outgoing, roundLimit, validate, Workflow, type Edge, type NodeType, type Problem, type WorkflowNode } from '@ade/workflow-engine';
+import { backEdges, cycles, incoming, outgoing, roundLimit, startNodes, validate, Workflow, type Edge, type NodeType, type Problem, type WorkflowNode } from '@ade/workflow-engine';
 
 /**
  * Pure edits over a workflow being designed (WF-01). Every function returns a new workflow, so the canvas can
@@ -140,10 +140,23 @@ export function removeEdge(wf: Draft, index: number): Draft {
   return { ...wf, edges: wf.edges.filter((_, i) => i !== index) };
 }
 
-/** Moves a node to the front, which makes it the step a run starts with. */
+/**
+ * Moves a step to the front. A run starts at every step nothing leads into (WF-18); in a cycle that no start leads
+ * into, the step listed first is where the run enters it, so moving it first makes it a start.
+ */
 export function makeStart(wf: Draft, id: string): Draft {
   const node = wf.nodes.find((n) => n.id === id);
   return node ? { ...wf, nodes: [node, ...wf.nodes.filter((n) => n.id !== id)] } : wf;
+}
+
+/** WF-18: whether a run starts at this step. */
+export function isStart(wf: Draft, id: string): boolean {
+  return startNodes(wf).some((n) => n.id === id);
+}
+
+/** WF-18: whether "Start here" can make this step a start: only a step on a cycle no start leads into. */
+export function canStartHere(wf: Draft, id: string): boolean {
+  return !isStart(wf, id) && isStart(makeStart(wf, id), id);
 }
 
 /** Schema and structure problems, as the host would report them on save or run. */
