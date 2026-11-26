@@ -87,14 +87,13 @@ edges:
     expect(ids(late)).toEqual(['b', 'a']);
   });
 
-  it('an unconnected step is a start of its own', () => {
-    expect(
-      ids(
-        wf(
-          `nodes:\n  - { id: a, type: gate }\n  - { id: b, type: gate }\n  - { id: c, type: gate }\nedges:\n  - { from: a, to: b }`,
-        ),
-      ),
-    ).toEqual(['a', 'c']);
+  it('an unconnected step is a start of its own, with a warning; a single step is not warned about', () => {
+    const w = wf(`nodes:\n  - { id: a, type: gate }\n  - { id: b, type: gate }\n  - { id: c, type: gate }\nedges:\n  - { from: a, to: b }`);
+    expect(ids(w)).toEqual(['a', 'c']);
+    expect(validate(w)).toEqual([
+      { level: 'warning', message: 'c is not connected to any other step, so it runs on its own when the run starts.', nodeId: 'c' },
+    ]);
+    expect(validate(wf(`nodes:\n  - { id: a, type: gate }\nedges: []`))).toEqual([]);
   });
 
   it('a step whose only input closes a cycle still starts (the first step of a retry cycle)', () => {

@@ -211,6 +211,10 @@ export function validate(wf: Workflow): Problem[] {
 
   for (const n of wf.nodes) {
     const out = outgoing(wf, n.id);
+    // WF-18: a step with no connections is a start of its own; say so, as it is often a step not wired up yet.
+    if (wf.nodes.length > 1 && !out.length && !incoming(wf, n.id).length) {
+      problems.push({ level: 'warning', message: `${n.id} is not connected to any other step, so it runs on its own when the run starts.`, nodeId: n.id });
+    }
     // WF-16: several unmarked next steps run in parallel; say so where it may be a surprise.
     if (n.type === 'branch' && out.length > 1 && out.every((e) => !e.when)) {
       problems.push({ level: 'warning', message: `${n.id} is a branch, but none of its edges says pass or fail, so every next step runs.`, nodeId: n.id });
