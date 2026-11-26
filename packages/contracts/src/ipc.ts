@@ -175,9 +175,11 @@ export const NeedsYouItem = z.object({
   /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
   sessionId: z.string(),
   sessionTitle: z.string(),
-  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused', 'loop', 'review']),
+  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused', 'loop', 'review', 'reviewed']),
   /** AP-07: set for pull requests waiting on the user's review (`sessionId` is then empty). */
   url: z.string().url().optional(),
+  /** AP-08: for `reviewed` items, the pull request and its latest review; a newer review brings a dismissed one back. */
+  reviewKey: z.string().optional(),
   /** Set for workflow gates and paused runs. */
   runId: z.string().optional(),
   nodeId: z.string().optional(),
@@ -742,6 +744,10 @@ export const hostApi = defineApi({
   'sessions.detach': method(z.object({ sessionId: Id }), z.object({ agentSessionId: z.string().nullable() })),
 
   'inbox.list': method(z.object({}), z.array(NeedsYouItem)),
+  /** AP-08: squash and merge one of the user's reviewed pull requests (only from its button in Needs you). */
+  'github.squashMerge': method(z.object({ url: z.string().url().max(500) }), Ok),
+  /** AP-08: hide a reviewed pull request until it is reviewed again. */
+  'github.dismissReview': method(z.object({ url: z.string().url().max(500) }), Ok),
 
   'files.list': method(z.object({ root: AbsPath }), z.array(FileEntry)),
   'files.read': method(z.object({ path: AbsPath }), FileContent),
@@ -804,7 +810,7 @@ export const hostTopics = defineTopics({
   'session.changed': SessionsChanged,
   'inbox.changed': z.array(NeedsYouItem),
   'workflow.run': WorkflowRunView,
-  'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string() }),
+  'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string(), target: z.literal('inbox').optional() }),
   'telegram.status': TelegramStatus,
 });
 export type HostTopics = typeof hostTopics;
@@ -910,5 +916,7 @@ export type MainApi = typeof mainApi;
 export const mainTopics = defineTopics({
   'process.status': z.object({ which: z.enum(['host', 'pty']), status: z.enum(['up', 'restarting', 'down']) }),
   'focus.session': z.object({ sessionId: z.string() }),
+  /** AP-07: a notification about a pull request opens the Needs-you inbox. */
+  'focus.inbox': z.object({}),
 });
 export type MainTopics = typeof mainTopics;

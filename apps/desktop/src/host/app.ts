@@ -223,8 +223,17 @@ export function createHost(config: HostConfig) {
   workflows.connectorAction = (connector, action, ref, text) => sync.runAction(connector, action, ref, text);
   sessions.onCreated = (s) => sync.onSessionCreated(s);
   review.onLanded = (s, action, detail) => sync.onLanded(s, action, detail);
-  // AP-07: pull requests waiting on the user's review, at start-up and every three minutes (needs `gh`, signed in).
-  const reviewRequests = new ReviewRequestWatch({ workspaces: () => repos.workspaces.list(), creds: credentials, run: ghRun, gh, refreshInbox: () => sessions.refreshInbox() });
+  // AP-07, AP-08: pull requests that need the user, at start-up and every three minutes (needs `gh`, signed in).
+  const reviewRequests = new ReviewRequestWatch({
+    workspaces: () => repos.workspaces.list(),
+    creds: credentials,
+    run: ghRun,
+    gh,
+    refreshInbox: () => sessions.refreshInbox(),
+    notify: (title, body) => bus.emit('notify', { sessionId: '', title, body, target: 'inbox' }),
+    settings: repos.settings,
+    audit: (entry) => repos.audit.append(entry),
+  });
   sessions.inboxSources.push(() => reviewRequests.inbox());
   if (config.reviewRequests) reviewRequests.start();
   // CO-05: a merged pull request lands its session. Checked every five minutes and whenever its status is shown.
@@ -607,6 +616,14 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'inbox.list': () => sessions.inbox(),
+    'github.squashMerge': async ({ url }) => {
+      await reviewRequests.squashMerge(url);
+      return { ok: true };
+    },
+    'github.dismissReview': ({ url }) => {
+      reviewRequests.dismiss(url);
+      return { ok: true };
+    },
     'files.list': ({ root }) => files.list(root),
     'files.read': ({ path }) => files.read(path),
     'files.write': ({ path, content, expectedMtimeMs, sessionId }) =>

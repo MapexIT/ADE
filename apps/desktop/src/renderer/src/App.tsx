@@ -71,6 +71,7 @@ function useWiring() {
       host.on('session.event', (e) => useStore.getState().onEvent(e)),
       host.on('session.changed', ({ session }) => useStore.getState().upsertSession(session)),
       host.on('inbox.changed', (inbox) => useStore.setState({ inbox })),
+      onMain('focus.inbox', () => useStore.getState().set({ inboxOpen: true })),
       onMain('focus.session', ({ sessionId }) => {
         useStore.getState().selectSession(sessionId);
         useStore.getState().setTab('sessions');

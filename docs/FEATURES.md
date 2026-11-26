@@ -1,6 +1,6 @@
 # Features
 
-160 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+161 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -76,7 +76,8 @@ Linux.
 | AP-04 | Needs-you inbox | MVP | One list of pending approvals and questions across sessions, fully keyboard-driven, with a count in the top bar. |
 | AP-05 | Notifications | MVP | A desktop notification when a session needs the user, finishes or fails; clicking it focuses that session. |
 | AP-06 | Workspace rules | v1 | Allow and deny rules that answer matching requests; every automatic answer is logged. |
-| AP-07 | Review requests in Needs you | v1 | Pull requests where GitHub asks the user for a review join the Needs-you inbox as their own type: a pull-request icon and a violet "Review requested" badge, with the repository and author. ADE asks the GitHub CLI (`gh pr list --search review-requested:@me`) in every workspace folder at start-up and every 3 minutes, only when `gh` is installed and the user is signed in (`gh auth status`, or the GitHub token stored in Settings). Signing out clears them. A pull request in two workspaces shows once. Enter or a click opens it on GitHub. Read-only: ADE never reviews, approves or comments on its own. |
+| AP-07 | Review requests in Needs you | v1 | Pull requests where GitHub asks the user for a review join the Needs-you inbox as their own type: a pull-request icon and a violet "Review requested" badge, with the repository and author. ADE asks the GitHub CLI (`gh pr list --search review-requested:@me`) in every workspace folder at start-up and every 3 minutes, only when `gh` is installed and the user is signed in (`gh auth status`, or the GitHub token stored in Settings). Signing out clears them. A pull request in two workspaces shows once. Enter or a click opens it on GitHub. A new request also sends a desktop notification (and Telegram, when on); clicking it opens Needs you. The first check after installing only remembers what is there, and what was notified is remembered across restarts. Read-only: ADE never reviews, approves or comments on its own. |
+| AP-08 | Your reviewed pull requests in Needs you | v1 | Once someone else reviews one of the user's own open pull requests (`gh pr list --search author:@me`, same checks and timing as AP-07), it joins Needs you as "Reviewed", with a merge icon, the repository and how it was reviewed ("Approved by alice", "Changes requested by bob"), and a desktop notification for each new review. The item has Squash and merge, Open on GitHub and Dismiss. Squash and merge takes two presses (the second says Confirm squash and merge) and runs `gh pr merge --squash --match-head-commit` with the head ADE last saw, so commits pushed since make GitHub refuse; GitHub's own rules (required checks and approvals) decide, and a refusal is shown as is. Each merge is in the audit log. Dismiss hides the item until a newer review arrives. ADE never merges on its own. |
 
 ## Review and land (RV)
 

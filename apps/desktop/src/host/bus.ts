@@ -5,7 +5,8 @@ export interface HostEvents {
   'session.changed': { workspaceId: string; session: Session };
   'inbox.changed': NeedsYouItem[];
   'workflow.run': WorkflowRunView;
-  notify: { sessionId: string; title: string; body: string };
+  /** `target: 'inbox'` for notifications without a session (pull requests): clicking opens Needs you. */
+  notify: { sessionId: string; title: string; body: string; target?: 'inbox' };
   'telegram.status': TelegramStatus;
 }
 
