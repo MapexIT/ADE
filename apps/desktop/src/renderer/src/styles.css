@@ -311,12 +311,33 @@ textarea,
   position: relative;
   padding: var(--step-pad);
 }
+/*
+ * Connection points: a 14px dot with a 24px invisible hit area around it (the ::before), so the pointer finds a
+ * handle easily. They sit beside the clipped shape layers, never inside them, so no outline cuts them off.
+ */
 .ade-step .react-flow__handle {
   z-index: 1;
-  width: 9px;
-  height: 9px;
+  width: 14px;
+  height: 14px;
   background: var(--accent-soft);
   border: 2px solid var(--surface-sunken);
+  transition:
+    background-color 150ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+.ade-step .react-flow__handle::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 999px;
+}
+.ade-step .react-flow__handle:hover,
+.ade-step .react-flow__handle:focus-visible,
+.ade-step .react-flow__handle.connectingfrom,
+.ade-step .react-flow__handle.connectingto {
+  background: var(--ink);
+  box-shadow: 0 0 0 4px rgb(139 92 246 / 0.45);
+  outline: none;
 }
 .react-flow__node-step.selected .ade-step,
 .react-flow__node-step:focus-visible .ade-step {
@@ -397,6 +418,9 @@ textarea,
   .ade-step-running {
     animation: none;
     filter: drop-shadow(0 0 6px rgb(139 92 246 / 0.6));
+  }
+  .ade-step .react-flow__handle {
+    transition: none;
   }
 }
 
