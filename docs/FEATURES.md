@@ -1,6 +1,6 @@
 # Features
 
-163 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+164 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -142,6 +142,7 @@ Linux.
 | SM-12 | Inline viewers | v1 | Images, Markdown, JSON, CSV and test results render inside a block. |
 | SM-13 | Layouts | v1 | Saved splits and tabs per workspace, restored with scrollback. |
 | SM-14 | Guard rails | v1 | Confirmation before destructive commands and multi-line pastes; secret warning before sending to an agent. |
+| SM-18 | Problems in a block | v1 | When a command in a smart terminal finishes, ADE reads its output for problems (TypeScript, ESLint, gcc and clang style, .NET, Rust, Python tracebacks, pytest, vitest and jest, go test) and lists them under the block: file, line, code and message; a row opens the file at that line. The list is compared with the previous run of the same command in the same worktree: each problem is marked New or Still there, and problems that are gone are listed as Fixed, with a summary such as "2 new, 5 fixed, 3 still there since 14:02 (before turn 4)". A problem keeps its identity when its line number moves. In a session worktree a problem also says when it is in a file this session changed and when the same problem exists in your checkout's last run of that command. "Fix new problems with agent" starts a turn with only the new problems; "Send problems to agent" attaches the list to the next prompt; both pass the secret warning. "New only" filters the list. Built from the block's output only, with no model call, so it is the same for every agent; nothing is sent anywhere until you press a button. A block with no recognised problem looks as it does today. When the output was cut or the earlier run is not comparable, ADE says so and does not claim anything was fixed. |
 | SM-15 | Recording | Later | Replayable terminal log linked to the audit trail. |
 | SM-16 | Remote terminals | Later | SSH profiles with blocks and status bar. |
 | SM-17 | Terminal CLI | Later | A command to open tabs, notify and attach blocks. |
