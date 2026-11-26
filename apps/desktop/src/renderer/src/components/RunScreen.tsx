@@ -1,5 +1,5 @@
 import { ExternalLink, Play, Save, SendHorizontal, SlidersHorizontal } from 'lucide-react';
-import { Badge, Button, EmptyState, SectionLabel, Tabs } from '@ade/ui';
+import { Badge, Button, cx, EmptyState, SectionLabel, Tabs, Waiting } from '@ade/ui';
 import type { EnvSet, Run, RunConfig } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -13,6 +13,15 @@ import { TerminalView } from './terminal/TerminalView.tsx';
 
 const runAsText = (r: Run) => `$ ${r.command.join(' ')}\n${r.output.trimEnd().slice(-20_000)}\n[exit ${r.exitCode ?? 'unknown'}]`;
 
+/** CR-02: shown from the moment Run is pressed until the program prints something or ends. */
+function StartingRun({ label, overlay = false }: { label: string; overlay?: boolean }) {
+  return (
+    <div className={cx('flex min-h-0 flex-1 items-center justify-center', overlay && 'absolute inset-0 bg-bg/80')} data-testid="run-starting">
+      <Waiting className="text-[13px]">Starting {label}…</Waiting>
+    </div>
+  );
+}
+
 /** Screen 8: run bar, output, scratchpad and history (CR-01 to CR-11). */
 export function RunScreen() {
   const workspace = useStore(currentWorkspace);
@@ -21,6 +30,7 @@ export function RunScreen() {
   const attach = useStore((s) => s.attach);
   const toast = useStore((s) => s.toast);
   const active = useStore((s) => s.activeRun);
+  const starting = useStore((s) => s.startingRun);
   const runsVersion = useStore((s) => s.runsVersion);
   const [configs, setConfigs] = useState<RunConfig[]>([]);
   const [configId, setConfigId] = useState('');
@@ -56,6 +66,10 @@ export function RunScreen() {
   useEffect(() => {
     if (active?.runId) setView('output');
   }, [active?.runId]);
+  // CR-02: a run that was just asked for shows the output view at once, with a waiting animation until it prints.
+  useEffect(() => {
+    if (starting) setView('output');
+  }, [starting]);
 
   if (!workspace) return <EmptyState icon={<Play className="size-5" />} title="Run" body="Open a repository to detect its run, test and build commands." />;
 
@@ -135,8 +149,13 @@ export function RunScreen() {
           </div>
           {view === 'scratchpad' ? (
             <ScratchpadPanel />
+          ) : starting && (!active || active.label !== starting.label || !active.terminalId) ? (
+            <StartingRun label={starting.label} />
           ) : active ? (
-            <TerminalView key={active.terminalId} id={active.terminalId} />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <TerminalView key={active.terminalId} id={active.terminalId} />
+              {starting ? <StartingRun label={starting.label} overlay /> : null}
+            </div>
           ) : (
             <EmptyState icon={<Play className="size-5" />} title="Nothing running" body="Pick a configuration and a worktree, then run it; or run a file from the editor, or a snippet in the scratchpad. Every run is kept in the history." />
           )}
