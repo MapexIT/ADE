@@ -309,6 +309,9 @@ export type PullRequestStatus = z.infer<typeof PullRequestStatus>;
 /** CO-09: a Shortcut iteration or a GitHub Projects board, with the sessions working on each item. */
 export const BoardSettings = z.object({
   source: z.enum(['shortcut', 'github']),
+  /** CO-09: the repository chosen first ("owner/name"); the board shows only its items. */
+  githubRepo: z.string().max(200).nullable().default(null),
+  /** The project's owner and number; both null shows the repository's open issues and pull requests. */
   githubOwner: z.string().max(100).nullable(),
   githubProject: z.number().int().positive().nullable(),
 });
@@ -671,6 +674,13 @@ export const hostApi = defineApi({
   'board.settings': method(z.object({ workspaceId: Id }), BoardSettings),
   'board.save': method(z.object({ workspaceId: Id, settings: BoardSettings }), Ok),
   'board.get': method(z.object({ workspaceId: Id }), Board),
+  /** CO-09: repositories to pick from: this workspace's own GitHub repository first, then the user's. */
+  'board.repositories': method(z.object({ workspaceId: Id }), z.object({ current: z.string().nullable(), repos: z.array(z.string()) })),
+  /** CO-09: the GitHub projects linked to a repository. `problem` explains an empty list (for example a missing scope). */
+  'board.projects': method(
+    z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/) }),
+    z.object({ projects: z.array(z.object({ owner: z.string(), number: z.number(), title: z.string() })), problem: z.string().nullable() }),
+  ),
   /** CO-10: personal MCP servers (YAML, the same shape as `mcpServers` in .ade/workspace.yaml) for every session. */
   'mcp.personal': method(z.object({}), z.object({ yaml: z.string() })),
   'mcp.savePersonal': method(z.object({ yaml: z.string().max(20_000) }), Ok),

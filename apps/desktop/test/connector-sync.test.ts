@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import { runFile, type Runner } from '../src/host/connectors.ts';
 import { resultList, type ShortcutActions } from '../src/host/shortcut-actions.ts';
-import { githubIssue, parseProjectItems, shortcutId } from '../src/host/work-item-sync.ts';
+import { githubIssue, parseProjectItems, parseRepoProjects, shortcutId } from '../src/host/work-item-sync.ts';
 
 let root: string;
 let repo: string;
@@ -110,6 +110,62 @@ describe('parsing helpers', () => {
       { ref: 'o/r#3', title: 'Fix', url: 'https://x', status: 'Todo' },
       { ref: 'Draft', title: 'Draft', url: null, status: 'No status' },
     ]);
+  });
+});
+
+describe('CO-09: the GitHub board starts from a repository', () => {
+  it('reads linked projects whatever the key case, skipping closed ones', () => {
+    const out = JSON.stringify({
+      projectsV2: {
+        Nodes: [
+          { ID: 'P1', Title: 'Roadmap', ResourcePath: '/orgs/acme/projects/3', Closed: false },
+          { id: 'P2', title: 'Mine', url: 'https://github.com/users/me/projects/1' },
+          { Title: 'Old', ResourcePath: '/orgs/acme/projects/2', Closed: true },
+        ],
+      },
+    });
+    expect(parseRepoProjects(out)).toEqual([
+      { owner: 'acme', number: 3, title: 'Roadmap' },
+      { owner: 'me', number: 1, title: 'Mine' },
+    ]);
+    expect(parseRepoProjects('nope')).toEqual([]);
+  });
+
+  it('asks for a repository first, then shows its issues and pull requests, or its items on a project', async () => {
+    const { ws } = await start('say hi');
+    await host.handlers['board.save']({ workspaceId: ws.id, settings: { source: 'github', githubRepo: null, githubOwner: null, githubProject: null } });
+    await expect(host.handlers['board.get']({ workspaceId: ws.id })).rejects.toThrow(/Choose a repository/);
+
+    ghAnswers = (args) => {
+      if (args[0] === 'issue') return { code: 0, stdout: JSON.stringify([{ number: 1, title: 'Bug', url: 'https://github.com/acme/web/issues/1' }]) };
+      if (args[0] === 'pr') return { code: 0, stdout: JSON.stringify([{ number: 2, title: 'Fix', url: 'https://github.com/acme/web/pull/2' }]) };
+      if (args[0] === 'project')
+        return { code: 0, stdout: JSON.stringify({ items: [{ title: 'Here', status: 'Todo', content: { number: 5, repository: 'acme/web' } }, { title: 'Elsewhere', status: 'Todo', content: { number: 6, repository: 'acme/api' } }] }) };
+      if (args[0] === 'repo' && args[1] === 'list') return { code: 0, stdout: JSON.stringify([{ nameWithOwner: 'me/tool' }, { nameWithOwner: 'acme/web' }]) };
+      if (args[0] === 'repo' && args[1] === 'view') return { code: 0, stdout: JSON.stringify({ nameWithOwner: 'acme/web' }) };
+      return null;
+    };
+    expect(await host.handlers['board.repositories']({ workspaceId: ws.id })).toEqual({ current: 'acme/web', repos: ['acme/web', 'me/tool'] });
+
+    await host.handlers['board.save']({ workspaceId: ws.id, settings: { source: 'github', githubRepo: 'acme/web', githubOwner: null, githubProject: null } });
+    const plain = await host.handlers['board.get']({ workspaceId: ws.id });
+    expect(plain.title).toBe('acme/web');
+    expect(plain.columns.map((c) => [c.name, c.items.map((i) => i.ref)])).toEqual([
+      ['Open issues', ['acme/web#1']],
+      ['Open pull requests', ['acme/web#2']],
+    ]);
+    expect(gh.find((c) => c.args[0] === 'issue')?.args).toEqual(['issue', 'list', '-R', 'acme/web', '--state', 'open', '--limit', '100', '--json', 'number,title,url']);
+
+    await host.handlers['board.save']({ workspaceId: ws.id, settings: { source: 'github', githubRepo: 'acme/web', githubOwner: 'acme', githubProject: 3 } });
+    const project = await host.handlers['board.get']({ workspaceId: ws.id });
+    expect(project.columns).toEqual([{ name: 'Todo', items: [expect.objectContaining({ ref: 'acme/web#5', title: 'Here' })] }]);
+  }, 40_000);
+
+  it('explains a missing project scope instead of failing', async () => {
+    ghAnswers = (args) => (args[0] === 'repo' ? { code: 1, stdout: '' } : null);
+    const res = await host.handlers['board.projects']({ repo: 'acme/web' });
+    expect(res.projects).toEqual([]);
+    expect(res.problem).toBeTruthy();
   });
 });
 

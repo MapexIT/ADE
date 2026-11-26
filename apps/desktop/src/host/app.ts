@@ -437,6 +437,8 @@ export function createHost(config: HostConfig) {
       workspaceRoot(workspaceId);
       return sync.board(workspaceId);
     },
+    'board.repositories': ({ workspaceId }) => sync.boardRepositories(workspaceRoot(workspaceId)),
+    'board.projects': ({ repo }) => sync.boardProjects(repo),
     'mcp.personal': () => ({ yaml: mcp.personalYaml() }),
     'mcp.savePersonal': async ({ yaml }) => {
       mcp.savePersonalYaml(yaml);

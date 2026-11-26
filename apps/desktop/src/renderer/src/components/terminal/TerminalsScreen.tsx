@@ -137,7 +137,7 @@ export function TerminalsScreen() {
   const current = active ? terminals[active] : undefined;
   return (
     <div className="flex h-full min-h-0">
-      <aside aria-label="Terminals" className="flex w-64 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
+      <aside aria-label="Terminals" className="flex w-72 shrink-0 flex-col gap-2 overflow-auto border-r border-line bg-surface p-3">
         {groups.map(([label, list]) => (
           <section key={label} className="flex flex-col gap-2">
             <SectionLabel>{label}</SectionLabel>
@@ -165,7 +165,7 @@ export function TerminalsScreen() {
               <span className="text-[12px]">
                 {layout.offer.terminals.length} terminal(s) from your last session, with their scrollback.
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button icon={<RotateCcw className="size-4" aria-hidden="true" />} size="dense" variant="primary" onClick={() => void layout.restore()}>
                   Restore terminals
                 </Button>
