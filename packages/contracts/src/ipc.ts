@@ -459,6 +459,12 @@ export const PermissionRule = z.object({
 });
 export type PermissionRule = z.infer<typeof PermissionRule>;
 
+/** AP-09: what kind of command a shape is. `never` is not offered as an allow rule. */
+export const RuleRisk = z.enum(['read', 'project', 'exact', 'never']);
+export type RuleRisk = z.infer<typeof RuleRisk>;
+export const RuleCaveat = z.enum(['repo-script', 'not-a-sandbox']);
+export type RuleCaveat = z.infer<typeof RuleCaveat>;
+
 export const SessionDetail = z.object({
   session: Session,
   turns: z.array(Turn),

@@ -112,6 +112,26 @@ describe('AP-06 workspace rules in a session', () => {
     expect(audit[1]!.detail.rule).toMatchObject({ pattern: 'rm *' });
     expect(host.repos.audit.list(ws.id).some((a) => a.action === 'rules.saved')).toBe(true);
   });
+
+  it('AP-09: a wildcard allow rule does not answer a chained command', async () => {
+    const ws = await host.handlers['workspace.open']({ path: repo });
+    await host.handlers['rules.save']({ workspaceId: ws.id, rules: [{ id: 'tests', decision: 'allow', kind: 'execute', pattern: 'npm test*' }] });
+    const session = await host.handlers['sessions.create']({
+      workspaceId: ws.id,
+      agentId: 'fake',
+      prompt: text('ask npm test --watch\nask npm test && rm -rf build\nsay done'),
+      permissionProfile: 'ask',
+      bringChanges: false,
+    });
+    await waitFor(() => host.repos.sessions.require(session.id).state === 'waiting-on-user');
+    const events = host.repos.events.list(session.id);
+    const decided = events.flatMap((e) => (e.type === 'permission.decided' ? [e] : []));
+    expect(decided.map((d) => d.decidedBy)).toEqual(['rule:tests']);
+    const pending = events.flatMap((e) => (e.type === 'permission.requested' ? [e] : [])).at(-1)!;
+    expect(pending.detail).toBe('npm test && rm -rf build');
+    await host.handlers['sessions.answerPermission']({ sessionId: session.id, requestId: pending.requestId, optionId: 'reject-once' });
+    await ready(session.id);
+  });
 });
 
 describe('CN-08 run in place', () => {

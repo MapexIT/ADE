@@ -236,7 +236,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       questions in `docs/DECISIONS.md`; the rules paragraph in `docs/ARCHITECTURE.md`; glossary entries in
       `docs/PRODUCT.md`; screen 1 and the component rule in `docs/UI.md`; this milestone in `docs/PLAN.md`.
       Done when `apps/desktop/test/help.test.ts` passes with the new feature count.
-- [ ] **M12-T02** Pure module `packages/session-core/src/rule-advice.ts`: `commandAnatomy`, `ruleRegExp`
+- [x] **M12-T02** Pure module `packages/session-core/src/rule-advice.ts`: `commandAnatomy`, `ruleRegExp`
       (moved), `decideByRules`, `shapeOfStep`, with their unit tests; `workspace-rules.ts` delegates to it.
       Done when the anatomy, matching and shape cases pass and `rules-inplace.test.ts` passes with the new
       chained-command case.
