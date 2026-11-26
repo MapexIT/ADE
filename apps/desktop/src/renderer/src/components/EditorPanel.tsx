@@ -93,6 +93,17 @@ export function EditorPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor?.path, loaded, mounted]);
 
+  // SM-18: a problem row opens the file at its line. Revealed once per request (`lineSeq`), not on every reload.
+  const revealed = useRef<number | null>(null);
+  useEffect(() => {
+    const ed = monacoRef.current;
+    // A disposed editor (the file is being swapped) has no model; the next mount runs this again.
+    if (!editor?.line || !editor.lineSeq || !loaded || !ed?.getModel() || revealed.current === editor.lineSeq) return;
+    revealed.current = editor.lineSeq;
+    ed.setPosition({ lineNumber: editor.line, column: 1 });
+    ed.revealLineInCenter(editor.line);
+  }, [editor?.line, editor?.lineSeq, loaded, mounted]);
+
   const dirtyNow = content !== null && content !== saved;
   useEffect(() => {
     set({ editorDirty: dirtyNow });

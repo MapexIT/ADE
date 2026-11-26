@@ -35,7 +35,7 @@ ade/
     acp-client/        # AgentRuntime + AgentSession over the official ACP SDK
     fake-agent/        # scripted ACP agent for tests
     git/               # worktrees, checkpoints, diffs (argument arrays only)
-    shell-integration/ # scripts for pwsh, bash, zsh, fish + sequence parser
+    shell-integration/ # scripts for pwsh, bash, zsh, fish + sequence parser + problem matchers
     workflow-engine/   # v1
     ui/                # design tokens, shared components
   docs/
@@ -58,6 +58,7 @@ ade/
 | `workflow_runs`, `workflow_node_runs` | v1: run state, node state, session_id per node, budgets used |
 | `skills_index` | v1: name, description, location (`repo`, `library`), path |
 | `review_marks` | v1: session_id, path, fingerprint, marked_at (one row per reviewed file, RV-15) |
+| `problem_snapshots` | v1: id, workspace_id, session_id, command_key, exit_code, turn_count, cut, problems_json, created_at (SM-18, newest 3 per workspace, scope and command) |
 | `audit_log` | id, ts, workspace_id, session_id, actor, action, detail_json (append-only) |
 | `settings` | key, value_json |
 
@@ -175,6 +176,10 @@ deleted files, renames, binary files and CRLF line endings.
   as working, waiting or finished. Waiting terminals get the attention ring and join the Needs-you inbox.
 - Status bar segments: location, Git, session, process, ports, resources, usage, work item.
 - Scrollback is serialised on exit and restored on start. Processes are not resurrected.
+- Problems (SM-18): when a smart block finishes, the renderer runs `extractProblems` from
+  `@ade/shell-integration/problems` over the block's stored output, the host stores a snapshot per workspace,
+  scope (session or checkout) and command (`problems.record`) and returns the previous one, and the checkout's
+  latest, for the diff. A block carries `truncated` when the 256 KiB output cap dropped its head.
 
 ## 7. Code runner
 

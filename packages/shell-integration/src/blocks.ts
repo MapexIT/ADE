@@ -1,7 +1,7 @@
 import type { CommandBlock } from '@ade/contracts';
-import { stripAnsi, type ShellEvent } from './parser.ts';
+import { rejoinConptyWraps, stripAnsi, type ShellEvent } from './parser.ts';
 
-const MAX_OUTPUT = 256 * 1024;
+export const MAX_OUTPUT = 256 * 1024;
 
 /**
  * Turns shell events into command blocks (SM-01): command text, cwd, start, end, exit code and output.
@@ -67,6 +67,7 @@ export class BlockBuilder {
           endedAt: null,
           exitCode: null,
           output: '',
+          truncated: false,
         };
         this.inOutput = true;
         this.commandLine = null;
@@ -81,7 +82,7 @@ export class BlockBuilder {
           this.current = null; // some shells report a blank line as a command
           return;
         }
-        const done: CommandBlock = { ...this.current, endedAt: this.now(), exitCode: event.exitCode, output: stripAnsi(this.current.output) };
+        const done: CommandBlock = { ...this.current, endedAt: this.now(), exitCode: event.exitCode, output: stripAnsi(rejoinConptyWraps(this.current.output)) };
         this.blocks.push(done);
         this.current = null;
         this.onBlock(done);
@@ -90,7 +91,11 @@ export class BlockBuilder {
       case 'text':
         if (this.inOutput && this.current) {
           const next = this.current.output + event.text;
-          this.current.output = next.length > MAX_OUTPUT ? next.slice(next.length - MAX_OUTPUT) : next;
+          if (next.length > MAX_OUTPUT) {
+            // Keep the tail and say so (SM-18 does not claim a problem was fixed from cut output).
+            this.current.output = next.slice(next.length - MAX_OUTPUT);
+            this.current.truncated = true;
+          } else this.current.output = next;
         } else if (!this.inPrompt) {
           this.typed += event.text;
         }

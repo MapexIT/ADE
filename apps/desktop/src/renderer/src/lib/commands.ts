@@ -6,6 +6,8 @@ import { PAGES } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
 import { reviewActions } from './review.ts';
 import { attempt, useStore } from './store.ts';
+import { fixNewProblems, latestProblems, problemKey, useProblems } from './problems.ts';
+import { useTerminals } from './terminals.ts';
 
 /** One action the user can take (Command pattern). Every action is reachable from the palette (UI rule). */
 export interface Command {
@@ -67,6 +69,22 @@ export function buildCommands(): Command[] {
     { id: 'app.restart-host', title: 'Restart the host process', group: 'App', run: () => void main('main.restartProcess', { which: 'host' }) },
     { id: 'app.restart-pty', title: 'Restart the terminal process', group: 'App', run: () => void main('main.restartProcess', { which: 'pty' }) },
   ];
+  // SM-18: on the active terminal's latest block that has problems; absent when there is none.
+  const terms = useTerminals.getState();
+  const problems = terms.active ? latestProblems(useProblems.getState().byBlock, terms.active, terms.blocks[terms.active] ?? []) : null;
+  if (problems && problems.previousAt !== null && problems.counts.new > 0) {
+    if (problems.sessionId) cmds.push({ id: 'terminal.problems.fix', title: 'Fix new problems with agent', group: 'Terminal', run: () => fixNewProblems(problems) });
+    const key = problemKey(problems.terminalId, problems.blockId);
+    cmds.push({
+      id: 'terminal.problems.newOnly',
+      title: problems.newOnly ? 'Show all problems' : 'Show new problems only',
+      group: 'Terminal',
+      run: () => {
+        useProblems.getState().toggleNewOnly(key);
+        s.setTab('terminals');
+      },
+    });
+  }
   if (session) {
     if (isLive(session.state)) {
       cmds.push({ id: 'session.cancel', title: 'Cancel the running turn', group: 'Session', shortcut: 'Esc', run: () => void attempt(() => host.call('sessions.cancel', { sessionId: session.id })) });

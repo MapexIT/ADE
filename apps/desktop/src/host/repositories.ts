@@ -8,6 +8,8 @@ import {
   type PermissionOption,
   type PermissionRequest,
   type PromptBlock,
+  ProblemSnapshot,
+  type Problem,
   type Run,
   type RunConfig,
   type Session,
@@ -532,6 +534,55 @@ export class WorkflowRunRepo {
 }
 
 /** SM-11: commands typed in terminals, searched together with runs and the commands agents ran. */
+/** SM-18: problem snapshots per workspace, scope (a session, or the checkout when null) and command. */
+export class ProblemSnapshotRepo {
+  static readonly KEEP = 3;
+  constructor(private readonly db: Database) {}
+
+  latest(workspaceId: string, sessionId: string | null, commandKey: string): ProblemSnapshot | null {
+    const r = this.db.get<R>(
+      `SELECT * FROM problem_snapshots WHERE workspace_id = ? AND session_id IS ? AND command_key = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      workspaceId,
+      sessionId,
+      commandKey,
+    );
+    if (!r) return null;
+    const parsed = ProblemSnapshot.safeParse({
+      commandKey: String(r.command_key),
+      sessionId: str(r.session_id),
+      exitCode: r.exit_code === null ? null : Number(r.exit_code),
+      turnCount: r.turn_count === null ? null : Number(r.turn_count),
+      cut: Number(r.cut) === 1,
+      at: String(r.created_at),
+      problems: JSON.parse(String(r.problems_json)) as unknown,
+    });
+    return parsed.success ? parsed.data : null;
+  }
+
+  /** Stores a snapshot and keeps only the newest `KEEP` for that workspace, scope and command. */
+  record(s: { workspaceId: string; sessionId: string | null; commandKey: string; exitCode: number | null; turnCount: number | null; cut: boolean; problems: Problem[] }): void {
+    this.db.transaction(() => {
+      this.db.run(
+        'INSERT INTO problem_snapshots (id, workspace_id, session_id, command_key, exit_code, turn_count, cut, problems_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        randomUUID(), s.workspaceId, s.sessionId, s.commandKey, s.exitCode, s.turnCount, s.cut ? 1 : 0, JSON.stringify(s.problems), now(),
+      );
+      this.db.run(
+        `DELETE FROM problem_snapshots WHERE workspace_id = ? AND session_id IS ? AND command_key = ? AND id NOT IN (
+           SELECT id FROM problem_snapshots WHERE workspace_id = ? AND session_id IS ? AND command_key = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)`,
+        s.workspaceId, s.sessionId, s.commandKey, s.workspaceId, s.sessionId, s.commandKey, ProblemSnapshotRepo.KEEP,
+      );
+    });
+  }
+
+  count(workspaceId: string, sessionId: string | null, commandKey: string): number {
+    return Number(this.db.get<R>('SELECT COUNT(*) AS n FROM problem_snapshots WHERE workspace_id = ? AND session_id IS ? AND command_key = ?', workspaceId, sessionId, commandKey)?.n ?? 0);
+  }
+
+  deleteForSession(sessionId: string): void {
+    this.db.run('DELETE FROM problem_snapshots WHERE session_id = ?', sessionId);
+  }
+}
+
 export class CommandHistoryRepo {
   constructor(private readonly db: Database) {}
 
@@ -598,6 +649,7 @@ export class Repositories {
   readonly runs: RunRepo;
   readonly workflowRuns: WorkflowRunRepo;
   readonly history: CommandHistoryRepo;
+  readonly problems: ProblemSnapshotRepo;
 
   constructor(readonly db: Database) {
     this.workspaces = new WorkspaceRepo(db);
@@ -610,6 +662,7 @@ export class Repositories {
     this.settings = new SettingsRepo(db);
     this.audit = new AuditRepo(db);
     this.history = new CommandHistoryRepo(db);
+    this.problems = new ProblemSnapshotRepo(db);
     this.runs = new RunRepo(db);
     this.workflowRuns = new WorkflowRunRepo(db);
   }

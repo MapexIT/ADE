@@ -229,6 +229,35 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       Windows. Not yet verified: CI on Ubuntu (the branch is not pushed) and closing messages and `execute`
       titles from real Codex, Claude Code and OpenCode sessions (see the open questions).
 
+## M11 - Problems in a block
+
+- [x] **M11-T01** Feature, decisions and plan for problems in a block (SM-18): the SM-18 row and the count
+      in `docs/FEATURES.md`, the decision row, VERIFY items and open questions in `docs/DECISIONS.md`,
+      section 6 and the data model in `docs/ARCHITECTURE.md`, screen 2 in `docs/UI.md`, this milestone.
+      Done when `apps/desktop/test/help.test.ts` passes with 163 features.
+- [x] **M11-T02** Contracts (`Problem`, `ProblemSnapshot`, `problems.record`, `CommandBlock.truncated`)
+      and the pure module `packages/shell-integration/src/problems.ts` behind the `./problems` export,
+      with `test/problems.test.ts`; `BlockBuilder` sets `truncated`. Done when unit cases 1 to 41 pass on
+      Windows and Ubuntu.
+- [x] **M11-T03** Host: migration `problem_snapshots`, `ProblemSnapshotRepo`, the `problems.record`
+      handler and removal with a session. Done when cases 42 to 49 pass on Windows and Ubuntu.
+- [x] **M11-T04** Renderer logic: `lib/problems.ts` (`recordBlock`, per-block state), the extended
+      `onBlockFinished` listener in `App.tsx`, `openEditor` with a line. Done when a block with problems
+      has state in the store in `pnpm dev` and SM-11 history still records.
+- [x] **M11-T05** Renderer UI: `BlockProblems.tsx` in `SmartBlocks`, the status-bar segment, two palette
+      commands; `e2e/sm18-problems.spec.ts`. Done when the spec and the three existing terminal specs pass
+      on Windows against the production build and the development renderer.
+- [ ] **M11-T06** Verify and record: the ConPTY long-line fixture, `FileChange.path` form, real output of
+      `tsc`, `eslint`, `pytest` and `cargo` pasted into fixtures; tick the boxes and note what was and was
+      not verified (Ubuntu CI, Git Bash, zsh, fish). Done when CI is green on Windows and Ubuntu.
+      Verified on Windows: the ConPTY long-line behaviour (captured with node-pty, kept as fixtures, broken wraps
+      rejoined), the `FileChange.path` form, real output of tsc 6.0 (both forms), eslint 9 stylish, Python 3.15
+      tracebacks and vitest 5.1 in the fixtures; unit, host and end-to-end tests (production build and development
+      renderer, plus the existing terminal specs). Not verified: pytest, cargo, gcc/clang, MSBuild and go test
+      fixtures are written from their documented formats, not captured (those tools are not installed here); CI on
+      Ubuntu (the branch is not pushed); Git Bash, PowerShell 7, zsh and fish end to end (covered by path unit tests
+      only).
+
 ## M12 - Rule suggestions and rehearsal
 
 - [x] **M12-T01** Feature, decisions and plan for rule suggestions (AP-09): the AP-09 row, the AP-06

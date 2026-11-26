@@ -238,6 +238,7 @@ export class ReviewService {
     }
     this.repos.audit.append({ workspaceId: s.workspaceId, sessionId, actor: 'user', action: 'session.discarded', detail: { patchPath } });
     this.sessions.record(sessionId, { type: 'session.discarded', patchPath });
+    this.repos.problems.deleteForSession(sessionId); // SM-18: snapshots go with the session
     await this.sessions.finish(sessionId, 'discard');
     return patchPath;
   }
