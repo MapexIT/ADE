@@ -3,6 +3,7 @@ import { Bot, GitMerge, Hand, Plug, Repeat, Split, SquareTerminal, type LucideIc
 import { cx, palette } from '@ade/ui';
 import type { WorkflowRunView } from '@ade/contracts';
 import { useCallback, useState, type CSSProperties } from 'react';
+import { columns, startIds } from '../../lib/workflow-layout.ts';
 
 export interface GraphNode {
   id: string;
@@ -172,27 +173,6 @@ export const STATUS: Record<
   skipped: { label: 'Skipped', border: 'var(--line)', background: 'var(--surface)' },
 };
 
-/** Layered left-to-right layout: each node sits one column after the first node that reaches it. */
-function columns(nodes: GraphNode[], edges: GraphEdge[]): Map<string, number> {
-  const depth = new Map<string, number>();
-  const first = nodes[0]?.id;
-  if (!first) return depth;
-  depth.set(first, 0);
-  const queue = [first];
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const e of edges.filter((x) => x.from === id)) {
-      if (depth.has(e.to)) continue;
-      depth.set(e.to, depth.get(id)! + 1);
-      queue.push(e.to);
-    }
-  }
-  // Unconnected nodes go after the last column so they stay visible while editing.
-  const last = Math.max(0, ...depth.values()) + 1;
-  for (const n of nodes) if (!depth.has(n.id)) depth.set(n.id, last);
-  return depth;
-}
-
 export function buildGraph(
   nodes: GraphNode[],
   edges: GraphEdge[],
@@ -205,11 +185,12 @@ export function buildGraph(
   } = {},
 ): { nodes: Node[]; edges: Edge[] } {
   // Cycle edges go backwards; leave them out of the layering so steps stay in reading order.
-  const depth = columns(nodes, edges.filter((e) => !e.cycle));
+  const depth = columns(nodes, edges);
+  const starts = startIds(nodes, edges);
   const rows = new Map<number, number>();
   const inputs = (id: string) => edges.filter((e) => e.to === id && !e.cycle).length;
   const outputs = (id: string) => edges.filter((e) => e.from === id).length;
-  const out: Node[] = nodes.map((n, index) => {
+  const out: Node[] = nodes.map((n) => {
     const col = depth.get(n.id) ?? 0;
     const row = rows.get(col) ?? 0;
     rows.set(col, row + 1);
@@ -224,7 +205,7 @@ export function buildGraph(
       type: n.type,
       title: n.title,
       detail: n.detail,
-      start: index === 0,
+      start: starts.has(n.id),
       fan: [ins > 1 ? `waits for ${ins} inputs` : '', outs > 1 ? `${outs} next steps` : ''].filter(Boolean).join(' · '),
       status: status?.label ?? null,
       line,

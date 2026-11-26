@@ -51,7 +51,7 @@ export function NodeSettings({
   onDelete,
   onMakeStart,
   onTest,
-  isStart,
+  canStartHere,
   skillNames,
 }: {
   node: WorkflowNode;
@@ -60,7 +60,8 @@ export function NodeSettings({
   onDelete: () => void;
   onMakeStart: () => void;
   onTest: (() => void) | null;
-  isStart: boolean;
+  /** WF-18: the step sits on a cycle no start leads into, so listing it first makes the run enter there. */
+  canStartHere: boolean;
   /** Repository and personal skills that can be attached (SK-01). */
   skillNames: string[];
 }) {
@@ -288,7 +289,7 @@ export function NodeSettings({
             Test this step
           </Button>
         ) : null}
-        {!isStart && !readOnly ? (
+        {canStartHere && !readOnly ? (
           <Button icon={<Play className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={onMakeStart}>
             Start here
           </Button>

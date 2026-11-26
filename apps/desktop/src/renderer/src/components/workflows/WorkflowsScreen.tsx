@@ -12,6 +12,7 @@ import {
   connect,
   edgeInfo,
   fileNameFor,
+  canStartHere,
   makeStart,
   NODE_TYPES,
   problemsOf,
@@ -367,7 +368,7 @@ export function WorkflowsScreen() {
                   <EmptyState
                     icon={<Plus className="size-5" />}
                     title="An empty workflow"
-                    body="Add a first step from the toolbar above. The first step is where a run starts; drag from one step to another to connect them."
+                    body="Add a first step from the toolbar above. A run starts at every step nothing leads into; drag from one step to another to connect them."
                   />
                 ) : draft && draft.nodes.length ? (
                   <ReactFlow
@@ -435,7 +436,7 @@ export function WorkflowsScreen() {
                   key={node.id}
                   node={node}
                   readOnly={readOnly}
-                  isStart={draft.nodes[0]?.id === node.id}
+                  canStartHere={canStartHere(draft, node.id)}
                   skillNames={skillNames}
                   onChange={(next) => {
                     edit(updateNode(draft, node.id, next));
