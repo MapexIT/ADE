@@ -12,7 +12,10 @@ const ROW_TOLERANCE = 32;
 
 export const snap = (n: number) => Math.round(n / GRID) * GRID;
 
-function overlaps(a: Pick<PromptBox, 'x' | 'y' | 'w' | 'h'>, b: Pick<PromptBox, 'x' | 'y' | 'w' | 'h'>) {
+export type Rect = Pick<PromptBox, 'x' | 'y' | 'w' | 'h'>;
+
+/** True when two rectangles share some area; touching edges do not count. */
+export function overlaps(a: Rect, b: Rect) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
@@ -66,4 +69,26 @@ export function boardExtent(boxes: PromptBox[], minW: number, minH: number) {
     w: Math.max(minW, ...boxes.map((b) => b.x + b.w + GAP)),
     h: Math.max(minH, ...boxes.map((b) => b.y + b.h + GAP)),
   };
+}
+
+/** The rectangle spanned by two corner points, in any order (a rubber band dragged in any direction). */
+export function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): Rect {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+
+/** The ids of the boxes a rubber band touches. */
+export function boxesInRect(boxes: PromptBox[], rect: Rect): Set<string> {
+  return new Set(boxes.filter((b) => overlaps(rect, b)).map((b) => b.id));
+}
+
+/**
+ * The selection after a rubber band touched `hit`: it replaces the selection, or adds to it when `additive`.
+ * A band that touches nothing changes nothing, so a stray drag on empty space never loses the selection.
+ */
+export function selectByBand(boxes: PromptBox[], hit: Set<string>, additive: boolean): PromptBox[] {
+  if (hit.size === 0) return boxes;
+  return boxes.map((b) => {
+    const selected = hit.has(b.id) || (additive && b.selected);
+    return selected === b.selected ? b : { ...b, selected };
+  });
 }
