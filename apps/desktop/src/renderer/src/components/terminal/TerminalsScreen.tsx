@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { agentLabel, basename } from '../../lib/format.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
+import { latestProblems, useProblems } from '../../lib/problems.ts';
 import { SavedCommands } from './SavedCommands.tsx';
 import { AskBar, HistoryDialog, SuggestionsBar, useTerminalLayout } from './TerminalExtras.tsx';
 import { SmartBlocks } from './SmartBlocks.tsx';
@@ -23,12 +24,18 @@ export function StatusBar({ terminal }: { terminal: TerminalInfo }) {
   const blocks = useTerminals((t) => t.blocks[terminal.id] ?? EMPTY);
   const lastDone = [...blocks].reverse().find((b) => b.endedAt !== null);
   const running = blocks.find((b) => b.endedAt === null);
+  const problems = useProblems((p) => latestProblems(p.byBlock, terminal.id, blocks));
   const segments: { key: string; text: string; tone?: string }[] = [];
   segments.push({ key: 'loc', text: `${workspace?.name ?? ''} / ${basename(terminal.cwd)}` });
   if (session?.branch) segments.push({ key: 'git', text: session.branch });
   if (session) segments.push({ key: 'session', text: `${agentLabel(session.agentId)} · ${STATE_LABELS[session.state].toLowerCase()} · ${session.sandboxState.replace('-', ' ')}`, tone: session.state === 'waiting-on-user' ? 'text-attention' : undefined });
   if (running) segments.push({ key: 'proc', text: running.command });
   if (lastDone) segments.push({ key: 'exit', text: `last exit ${lastDone.exitCode}`, tone: lastDone.exitCode ? 'text-danger' : undefined });
+  // SM-18: the latest finished block that has problems.
+  if (problems) {
+    const fresh = problems.previousAt !== null && problems.counts.new > 0;
+    segments.push({ key: 'problems', text: `problems ${problems.counts.total}${fresh ? ` · ${problems.counts.new} new` : ''}`, tone: fresh ? 'text-attention' : undefined });
+  }
   if (terminal.agentState !== 'none') segments.push({ key: 'agent', text: `agent ${terminal.agentState}`, tone: terminal.agentState === 'waiting' ? 'text-attention' : undefined });
   if (session) segments.push({ key: 'usage', text: usage?.inputTokens != null ? `${usage.inputTokens.toLocaleString('en-GB')} tokens` : 'usage not reported', tone: 'text-ink-muted' });
   if (session?.workItemRef) segments.push({ key: 'wi', text: session.workItemRef });

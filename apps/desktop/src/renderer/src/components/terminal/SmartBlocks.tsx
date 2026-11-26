@@ -8,6 +8,7 @@ import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
 import { runInTerminal, sendChecked } from '../../lib/guards.ts';
 import { InlineViewer } from './InlineViewer.tsx';
+import { BlockProblems } from './BlockProblems.tsx';
 
 const LINK = /(https?:\/\/[^\s'"<>]+)|((?:[A-Za-z]:)?[\w./\\-]+\.[A-Za-z0-9]{1,8}):(\d+)(?::(\d+))?/g;
 
@@ -127,6 +128,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                 </pre>
               ) : null}
               {!isCollapsed && done ? <InlineViewer block={b} cwd={b.cwd ?? terminal?.cwd ?? null} /> : null}
+              {!isCollapsed && done ? <BlockProblems terminalId={terminalId} blockId={b.id} /> : null}
               {done ? (
                 <div className="flex flex-wrap gap-2 font-sans text-[13px]">
                   {failed ? (

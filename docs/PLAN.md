@@ -244,7 +244,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M11-T04** Renderer logic: `lib/problems.ts` (`recordBlock`, per-block state), the extended
       `onBlockFinished` listener in `App.tsx`, `openEditor` with a line. Done when a block with problems
       has state in the store in `pnpm dev` and SM-11 history still records.
-- [ ] **M11-T05** Renderer UI: `BlockProblems.tsx` in `SmartBlocks`, the status-bar segment, two palette
+- [x] **M11-T05** Renderer UI: `BlockProblems.tsx` in `SmartBlocks`, the status-bar segment, two palette
       commands; `e2e/sm18-problems.spec.ts`. Done when the spec and the three existing terminal specs pass
       on Windows against the production build and the development renderer.
 - [ ] **M11-T06** Verify and record: the ConPTY long-line fixture, `FileChange.path` form, real output of

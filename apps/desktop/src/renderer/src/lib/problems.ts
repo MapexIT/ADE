@@ -1,9 +1,10 @@
 import type { CommandBlock, Problem, TerminalInfo } from '@ade/contracts';
-import { commandKey, countRows, diffProblems, extractProblems, tagProblems, type ProblemCounts, type TaggedRow } from '@ade/shell-integration/problems';
+import { commandKey, countRows, diffProblems, extractProblems, problemsAsText, tagProblems, type ProblemCounts, type TaggedRow } from '@ade/shell-integration/problems';
 import { create } from 'zustand';
 import { host } from './bridge.ts';
-import { clock } from './format.ts';
-import { useStore } from './store.ts';
+import { attachmentText, clock } from './format.ts';
+import { sendChecked } from './guards.ts';
+import { attempt, useStore } from './store.ts';
 
 /** SM-18: what ADE found in one finished block, compared with the previous run of the same command. */
 export interface BlockProblemsState {
@@ -109,3 +110,40 @@ export function latestProblems(byBlock: Record<string, BlockProblemsState>, term
   }
   return null;
 }
+
+const newProblems = (state: BlockProblemsState) => state.rows.filter((r) => r.state === 'new').map((r) => r.problem);
+
+/** "Fix new problems with agent": a turn with only the new problems attached. Offered with a session and new problems. */
+export function fixNewProblems(state: BlockProblemsState) {
+  const sessionId = state.sessionId;
+  const fresh = newProblems(state);
+  if (!sessionId || !fresh.length) return;
+  const text = problemsAsText(state.command, state.exitCode, fresh, 'New problems since the previous run');
+  const one = fresh.length === 1;
+  sendChecked(text, async () => {
+    const ok = await attempt(() =>
+      host.call('sessions.prompt', {
+        sessionId,
+        content: [
+          { type: 'text', text: `${state.command} shows ${one ? 'a new problem' : `${fresh.length} new problems`} since the previous run. Find the cause and fix ${one ? 'it' : 'them'}.` },
+          attachmentText(`New problems: ${state.command}`, text),
+        ],
+      }),
+    );
+    if (ok) useStore.getState().toast('Sent to the agent.');
+  });
+}
+
+/** "Send problems to agent": the visible list goes with the next prompt. */
+export function sendProblems(state: BlockProblemsState, rows: TaggedRow[]) {
+  const sessionId = state.sessionId;
+  if (!sessionId || !rows.length) return;
+  const text = problemsAsText(state.command, state.exitCode, rows.map((r) => r.problem), 'Problems');
+  sendChecked(text, () => {
+    useStore.getState().attach(sessionId, attachmentText(`Problems: ${state.command}`, text));
+    useStore.getState().toast('Attached to the next prompt.');
+  });
+}
+
+/** The rows the block shows: New only when that filter is on. */
+export const visibleRows = (state: BlockProblemsState) => (state.newOnly ? state.rows.filter((r) => r.state === 'new') : state.rows);
