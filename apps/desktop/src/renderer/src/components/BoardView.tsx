@@ -1,4 +1,4 @@
-import { CircleAlert, ExternalLink, Play, RefreshCw, Settings } from 'lucide-react';
+import { CircleAlert, ExternalLink, FolderGit2, Play, RefreshCw, Settings } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, Waiting } from '@ade/ui';
 import type { Board, BoardSettings } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
@@ -16,6 +16,12 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [repos, setRepos] = useState<{ current: string | null; repos: string[] } | null>(null);
+  const [projects, setProjects] = useState<{ projects: { owner: string; number: number; title: string }[]; problem: string | null } | null>(null);
+  const github = settings?.source === 'github';
+  const repo = settings?.githubRepo ?? null;
+  // CO-09: a GitHub board needs a repository first; nothing loads until one is chosen.
+  const needsRepo = github && !repo;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,12 +38,35 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => {
     void host.call('board.settings', { workspaceId }).then(setSettings);
-    void load();
-  }, [workspaceId, load]);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (settings && !needsRepo) void load();
+  }, [settings?.source, repo, settings?.githubProject, needsRepo, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!github || repos) return;
+    void host.call('board.repositories', { workspaceId }).then(setRepos, () => setRepos({ current: null, repos: [] }));
+  }, [github, repos, workspaceId]);
+
+  useEffect(() => {
+    setProjects(null);
+    if (!github || !repo) return;
+    void host.call('board.projects', { repo }).then(setProjects, (err: Error) => setProjects({ projects: [], problem: err.message }));
+  }, [github, repo]);
 
   const save = async (next: BoardSettings) => {
+    if (next.source === 'github' && !next.githubRepo) setBoard(null);
     setSettings(next);
-    if (await attempt(() => host.call('board.save', { workspaceId, settings: next }))) void load();
+    await attempt(() => host.call('board.save', { workspaceId, settings: next }));
+  };
+
+  const chooseRepo = (value: string) => {
+    const next = value.trim();
+    if (!settings || next === (settings.githubRepo ?? '')) return;
+    if (next && !/^[\w.-]+\/[\w.-]+$/.test(next)) return void useStore.getState().toast('Write the repository as owner/name.', 'danger');
+    setBoard(null);
+    void save({ ...settings, githubRepo: next || null, githubOwner: null, githubProject: null });
   };
 
   return (
@@ -54,21 +83,60 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
           {settings.source === 'github' ? (
             <>
               <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
-                Owner
-                <input defaultValue={settings.githubOwner ?? ''} placeholder="@me or an organisation" onBlur={(e) => void save({ ...settings, githubOwner: e.target.value.trim() || null })} className={cx(inputClass, 'min-h-9 w-48')} />
+                Repository
+                <input
+                  key={repo ?? ''}
+                  list="ade-board-repos"
+                  defaultValue={repo ?? ''}
+                  placeholder={repos?.current ?? 'owner/name'}
+                  onBlur={(e) => chooseRepo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') chooseRepo(e.currentTarget.value);
+                  }}
+                  className={cx(inputClass, 'min-h-9 w-64')}
+                />
+                <datalist id="ade-board-repos">
+                  {(repos?.repos ?? []).map((r) => (
+                    <option key={r} value={r} />
+                  ))}
+                </datalist>
               </label>
-              <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
-                Project number
-                <input type="number" min={1} defaultValue={settings.githubProject ?? ''} onBlur={(e) => void save({ ...settings, githubProject: Number(e.target.value) || null })} className={cx(inputClass, 'min-h-9 w-28')} />
-              </label>
+              {repo ? (
+                <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
+                  Project
+                  <select
+                    value={settings.githubOwner && settings.githubProject ? `${settings.githubOwner}/${settings.githubProject}` : ''}
+                    onChange={(e) => {
+                      const hit = projects?.projects.find((p) => `${p.owner}/${p.number}` === e.target.value);
+                      void save({ ...settings, githubOwner: hit?.owner ?? null, githubProject: hit?.number ?? null });
+                    }}
+                    className={cx(inputClass, 'min-h-9 w-56')}
+                  >
+                    <option value="">Open issues and pull requests</option>
+                    {(projects?.projects ?? []).map((p) => (
+                      <option key={`${p.owner}/${p.number}`} value={`${p.owner}/${p.number}`}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </>
           ) : null}
-          <Button busy={loading} icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading} onClick={() => void load()}>
+          <Button busy={loading} icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading || needsRepo} onClick={() => void load()}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
         </div>
       ) : null}
-      {problem ? (
+      {github && repo && projects?.problem ? <p className="m-0 text-[12px] text-ink-muted">{projects.problem}</p> : null}
+      {needsRepo ? (
+        <EmptyState
+          icon={<FolderGit2 className="size-5" />}
+          title="Choose a repository"
+          body={repos?.current ? `Pick a repository above to see its board. This workspace is ${repos.current}.` : 'Pick a repository above to see its board.'}
+          action={repos?.current ? <Button onClick={() => chooseRepo(repos.current!)}>Use {repos.current}</Button> : undefined}
+        />
+      ) : problem ? (
         <>
           <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button icon={<Settings className="size-4" aria-hidden="true" />} onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
           {settings ? <ConnectionGuide key={settings.source} source={settings.source} onChecked={() => void load()} /> : null}
