@@ -235,7 +235,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       in `docs/FEATURES.md`, the decision row, VERIFY items and open questions in `docs/DECISIONS.md`,
       section 6 and the data model in `docs/ARCHITECTURE.md`, screen 2 in `docs/UI.md`, this milestone.
       Done when `apps/desktop/test/help.test.ts` passes with 163 features.
-- [ ] **M11-T02** Contracts (`Problem`, `ProblemSnapshot`, `problems.record`, `CommandBlock.truncated`)
+- [x] **M11-T02** Contracts (`Problem`, `ProblemSnapshot`, `problems.record`, `CommandBlock.truncated`)
       and the pure module `packages/shell-integration/src/problems.ts` behind the `./problems` export,
       with `test/problems.test.ts`; `BlockBuilder` sets `truncated`. Done when unit cases 1 to 41 pass on
       Windows and Ubuntu.

@@ -365,6 +365,36 @@ export const HistoryEntry = z.object({
 });
 export type HistoryEntry = z.infer<typeof HistoryEntry>;
 
+/** SM-18: one problem ADE recognised in a finished command block (an error, a warning or a failed test). */
+export const ProblemTool = z.enum(['tsc', 'eslint', 'cc', 'msbuild', 'rustc', 'python', 'pytest', 'jstest', 'gotest']);
+export type ProblemTool = z.infer<typeof ProblemTool>;
+export const Problem = z.object({
+  tool: ProblemTool,
+  severity: z.enum(['error', 'warning', 'failure']),
+  /** Relative to the worktree root with `/` when `inside`; otherwise the path as the tool printed it. */
+  path: z.string().max(1024).nullable(),
+  inside: z.boolean(),
+  line: z.number().int().positive().nullable(),
+  column: z.number().int().positive().nullable(),
+  code: z.string().max(200).nullable(),
+  message: z.string().max(500),
+  /** Tool, path and code (or the normalised message); never the line, so a moved problem keeps its identity. */
+  fingerprint: z.string().max(1500),
+});
+export type Problem = z.infer<typeof Problem>;
+
+/** SM-18: the problems of one run of a command in one scope (a session worktree, or the checkout when null). */
+export const ProblemSnapshot = z.object({
+  commandKey: z.string().max(500),
+  sessionId: z.string().nullable(),
+  exitCode: z.number().int().nullable(),
+  turnCount: z.number().int().nullable(),
+  cut: z.boolean(),
+  at: z.string(),
+  problems: z.array(Problem).max(500),
+});
+export type ProblemSnapshot = z.infer<typeof ProblemSnapshot>;
+
 /** SM-13: the terminals of a workspace with their scrollback, restored on request. */
 export const TerminalLayout = z.object({
   terminals: z
@@ -921,6 +951,8 @@ export const CommandBlock = z.object({
   endedAt: z.number().nullable(),
   exitCode: z.number().int().nullable(),
   output: z.string(),
+  /** SM-18: the output passed the size cap and its head was dropped. */
+  truncated: z.boolean().default(false),
 });
 export type CommandBlock = z.infer<typeof CommandBlock>;
 
