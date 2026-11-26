@@ -80,8 +80,10 @@ export function incoming(wf: Workflow, nodeId: string): IndexedEdge[] {
 const backCache = new WeakMap<Workflow, Set<number>>();
 
 /**
- * WF-17: the edges that close a cycle, found by a depth-first walk from the first node in edge order (then from any
- * node not reached). Every cycle has exactly one, and the run follows it at most its `maxRounds` times.
+ * WF-17: the edges that close a cycle, found by a depth-first walk in edge order: first from every node nothing leads
+ * into (in the order listed), then from any node not reached yet, in the order listed. Every cycle has exactly one,
+ * and the run follows it at most its `maxRounds` times. Walking from the true starts first means a cycle is entered
+ * where a start leads into it, so its first step there is not mistaken for a step the run starts with.
  */
 export function backEdges(wf: Workflow): Set<number> {
   const cached = backCache.get(wf);
@@ -97,6 +99,8 @@ export function backEdges(wf: Workflow): Set<number> {
     }
     state.set(id, 'done');
   };
+  const led = new Set(wf.edges.map((e) => e.to));
+  for (const n of wf.nodes) if (!led.has(n.id) && !state.has(n.id)) visit(n.id);
   for (const n of wf.nodes) if (!state.has(n.id)) visit(n.id);
   backCache.set(wf, back);
   return back;
@@ -143,9 +147,15 @@ export function roundLimit(wf: Workflow, edgeIndex: number, cycleNodes?: string[
   return loops.length ? Math.max(...loops.map((l) => l.max)) : 1;
 }
 
-/** The first node listed runs first. (It may sit inside a retry cycle, so "no incoming edge" is not a rule.) */
-export function startNode(wf: Workflow): WorkflowNode | null {
-  return wf.nodes[0] ?? null;
+/**
+ * WF-18: the steps a run starts with: every step whose only inputs, if any, are back edges of cycles (so the first
+ * step inside a retry cycle still counts). They all start together when the run starts. When no step qualifies, the
+ * first step listed starts, as before; an empty workflow has none.
+ */
+export function startNodes(wf: Workflow): WorkflowNode[] {
+  const back = backEdges(wf);
+  const starts = wf.nodes.filter((n) => incoming(wf, n.id).every((e) => back.has(e.index)));
+  return starts.length ? starts : wf.nodes.slice(0, 1);
 }
 
 /** Structural rules beyond the schema. Errors block running; warnings are shown in the editor. */
@@ -162,12 +172,12 @@ export function validate(wf: Workflow): Problem[] {
   }
   if (problems.length) return problems;
 
-  const start = startNode(wf);
-  if (!start) return [{ level: 'error', message: 'This workflow has no steps yet. Add a first step from the palette.' }];
+  const starts = startNodes(wf).map((n) => n.id);
+  if (!starts.length) return [{ level: 'error', message: 'This workflow has no steps yet. Add a first step from the palette.' }];
 
-  // Reachability.
-  const seen = new Set<string>([start.id]);
-  const queue = [start.id];
+  // Reachability from every start.
+  const seen = new Set<string>(starts);
+  const queue = [...starts];
   while (queue.length) {
     const id = queue.shift()!;
     for (const e of outgoing(wf, id)) {
@@ -181,7 +191,7 @@ export function validate(wf: Workflow): Problem[] {
   const byId = new Map(wf.nodes.map((n) => [n.id, n]));
   // A gate must stand between the last agent and any land node, on every path (docs/ARCHITECTURE.md section 8).
   const visited = new Set<string>();
-  const stack: { id: string; gated: boolean }[] = [{ id: start.id, gated: true }];
+  const stack: { id: string; gated: boolean }[] = starts.map((id) => ({ id, gated: true }));
   while (stack.length) {
     const { id, gated: before } = stack.pop()!;
     const node = byId.get(id)!;
