@@ -19,6 +19,8 @@ const host = createHost({
   nodeEnv: { ELECTRON_RUN_AS_NODE: '1' },
   ...(process.env.ADE_FAKE_AGENT_ENTRY ? { fakeAgentEntry: process.env.ADE_FAKE_AGENT_ENTRY } : {}),
   runnerMcpEntry: join(__dirname, 'runner-mcp.js'),
+  // AP-07: end-to-end runs (the fake agent) must not reach the user's real GitHub account.
+  reviewRequests: !process.env.ADE_FAKE_AGENT_ENTRY,
 });
 
 type Publish = ReturnType<typeof createPublisher<typeof hostTopics>>;
