@@ -98,8 +98,18 @@ export function toRelative(printed: string, ctx: PathContext): { path: string; i
   const a = drive ? full.toLowerCase() : full;
   const b = drive ? root.toLowerCase() : root;
   if (a.startsWith(`${b}/`) && full.length > root.length + 1) return { path: full.slice(root.length + 1), inside: true };
+  if (drive) {
+    // Windows spells one folder two ways: ADE may hold an 8.3 short name (`C:/Users/ABCDEF~1/...`, from TEMP) while the
+    // shell reports the long one. A short-name segment matches any segment in the same place.
+    const fs = full.split('/');
+    const rs = root.split('/');
+    const same = (x: string, y: string) => x.toLowerCase() === y.toLowerCase() || SHORT_NAME.test(x) || SHORT_NAME.test(y);
+    if (fs.length > rs.length && rs.every((r, i) => same(r, fs[i]!))) return { path: fs.slice(rs.length).join('/'), inside: true };
+  }
   return { path: raw, inside: false };
 }
+
+const SHORT_NAME = /^[^.~\s]{1,6}~\d{1,6}(?:\.[^.\s]{0,3})?$/;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Identity

@@ -277,6 +277,14 @@ describe('paths', () => {
     expect(toRelative('x.ts', { cwd: '/c/repo/sub', root: 'C:\\repo' })).toEqual({ path: 'sub/x.ts', inside: true });
   });
 
+  it('23b. an 8.3 short name in the root matches the long name the shell reports (Windows only)', () => {
+    const root = 'C:\\Users\\ABCDEF~1\\AppData\\Local\\Temp\\ade\\worktrees\\s1';
+    expect(toRelative('src/b.ts', { cwd: 'C:/Users/Ábcdéfgh/AppData/Local/Temp/ade/worktrees/s1', root })).toEqual({ path: 'src/b.ts', inside: true });
+    expect(toRelative('C:\\Users\\Ábcdéfgh\\AppData\\Local\\Temp\\ade\\worktrees\\s1\\a.ts', { cwd: null, root })).toEqual({ path: 'a.ts', inside: true });
+    expect(toRelative('a.ts', { cwd: 'C:/Users/Ábcdéfgh/AppData/Local/Temp/ade/worktrees/s2', root }).inside).toBe(false);
+    expect(toRelative('/home/ABCDEF~1/repo/a.ts', { cwd: null, root: '/home/abcdefgh/repo' }).inside).toBe(false);
+  });
+
   it('24. a POSIX root is case-sensitive', () => {
     expect(toRelative('/home/dev/Repo/a.ts', POSIX).inside).toBe(false);
   });
