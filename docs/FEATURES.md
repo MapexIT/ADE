@@ -150,7 +150,7 @@ Linux.
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
 | CR-01 | Run configurations | MVP | Detects run, test and build commands from project manifests; the user can edit them and add their own. |
-| CR-02 | Run bar | MVP | Run button, configuration picker and worktree picker; a run executes in the chosen worktree. |
+| CR-02 | Run bar | MVP | Run button, configuration picker and worktree picker; a run executes in the chosen worktree. Pressing Run (here, in the scratchpad or from the editor) switches to the output at once and shows Starting <name> with a waiting animation until the program first prints or ends. |
 | CR-03 | Run output | MVP | Every run is a smart terminal block with exit code, duration and clickable stack traces, and a row in run history. |
 | CR-04 | Send run to agent | MVP | One action attaches a run's command, output and result to the next prompt. |
 | CR-05 | Run file and selection | v1 | Run the current file or selection with the right interpreter. |
@@ -168,7 +168,7 @@ Linux.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| CO-01 | Work item panel | MVP | Browse and search Shortcut stories and GitHub issues assigned to the user, by iteration, epic or project. Read scope only. |
+| CO-01 | Work item panel | MVP | Browse and search Shortcut stories and GitHub issues assigned to the user, by iteration, epic or project. GitHub issues (Assigned to me) are picked by repository first: a list of the repositories with assigned issues and their counts, then that repository's issues by state, with All repositories to go back. Read scope only. |
 | CO-02 | Start from a work item | MVP | Opens the composer with title, description and acceptance criteria attached, shown for review before sending. |
 | CO-03 | Branch naming | MVP | The session branch is named from the work item; Shortcut items use the `sc-<id>` form. |
 | CO-04 | Linked sessions | MVP | A session shows its work item; the panel shows which items have sessions. |
