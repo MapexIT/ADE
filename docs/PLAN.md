@@ -253,3 +253,10 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [ ] **M12-T06** Tick the boxes, record under the tasks what was and was not verified (real agents' request
       titles and command text, Ubuntu CI), and answer or keep each open question in `docs/DECISIONS.md`.
       Done when CI is green on Windows and Ubuntu.
+      Verified with the fake agent only, on Windows: unit tests for the anatomy, matcher, shapes, folds and copy
+      (`packages/session-core/test/rule-advice*.test.ts`); 11 host tests covering the 14 planned cases
+      (`apps/desktop/test/rule-advice.test.ts`, 4,000 events in about 40 ms); the chained-command case in
+      `rules-inplace.test.ts`; `e2e/rule-suggestions.spec.ts` against the production build and the development
+      renderer. What the Claude Code and Codex adapters send was read from the installed packages (see the facts
+      in `docs/DECISIONS.md`). Not yet verified: CI on Ubuntu (the branch is not pushed), OpenCode's request
+      text, and real sessions' command phrasing against the thresholds (open questions kept).
