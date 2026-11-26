@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, type NativeImage } from 'electron';
 import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
 import { isLocalPreviewUrl } from './preview.ts';
 import { SmokeRun, type SmokeCheck, type SmokeReport } from './smoke.ts';
@@ -13,6 +13,24 @@ import { ProcessSupervisor, type ProcessName } from './supervisor.ts';
 if (process.env.ADE_USER_DATA_DIR) app.setPath('userData', process.env.ADE_USER_DATA_DIR);
 const userData = app.getPath('userData');
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, '../../resources');
+
+// PL-05: notifications and the tray carry the ADE icon. On Windows the toast belongs to the app's user model ID: the
+// installer's shortcut uses the appId from electron-builder.yml; in development Electron's own executable stands in.
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'dev.mapexit.ade' : process.execPath);
+
+let iconCache: NativeImage | null = null;
+const appIcon = () => (iconCache ??= nativeImage.createFromPath(join(resources, 'icon.png')));
+
+/** The ADE icon sized for the tray (16 px on Windows, 22 px on Linux), with a sharp 2x version for HiDPI screens. */
+function trayIcon(): NativeImage {
+  const size = process.platform === 'win32' ? 16 : 22;
+  const icon = appIcon();
+  const image = nativeImage.createEmpty();
+  for (const scaleFactor of [1, 2]) {
+    image.addRepresentation({ scaleFactor, buffer: icon.resize({ width: size * scaleFactor, height: size * scaleFactor, quality: 'best' }).toPNG() });
+  }
+  return image;
+}
 const devFakeAgent = !app.isPackaged || process.env.ADE_ENABLE_FAKE_AGENT === '1';
 
 let window: BrowserWindow | null = null;
@@ -108,7 +126,7 @@ function updateTray() {
     return;
   }
   if (!tray) {
-    tray = new Tray(join(resources, 'icon.png'));
+    tray = new Tray(trayIcon());
     tray.on('click', showWindow);
   }
   tray.setToolTip(`ADE · ${background.live} running`);
@@ -124,7 +142,7 @@ function updateTray() {
 /** AP-05: a desktop notification; clicking it focuses that session. Skipped while the window has focus. */
 function notify(title: string, body: string, sessionId?: string, inbox = false) {
   if (!Notification.isSupported() || window?.isFocused()) return;
-  const n = new Notification({ title, body, silent: false });
+  const n = new Notification({ title, body, silent: false, icon: appIcon() });
   n.on('click', () => {
     showWindow();
     if (sessionId) publish('focus.session', { sessionId });
