@@ -28,7 +28,7 @@ const smokeChecks = (m: unknown): SmokeCheck[] | null => {
   return msg?.type === 'smoke-result' && Array.isArray(msg.checks) ? msg.checks : null;
 };
 
-const publish = (topic: 'process.status' | 'focus.session', payload: unknown) => {
+const publish = (topic: 'process.status' | 'focus.session' | 'focus.inbox', payload: unknown) => {
   window?.webContents.send('ade:main-event', { topic, payload });
 };
 
@@ -48,7 +48,7 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     onMessage: (msg) => {
       const checks = smokeChecks(msg);
       if (checks) return smoke?.add('host', checks);
-      const m = msg as { type?: string; sessionId?: string; title?: string; body?: string; live?: number; keepRunning?: boolean; id?: number; action?: string; args?: Record<string, string> };
+      const m = msg as { type?: string; sessionId?: string; target?: string; title?: string; body?: string; live?: number; keepRunning?: boolean; id?: number; action?: string; args?: Record<string, string> };
       if (m.type === 'preview-request' && m.id !== undefined) {
         void drivePreview(m.action ?? '', m.args ?? {}).then(
           (result) => supervisors.host.post({ type: 'preview-response', id: m.id, ok: true, result }),
@@ -56,6 +56,7 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
         );
       }
       if (m.type === 'notify' && m.sessionId) notify(m.title ?? 'ADE', m.body ?? '', m.sessionId);
+      else if (m.type === 'notify' && m.target === 'inbox') notify(m.title ?? 'ADE', m.body ?? '', undefined, true);
       if (m.type === 'background') {
         background = { live: m.live ?? 0, keepRunning: m.keepRunning !== false };
         updateTray();
@@ -121,12 +122,13 @@ function updateTray() {
 }
 
 /** AP-05: a desktop notification; clicking it focuses that session. Skipped while the window has focus. */
-function notify(title: string, body: string, sessionId?: string) {
+function notify(title: string, body: string, sessionId?: string, inbox = false) {
   if (!Notification.isSupported() || window?.isFocused()) return;
   const n = new Notification({ title, body, silent: false });
   n.on('click', () => {
     showWindow();
     if (sessionId) publish('focus.session', { sessionId });
+    else if (inbox) publish('focus.inbox', {});
   });
   n.show();
 }

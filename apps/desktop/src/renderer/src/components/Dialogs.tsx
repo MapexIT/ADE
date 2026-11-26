@@ -1,4 +1,4 @@
-import { Bot, Check, CircleAlert, CircleHelp, CirclePause, Download, FolderGit2, FolderOpen, Gauge, GitPullRequest, Hand, Info, MessagesSquare, Navigation, Repeat, RefreshCw, Save, ShieldQuestion, SquareTerminal, Trash2, Unplug, type LucideIcon } from 'lucide-react';
+import { Bot, Check, CircleAlert, CircleHelp, CirclePause, Download, ExternalLink, FolderGit2, FolderOpen, Gauge, GitMerge, GitPullRequest, Hand, Info, MessagesSquare, Navigation, Repeat, RefreshCw, Save, ShieldQuestion, SquareTerminal, Trash2, Unplug, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
 import { LoopSettings, ReceiptSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
@@ -85,7 +85,46 @@ const KINDS: Record<string, { label: string; icon: LucideIcon }> = {
   paused: { label: 'Workflow paused', icon: CirclePause },
   loop: { label: 'May be looping', icon: Repeat },
   review: { label: 'Review requested', icon: GitPullRequest },
+  reviewed: { label: 'Reviewed', icon: GitMerge },
 };
+
+const PR_KINDS = new Set(['review', 'reviewed']);
+
+/**
+ * AP-08: Squash and merge for one of your reviewed pull requests. Two presses, like GitHub: the first arms the
+ * button for a few seconds, the second merges. Dismiss hides the item until someone reviews it again.
+ */
+function ReviewedActions({ url }: { url: string }) {
+  const toast = useStore((s) => s.toast);
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const merge = async () => {
+    if (!armed) return setArmed(true);
+    setBusy(true);
+    const ok = await attempt(() => host.call('github.squashMerge', { url }));
+    setBusy(false);
+    setArmed(false);
+    if (ok) toast('Squashed and merged on GitHub.');
+  };
+  return (
+    <div className="flex flex-wrap gap-2 pt-2 pl-7">
+      <Button size="dense" variant="primary" busy={busy} icon={<GitMerge className="size-4" aria-hidden="true" />} onClick={() => void merge()}>
+        {armed ? 'Confirm squash and merge' : 'Squash and merge'}
+      </Button>
+      <Button size="dense" variant="ghost" icon={<ExternalLink className="size-4" aria-hidden="true" />} onClick={() => void attempt(() => main('main.openExternal', { url }))}>
+        Open on GitHub
+      </Button>
+      <Button size="dense" variant="ghost" onClick={() => void attempt(() => host.call('github.dismissReview', { url }))}>
+        Dismiss
+      </Button>
+    </div>
+  );
+}
 
 export function InboxDialog() {
   const open = useStore((s) => s.inboxOpen);
@@ -100,7 +139,7 @@ export function InboxDialog() {
     ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, runId: null, url: null, requestId: null })),
   ];
   const go = (sessionId: string | null, runId: string | null = null, url: string | null = null) => {
-    // AP-07: a pull request waiting on your review opens on GitHub.
+    // AP-07, AP-08: pull requests open on GitHub.
     if (url) return void attempt(() => main('main.openExternal', { url }));
     if (runId) return set({ inboxOpen: false, tab: 'workflows', focusRunId: runId });
     if (sessionId) selectSession(sessionId);
@@ -142,15 +181,16 @@ export function InboxDialog() {
                 onClick={() => go(it.sessionId, it.runId, it.url)}
                 className={cx('flex w-full items-start gap-3 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}
               >
-                <Icon className={cx('mt-0.5 size-4 shrink-0', it.kind === 'review' ? 'text-accent-soft' : 'text-ink-muted')} aria-hidden="true" />
+                <Icon className={cx('mt-0.5 size-4 shrink-0', PR_KINDS.has(it.kind) ? 'text-accent-soft' : 'text-ink-muted')} aria-hidden="true" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="font-semibold">{it.title}</span>
                   <span className="truncate text-ink-muted">{it.sub}</span>
                 </span>
-                <Badge tone={it.kind === 'review' ? 'accent' : 'neutral'} className="shrink-0">
+                <Badge tone={PR_KINDS.has(it.kind) ? 'accent' : 'neutral'} className="shrink-0">
                   {kind.label}
                 </Badge>
               </button>
+              {it.kind === 'reviewed' && it.url ? <ReviewedActions url={it.url} /> : null}
             </li>
           );
         })}
