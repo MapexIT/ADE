@@ -250,6 +250,13 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [ ] **M11-T06** Verify and record: the ConPTY long-line fixture, `FileChange.path` form, real output of
       `tsc`, `eslint`, `pytest` and `cargo` pasted into fixtures; tick the boxes and note what was and was
       not verified (Ubuntu CI, Git Bash, zsh, fish). Done when CI is green on Windows and Ubuntu.
+      Verified on Windows: the ConPTY long-line behaviour (captured with node-pty, kept as fixtures, broken wraps
+      rejoined), the `FileChange.path` form, real output of tsc 6.0 (both forms), eslint 9 stylish, Python 3.15
+      tracebacks and vitest 5.1 in the fixtures; unit, host and end-to-end tests (production build and development
+      renderer, plus the existing terminal specs). Not verified: pytest, cargo, gcc/clang, MSBuild and go test
+      fixtures are written from their documented formats, not captured (those tools are not installed here); CI on
+      Ubuntu (the branch is not pushed); Git Bash, PowerShell 7, zsh and fish end to end (covered by path unit tests
+      only).
 
 ## M12 - Rule suggestions and rehearsal
 
