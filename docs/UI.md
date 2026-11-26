@@ -55,7 +55,7 @@ Default to three visible regions at most. Everything else opens on demand and re
 
 | # | Screen | Purpose |
 | --- | --- | --- |
-| 1 | Main workspace | Sessions list, timeline with plan, approval card, turn receipt, composer (Chat or Board, generation method), inspector, terminal strip |
+| 1 | Main workspace | Sessions list, timeline with plan, approval card, rule suggestion under a decided approval, turn receipt, composer (Chat or Board, generation method), inspector, terminal strip |
 | 2 | Smart terminal | Terminal list, command blocks, suggested command, status bar, agent terminal with attention ring, plain terminal |
 | 3 | Review and land | Changed files, per-turn selector, side-by-side diff, comment to agent, review assistant, receipts to check, landing actions |
 | 4 | Workflow canvas | Node palette, skills list, node graph, run strip, node settings with skills |
@@ -79,3 +79,5 @@ Default to three visible regions at most. Everything else opens on demand and re
   loading lines use `Waiting` (three breathing violet dots, fading in after 150 ms). Both stand still under
   reduced motion. Do not add other loading animations.
 - Empty states say what the area is for and offer the one obvious next action.
+- A rule suggestion (AP-09) never uses the attention tint and never appears on a pending approval. Settings
+  shows suggested rules above the workspace rules and a rehearsal line under each rule.

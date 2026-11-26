@@ -61,6 +61,8 @@ ade/
 | `audit_log` | id, ts, workspace_id, session_id, actor, action, detail_json (append-only) |
 | `settings` | key, value_json |
 
+An index on `events(type, session_id)` serves reads of one event type across a workspace's sessions (AP-09).
+
 Secrets are never stored in SQLite. Large terminal output is stored as files under the app data folder with
 a reference in the row.
 
@@ -135,6 +137,11 @@ The host sandbox (CN-07, `apps/desktop/src/host/containment.ts`) makes a session
 Known today: Claude Code's sandbox covers shell commands on Linux, macOS and WSL2 and does not exist on
 native Windows; OpenCode has no sandbox. `VERIFY` Codex's sandbox on Windows and Linux and how each adapter
 accepts sandbox and permission-mode settings at launch.
+
+Workspace rules (AP-06) are matched by `packages/session-core/src/rule-advice.ts`, which is chain-safe: a wildcard
+allow rule answers a multi-step command only when every step is allowed. The host's rule advice service
+(`apps/desktop/src/host/rule-advice.ts`, AP-09) derives rule suggestions and rehearsals from the stored
+`permission.requested` and `permission.decided` events, with no model call.
 
 ## 5. Worktrees, checkpoints and landing (`packages/git`)
 
