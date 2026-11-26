@@ -1,4 +1,4 @@
-import { Bot, Check, CircleAlert, Download, FolderGit2, FolderOpen, Info, MessagesSquare, Navigation, RefreshCw, Save, SquareTerminal, Trash2, type LucideIcon } from 'lucide-react';
+import { Bot, Check, CircleAlert, CircleHelp, CirclePause, Download, FolderGit2, FolderOpen, Gauge, GitPullRequest, Hand, Info, MessagesSquare, Navigation, Repeat, RefreshCw, Save, ShieldQuestion, SquareTerminal, Trash2, Unplug, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
 import { LoopSettings, ReceiptSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
@@ -74,16 +74,17 @@ export function CommandPalette() {
 }
 
 /** AP-04: one keyboard-driven list of everything waiting on the user. */
-const KIND_LABELS: Record<string, string> = {
-  question: 'Question',
-  permission: 'Approval',
-  terminal: 'Terminal',
-  'setup-failed': 'Setup failed',
-  interrupted: 'Interrupted',
-  limit: 'Limit reached',
-  gate: 'Workflow gate',
-  paused: 'Workflow paused',
-  loop: 'May be looping',
+const KINDS: Record<string, { label: string; icon: LucideIcon }> = {
+  question: { label: 'Question', icon: CircleHelp },
+  permission: { label: 'Approval', icon: ShieldQuestion },
+  terminal: { label: 'Terminal', icon: SquareTerminal },
+  'setup-failed': { label: 'Setup failed', icon: CircleAlert },
+  interrupted: { label: 'Interrupted', icon: Unplug },
+  limit: { label: 'Limit reached', icon: Gauge },
+  gate: { label: 'Workflow gate', icon: Hand },
+  paused: { label: 'Workflow paused', icon: CirclePause },
+  loop: { label: 'May be looping', icon: Repeat },
+  review: { label: 'Review requested', icon: GitPullRequest },
 };
 
 export function InboxDialog() {
@@ -95,10 +96,12 @@ export function InboxDialog() {
   const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
   const [index, setIndex] = useState(0);
   const items = [
-    ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, runId: i.runId ?? null, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
-    ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, runId: null, requestId: null })),
+    ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, runId: i.runId ?? null, url: i.url ?? null, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
+    ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, runId: null, url: null, requestId: null })),
   ];
-  const go = (sessionId: string | null, runId: string | null = null) => {
+  const go = (sessionId: string | null, runId: string | null = null, url: string | null = null) => {
+    // AP-07: a pull request waiting on your review opens on GitHub.
+    if (url) return void attempt(() => main('main.openExternal', { url }));
     if (runId) return set({ inboxOpen: false, tab: 'workflows', focusRunId: runId });
     if (sessionId) selectSession(sessionId);
     set({ inboxOpen: false, tab: 'sessions' });
@@ -111,7 +114,7 @@ export function InboxDialog() {
     void attempt(() => host.call('sessions.answerPermission', { sessionId, requestId, optionId: option.optionId }));
   };
   return (
-    <Modal open={open} onOpenChange={(o) => set({ inboxOpen: o })} title="Needs you" description="Arrow keys move, Enter opens, A allows once, R rejects.">
+    <Modal open={open} onOpenChange={(o) => set({ inboxOpen: o })} title="Needs you" description="Arrow keys move, Enter opens (pull requests open on GitHub), A allows once, R rejects.">
       <ul
         role="listbox"
         aria-label="Needs you"
@@ -122,23 +125,35 @@ export function InboxDialog() {
           const cur = items[index];
           if (e.key === 'ArrowDown') setIndex((i) => Math.min(items.length - 1, i + 1));
           else if (e.key === 'ArrowUp') setIndex((i) => Math.max(0, i - 1));
-          else if (e.key === 'Enter' && cur) go(cur.sessionId, cur.runId);
+          else if (e.key === 'Enter' && cur) go(cur.sessionId, cur.runId, cur.url);
           else if ((e.key === 'a' || e.key === 'r') && cur?.requestId && cur.sessionId) answer(cur.sessionId, cur.requestId, e.key === 'a' ? 'allow' : 'reject');
           else return;
           e.preventDefault();
         }}
       >
         {items.length === 0 ? <li className="p-2 text-ink-muted">Nothing is waiting on you.</li> : null}
-        {items.map((it, i) => (
-          <li key={it.key} role="option" aria-selected={i === index}>
-            <button type="button" onClick={() => go(it.sessionId, it.runId)} className={cx('flex w-full flex-col gap-0.5 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}>
-              <span className="font-semibold">{it.title}</span>
-              <span className="text-ink-muted">
-                {it.sub} · {KIND_LABELS[it.kind]}
-              </span>
-            </button>
-          </li>
-        ))}
+        {items.map((it, i) => {
+          const kind = KINDS[it.kind] ?? { label: it.kind, icon: Info };
+          const Icon = kind.icon;
+          return (
+            <li key={it.key} role="option" aria-selected={i === index} data-kind={it.kind}>
+              <button
+                type="button"
+                onClick={() => go(it.sessionId, it.runId, it.url)}
+                className={cx('flex w-full items-start gap-3 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}
+              >
+                <Icon className={cx('mt-0.5 size-4 shrink-0', it.kind === 'review' ? 'text-accent-soft' : 'text-ink-muted')} aria-hidden="true" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="font-semibold">{it.title}</span>
+                  <span className="truncate text-ink-muted">{it.sub}</span>
+                </span>
+                <Badge tone={it.kind === 'review' ? 'accent' : 'neutral'} className="shrink-0">
+                  {kind.label}
+                </Badge>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </Modal>
   );

@@ -38,6 +38,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { ComposerState, LoopSettings, PromptBoxes, ReceiptSettings, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
 import { changedFiles, diffPatch, ignoredPaths } from '@ade/git';
 import { RECEIPT_EVENTS, ReceiptService } from './receipts.ts';
+import { ReviewRequestWatch } from './review-requests.ts';
 import { WorkItemService } from './work-items.ts';
 import { commandResolver } from './executors.ts';
 import { WorkflowService } from './workflow-service.ts';
@@ -60,6 +61,8 @@ export interface HostConfig {
   homeDir?: string;
   /** RV-12: overrides the GitHub CLI and how it is run (tests only). */
   github?: { gh: string | null; run: Runner };
+  /** AP-07: poll GitHub for pull requests waiting on the user's review. The app turns it on; tests leave it off. */
+  reviewRequests?: boolean;
   /** HI-08: drives the preview window (main implements it); without one, agents get no preview tools. */
   previewDriver?: PreviewDriver;
   /** CR-08: the runner MCP server's entry; when set, sessions get the `ade-runner` tools. */
@@ -220,6 +223,10 @@ export function createHost(config: HostConfig) {
   workflows.connectorAction = (connector, action, ref, text) => sync.runAction(connector, action, ref, text);
   sessions.onCreated = (s) => sync.onSessionCreated(s);
   review.onLanded = (s, action, detail) => sync.onLanded(s, action, detail);
+  // AP-07: pull requests waiting on the user's review, at start-up and every three minutes (needs `gh`, signed in).
+  const reviewRequests = new ReviewRequestWatch({ workspaces: () => repos.workspaces.list(), creds: credentials, run: ghRun, gh, refreshInbox: () => sessions.refreshInbox() });
+  sessions.inboxSources.push(() => reviewRequests.inbox());
+  if (config.reviewRequests) reviewRequests.start();
   // CO-05: a merged pull request lands its session. Checked every five minutes and whenever its status is shown.
   const mergeTimer = setInterval(() => void pullRequests.pollMerges().catch(() => undefined), 5 * 60_000);
   mergeTimer.unref();
@@ -747,6 +754,7 @@ export function createHost(config: HostConfig) {
     },
     async dispose() {
       clearInterval(mergeTimer);
+      reviewRequests.dispose();
       loops.dispose();
       receipts.dispose();
       telegram.dispose();

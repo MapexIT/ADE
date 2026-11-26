@@ -1,6 +1,6 @@
 # Features
 
-159 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+160 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -76,6 +76,7 @@ Linux.
 | AP-04 | Needs-you inbox | MVP | One list of pending approvals and questions across sessions, fully keyboard-driven, with a count in the top bar. |
 | AP-05 | Notifications | MVP | A desktop notification when a session needs the user, finishes or fails; clicking it focuses that session. |
 | AP-06 | Workspace rules | v1 | Allow and deny rules that answer matching requests; every automatic answer is logged. |
+| AP-07 | Review requests in Needs you | v1 | Pull requests where GitHub asks the user for a review join the Needs-you inbox as their own type: a pull-request icon and a violet "Review requested" badge, with the repository and author. ADE asks the GitHub CLI (`gh pr list --search review-requested:@me`) in every workspace folder at start-up and every 3 minutes, only when `gh` is installed and the user is signed in (`gh auth status`, or the GitHub token stored in Settings). Signing out clears them. A pull request in two workspaces shows once. Enter or a click opens it on GitHub. Read-only: ADE never reviews, approves or comments on its own. |
 
 ## Review and land (RV)
 

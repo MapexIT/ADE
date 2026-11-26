@@ -175,7 +175,9 @@ export const NeedsYouItem = z.object({
   /** The session the item belongs to; for workflow items, the run's latest session or an empty string. */
   sessionId: z.string(),
   sessionTitle: z.string(),
-  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused', 'loop']),
+  kind: z.enum(['permission', 'question', 'setup-failed', 'interrupted', 'limit', 'gate', 'paused', 'loop', 'review']),
+  /** AP-07: set for pull requests waiting on the user's review (`sessionId` is then empty). */
+  url: z.string().url().optional(),
   /** Set for workflow gates and paused runs. */
   runId: z.string().optional(),
   nodeId: z.string().optional(),
