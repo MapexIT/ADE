@@ -16,6 +16,13 @@ export interface ActiveRun {
   previewUrl: string | null;
 }
 
+/** Ends the wait for a run that is still starting (by the token of its `startingRun`). */
+const endWait = (token: string) => () => {
+  if (useStore.getState().startingRun?.token === token) useStore.setState({ startingRun: null });
+};
+/** Waits still open per run, ended when the run finishes without printing anything. */
+const waits = new Map<string, () => void>();
+
 /** Runs started from ADE that have not finished; their secrets are masked when the output is stored. */
 const pending = new Map<string, { run: ActiveRun; secrets: string[]; workspaceId: string | null }>();
 
@@ -43,15 +50,37 @@ async function resolveEnv(workspaceId: string | null, envSetId: string | null): 
 }
 
 /**
+ * CR-02: shows the Run tab with a waiting animation straight away, before slow preparation (a scratch folder, a
+ * sandbox, a first compile). Returns a function that ends the wait; `startRun` ends it when the program first
+ * prints, exits or fails to start.
+ */
+export function beginStarting(label: string): () => void {
+  const token = crypto.randomUUID();
+  useStore.setState({ startingRun: { token, label }, tab: 'run' });
+  return () => {
+    if (useStore.getState().startingRun?.token === token) useStore.setState({ startingRun: null });
+  };
+}
+
+/**
  * CR-02, CR-05 to CR-07: starts a program as a run (a pty terminal), shows it in the Run tab and records it in
  * the history when it ends. Used by the run bar, the editor and the scratchpad.
  */
 export async function startRun(o: { command: string[]; cwd: string; sessionId: string | null; configId?: string | null; label: string; envSetId?: string | null; env?: Record<string, string> }) {
   const workspaceId = useStore.getState().workspaceId;
-  const { env, secrets } = await resolveEnv(workspaceId, o.envSetId ?? null);
+  const done = useStore.getState().startingRun?.label === o.label ? endWait(useStore.getState().startingRun!.token) : beginStarting(o.label);
+  const { env, secrets } = await resolveEnv(workspaceId, o.envSetId ?? null).catch(() => ({ env: {}, secrets: [] as string[] }));
   const runId = crypto.randomUUID();
   const res = await attempt(() => pty.call('pty.run', { command: o.command, cwd: o.cwd, sessionId: o.sessionId, runId, env: { ...(o.env ?? {}), ...env } }));
-  if (!res) return null;
+  if (!res) {
+    done();
+    return null;
+  }
+  waits.set(runId, done);
+  const first = subscribeData(res.terminalId, () => {
+    first();
+    done();
+  });
   const run: ActiveRun = { runId, terminalId: res.terminalId, startedAt: new Date().toISOString(), command: o.command, cwd: o.cwd, sessionId: o.sessionId, configId: o.configId ?? null, label: o.label, previewUrl: null };
   pending.set(runId, { run, secrets, workspaceId });
   useTerminals.setState((s) => ({ terminals: { ...s.terminals } }));
@@ -76,6 +105,8 @@ export function wireRuns() {
   if (wired) return;
   wired = true;
   onRunFinished(async (r) => {
+    waits.get(r.runId)?.();
+    waits.delete(r.runId);
     const p = pending.get(r.runId);
     if (!p) return;
     pending.delete(r.runId);

@@ -8,7 +8,7 @@ import { host, main } from '../lib/bridge.ts';
 import { duration } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { rerunCommand, splitFailure } from '../lib/runner.ts';
-import { startRun } from '../lib/runs.ts';
+import { beginStarting, startRun } from '../lib/runs.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { parseTestSummary } from '../lib/terminal-intel.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
@@ -26,10 +26,13 @@ export function ScratchpadPanel() {
   const [code, setCode] = useState<Record<ScratchLanguage, string>>({ javascript: SAMPLES.javascript.code, typescript: SAMPLES.typescript.code, python: SAMPLES.python.code, csharp: SAMPLES.csharp.code });
   const [status, setStatus] = useState<{ sandboxed: boolean; note: string | null } | null>(null);
   const run = async () => {
+    const label = `Scratchpad · ${SAMPLES[language].label}`;
+    // CR-02: switch to the output at once; preparing the folder and sandbox can take a while on the first run.
+    const done = beginStarting(label);
     const prepared = await attempt(() => host.call('scratch.prepare', { language, code: code[language] }));
-    if (!prepared) return;
+    if (!prepared) return done();
     setStatus({ sandboxed: prepared.sandboxed, note: prepared.note });
-    await startRun({ command: prepared.command, cwd: prepared.dir, sessionId: null, label: `Scratchpad · ${SAMPLES[language].label}`, env: prepared.env });
+    await startRun({ command: prepared.command, cwd: prepared.dir, sessionId: null, label, env: prepared.env });
   };
   return (
     <section aria-label="Scratchpad" className="flex min-h-0 flex-1 flex-col gap-2 p-3">

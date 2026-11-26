@@ -16,6 +16,9 @@ test('M7-T05: scratchpad snippet; an environment set with a masked secret; two r
   // CR-07: the sample JavaScript snippet runs in a temporary folder.
   await page.getByRole('tab', { name: 'Scratchpad' }).click();
   await page.getByRole('button', { name: 'Run snippet' }).click();
+  // CR-02: the output shows at once, and the waiting line goes once the program prints.
+  await expect(page.getByRole('tab', { name: /^Output/ })).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+  await expect(page.getByTestId('run-starting')).toHaveCount(0, { timeout: 20_000 });
   const runs = page.getByRole('complementary', { name: 'Run history' });
   await expect(runs.getByText(/snippet\.mjs/)).toBeVisible({ timeout: 20_000 });
   await expect(runs.getByText('Passed').first()).toBeVisible();

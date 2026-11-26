@@ -74,6 +74,8 @@ interface State {
   sessionSearchOpen: boolean;
   /** The run shown in the Run tab (CR-02); see lib/runs.ts. */
   activeRun: ActiveRun | null;
+  /** CR-02: a run that was asked for and has not printed anything yet; the Run tab shows a waiting animation. */
+  startingRun: { token: string; label: string } | null;
   /** Bumped when a run is recorded, so history views refresh. */
   runsVersion: number;
   /** PL-03: the compare run shown side by side, by its group id. */
@@ -175,6 +177,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   suggestions: [],
   sessionSearchOpen: false,
   activeRun: null,
+  startingRun: null,
   runsVersion: 0,
   newSession: null,
   paletteOpen: false,
