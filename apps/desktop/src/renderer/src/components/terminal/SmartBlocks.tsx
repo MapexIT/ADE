@@ -29,7 +29,7 @@ function Linkified({ text, cwd, sessionId }: { text: string; cwd: string | null;
     } else if (m[2] && cwd) {
       const path = /^([A-Za-z]:|\/)/.test(m[2]) ? m[2] : joinPath(cwd, m[2]);
       out.push(
-        <button key={idx} type="button" className="text-accent underline" onClick={() => openEditor(path, sessionId)}>
+        <button key={idx} type="button" className="text-accent underline" onClick={() => openEditor(path, sessionId, Number(m[3]))}>
           {m[0]}
         </button>,
       );

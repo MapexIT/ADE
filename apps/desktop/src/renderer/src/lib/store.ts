@@ -68,7 +68,8 @@ interface State {
   /** Context waiting to be sent with the next prompt, per session (ST-03, TM-05, CR-04, SM-08). */
   attachments: Record<string, PromptBlock[]>;
   /** `rev` changes when the open file should be reloaded (follow mode after the agent edited it). */
-  editor: { path: string; sessionId: string | null; rev?: number } | null;
+  /** `line` (SM-18): reveal and place the cursor on this line once the file is open; `lineSeq` changes per request. */
+  editor: { path: string; sessionId: string | null; rev?: number; line?: number; lineSeq?: number } | null;
   suggestions: Suggestion[];
   /** HI-06: the session search dialog. */
   sessionSearchOpen: boolean;
@@ -120,7 +121,7 @@ interface Actions {
   attach(sessionId: string, block: PromptBlock): void;
   detach(sessionId: string, index: number): void;
   takeAttachments(sessionId: string): PromptBlock[];
-  openEditor(path: string, sessionId: string | null): void;
+  openEditor(path: string, sessionId: string | null, line?: number): void;
   set(patch: Partial<State>): void;
   toast(text: string, tone?: Toast['tone']): void;
   ask(spec: ConfirmSpec): void;
@@ -302,8 +303,8 @@ export const useStore = create<State & Actions>((set, get) => ({
     return taken;
   },
 
-  openEditor(path, sessionId) {
-    set({ editor: { path, sessionId }, tab: 'sessions' });
+  openEditor(path, sessionId, line) {
+    set({ editor: { path, sessionId, ...(line && line > 0 ? { line, lineSeq: ++lineSeq } : {}) }, tab: 'sessions' });
   },
 
   set(patch) {
@@ -342,6 +343,7 @@ export const useStore = create<State & Actions>((set, get) => ({
 
 /** Stable empty array for selectors (a fresh `[]` each call would re-render forever). */
 export const EMPTY: never[] = [];
+let lineSeq = 0;
 
 export const selectedSession = (s: State) => (s.selectedSessionId ? s.sessions[s.selectedSessionId] ?? null : null);
 export const currentWorkspace = (s: State) => s.workspaces.find((w) => w.id === s.workspaceId) ?? null;

@@ -34,8 +34,10 @@ import { TooltipProvider } from './components/Tooltip.tsx';
 import { useStore } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
 import { wireRuns } from './lib/runs.ts';
+import { recordBlock } from './lib/problems.ts';
 
-// SM-11: every finished terminal command goes into the searchable history.
+// SM-11: every finished terminal command goes into the searchable history. SM-18: the same (single) listener reads
+// the block for problems; a second onBlockFinished registration would replace this one.
 onBlockFinished((terminal, block) => {
   const workspaceId = useStore.getState().workspaceId;
   void host
@@ -47,6 +49,7 @@ onBlockFinished((terminal, block) => {
       exitCode: block.exitCode,
     })
     .catch(() => undefined);
+  void recordBlock(terminal, block);
 });
 
 
