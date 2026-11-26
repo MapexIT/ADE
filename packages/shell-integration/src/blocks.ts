@@ -1,5 +1,5 @@
 import type { CommandBlock } from '@ade/contracts';
-import { stripAnsi, type ShellEvent } from './parser.ts';
+import { rejoinConptyWraps, stripAnsi, type ShellEvent } from './parser.ts';
 
 export const MAX_OUTPUT = 256 * 1024;
 
@@ -82,7 +82,7 @@ export class BlockBuilder {
           this.current = null; // some shells report a blank line as a command
           return;
         }
-        const done: CommandBlock = { ...this.current, endedAt: this.now(), exitCode: event.exitCode, output: stripAnsi(this.current.output) };
+        const done: CommandBlock = { ...this.current, endedAt: this.now(), exitCode: event.exitCode, output: stripAnsi(rejoinConptyWraps(this.current.output)) };
         this.blocks.push(done);
         this.current = null;
         this.onBlock(done);

@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CommandBlock, Problem } from '@ade/contracts';
 import { describe, expect, it } from 'vitest';
 import { BlockBuilder, MAX_OUTPUT } from '../src/blocks.ts';
+import { rejoinConptyWraps, stripAnsi } from '../src/parser.ts';
 import {
   commandKey,
   countRows,
@@ -405,6 +408,33 @@ describe('tags and text', () => {
   it('counts rows by state', () => {
     const { rows, fixed } = diffProblems([P({ code: 'A' }), P({ code: 'B' })], [P({ code: 'A' }), P({ code: 'C' })]);
     expect(countRows(rows, fixed)).toEqual({ total: 2, new: 1, still: 1, fixed: 1 });
+  });
+});
+
+describe('ConPTY long lines (real captures, Windows 11, node-pty 1.1.0)', () => {
+  const fixture = (name: string) => JSON.parse(readFileSync(join(__dirname, 'fixtures', name), 'utf8')) as string;
+  const expected = Array.from({ length: 12 }, (_, i) => `src/f${i + 1}.ts(${i + 1},7): error TS2322: ${'x'.repeat((i + 1) % 2 ? 260 : 20)} end.`);
+  const lines = (raw: string) => stripAnsi(rejoinConptyWraps(raw)).split(/\r?\n/).map((l) => l.replace(/\r/g, ''));
+
+  it('at 100 columns every line arrives whole', () => {
+    const raw = fixture('conpty-node-100cols.json');
+    expect(raw).not.toMatch(new RegExp(String.raw`\u001b\[\d+;\d+H`));
+    for (const line of expected) expect(lines(raw)).toContain(line);
+  });
+
+  it('at 40 columns a full screen breaks wrapped lines with cursor moves; they are put back together', () => {
+    for (const name of ['conpty-node-40cols.json', 'conpty-powershell-40cols.json']) {
+      const raw = fixture(name);
+      expect(stripAnsi(raw).split(/\r?\n/).filter((l) => expected.includes(l.replace(/\r/g, ''))).length).toBeLessThan(12);
+      const joined = lines(raw);
+      for (const line of expected) expect(joined).toContain(line);
+      expect(extractProblems(stripAnsi(rejoinConptyWraps(raw)), POSIX).problems.map((p) => p.path)).toEqual(expected.map((_, i) => `src/f${i + 1}.ts`));
+    }
+  });
+
+  it('leaves ordinary cursor moves alone', () => {
+    expect(rejoinConptyWraps('ab\r\n\x1b[5;1Hcd')).toBe('ab\r\n\x1b[5;1Hcd');
+    expect(rejoinConptyWraps('plain\r\ntext')).toBe('plain\r\ntext');
   });
 });
 

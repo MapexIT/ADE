@@ -130,6 +130,25 @@ export class ShellIntegrationParser {
 }
 
 /** Removes ANSI escape sequences, for storing and searching block output as plain text. */
+/**
+ * SM-18: ConPTY (Windows) breaks a wrapped line once the screen is full: it writes CRLF, moves the cursor back to the
+ * last cell of the row above (`ESC[<row>;<cols>H`) and prints that cell's character again before the rest. Verified on
+ * Windows 11 with node-pty 1.1.0 (fixtures in test/fixtures). This puts such lines back together. The repeated
+ * character must match, so ordinary output with cursor moves is left alone; other platforms never produce it.
+ */
+// eslint-disable-next-line no-control-regex
+const CONPTY_WRAP = /([^\r\n\x1b])((?:\x1b\[[0-9;]*m)*)\r\n\x1b\[\d+;\d+H((?:\x1b\[[0-9;]*m)*)\1/g;
+export function rejoinConptyWraps(text: string): string {
+  let prev: string;
+  let out = text;
+  // A line wrapped several times chains the pattern; each pass rejoins one break per match.
+  do {
+    prev = out;
+    out = out.replace(CONPTY_WRAP, '$1$2$3');
+  } while (out !== prev);
+  return out;
+}
+
 export function stripAnsi(text: string): string {
   // eslint-disable-next-line no-control-regex
   return text.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g, '');
