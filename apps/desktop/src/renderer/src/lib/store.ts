@@ -1,4 +1,4 @@
-import type { AgentStatus, NeedsYouItem, PromptBlock, Session, SessionEvent, Turn, WorkItem, Workspace } from '@ade/contracts';
+import type { AgentStatus, NeedsYouItem, PromptBlock, RuleAdvice, RuleSuggestion, Session, SessionEvent, Turn, WorkItem, Workspace } from '@ade/contracts';
 import { activityFrom, applyActivity, applyEvent, emptyActivity, emptyView, projectSession, type Activity, type SessionView } from '@ade/session-core';
 import { create } from 'zustand';
 import { host } from './bridge.ts';
@@ -99,6 +99,12 @@ interface State {
   toasts: Toast[];
   /** WA-10: text to put in a session's chat box (Redirect the agent); the composer takes it and clears it. */
   composerDraft: { sessionId: string; text: string } | null;
+  /** AP-09: rule suggestions and rule usage per workspace, from `rules.advice`. */
+  ruleAdvice: Record<string, RuleAdvice>;
+  /** AP-09: the suggestion open in the "Rule from your decisions" dialog. */
+  ruleSuggestion: { workspaceId: string; suggestion: RuleSuggestion } | null;
+  /** A section of the Settings dialog to scroll to when it opens. */
+  settingsSection: 'suggested-rules' | null;
 }
 
 interface Actions {
@@ -118,9 +124,13 @@ interface Actions {
   set(patch: Partial<State>): void;
   toast(text: string, tone?: Toast['tone']): void;
   ask(spec: ConfirmSpec): void;
+  /** AP-09: reloads rule advice for a workspace, after `delayMs` (debounced per workspace). */
+  refreshRuleAdvice(workspaceId: string, delayMs?: number): void;
 }
 
 let toastId = 1;
+const adviceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const adviceSeq = new Map<string, number>();
 
 /** SM-09: shell blocks in an agent's reply become pending suggestions on that session's terminals. */
 function suggestFrom(sessionId: string, text: string) {
@@ -190,6 +200,9 @@ export const useStore = create<State & Actions>((set, get) => ({
   confirm: null,
   toasts: [],
   composerDraft: null,
+  ruleAdvice: {},
+  ruleSuggestion: null,
+  settingsSection: null,
 
   async init() {
     const [workspaces, firstRunDone, lastWorkspace, inbox] = await Promise.all([
@@ -218,6 +231,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     const list = await host.call('sessions.list', { workspaceId: id });
     void host.call('settings.set', { key: 'lastWorkspaceId', value: id });
     set({ workspaceId: id, sessions: Object.fromEntries(list.map((s) => [s.id, s])), selectedSessionId: list[0]?.id ?? null, views: {}, activity: {}, turns: {}, queued: {} });
+    get().refreshRuleAdvice(id);
     const first = list[0];
     if (first) await get().loadSession(first.id);
   },
@@ -251,6 +265,11 @@ export const useStore = create<State & Actions>((set, get) => ({
     }));
     followAgent(e);
     if (e.type === 'agent.message') suggestFrom(e.sessionId, e.text);
+    // AP-09: a decision of the user's own may make a rule suggestion appear.
+    if (e.type === 'permission.decided' && e.decidedBy === 'user') {
+      const ws = get().sessions[e.sessionId]?.workspaceId;
+      if (ws) get().refreshRuleAdvice(ws, 300);
+    }
     // Turn boundaries change the turn list and the queue; refresh them from the host.
     if (e.type === 'turn.started' || e.type === 'turn.ended' || e.type === 'user.message') {
       void host.call('sessions.get', { sessionId: e.sessionId }).then((d) =>
@@ -299,6 +318,25 @@ export const useStore = create<State & Actions>((set, get) => ({
 
   ask(spec) {
     set({ confirm: spec });
+  },
+
+  refreshRuleAdvice(workspaceId, delayMs = 0) {
+    clearTimeout(adviceTimers.get(workspaceId));
+    adviceTimers.set(
+      workspaceId,
+      setTimeout(() => {
+        adviceTimers.delete(workspaceId);
+        const seq = (adviceSeq.get(workspaceId) ?? 0) + 1;
+        adviceSeq.set(workspaceId, seq);
+        void host.call('rules.advice', { workspaceId }).then(
+          (advice) => {
+            // A slower, older answer never replaces a newer one.
+            if (adviceSeq.get(workspaceId) === seq) set((s) => ({ ruleAdvice: { ...s.ruleAdvice, [workspaceId]: advice } }));
+          },
+          () => undefined,
+        );
+      }, delayMs),
+    );
   },
 }));
 

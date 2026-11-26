@@ -1,7 +1,7 @@
 import { Bot, Check, CircleAlert, CircleHelp, CirclePause, Download, ExternalLink, FolderGit2, FolderOpen, Gauge, GitMerge, GitPullRequest, Hand, Info, MessagesSquare, Navigation, Repeat, RefreshCw, Save, ShieldQuestion, SquareTerminal, Trash2, Unplug, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
-import { LoopSettings, ReceiptSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
+import { LoopSettings, ReceiptSettings, RuleAdviceSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
 import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -218,6 +218,7 @@ export function SettingsDialog() {
   const [keepRunning, setKeepRunning] = useState(true);
   const [loops, setLoops] = useState<LoopSettings>({ enabled: true, stopTurn: false });
   const [receipts, setReceipts] = useState<ReceiptSettings>({ enabled: true, notify: true });
+  const [ruleAdvice, setRuleAdvice] = useState<RuleAdviceSettings>({ enabled: true, threshold: 3 });
 
   useEffect(() => {
     if (!open) return;
@@ -235,6 +236,10 @@ export function SettingsDialog() {
       const parsed = ReceiptSettings.safeParse(v.value ?? {});
       setReceipts(parsed.success ? parsed.data : { enabled: true, notify: true });
     });
+    void host.call('settings.get', { key: 'ruleAdvice' }).then((v) => {
+      const parsed = RuleAdviceSettings.safeParse(v.value ?? {});
+      setRuleAdvice(parsed.success ? parsed.data : { enabled: true, threshold: 3 });
+    });
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
@@ -246,12 +251,14 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'limits', value: limits }));
     await attempt(() => host.call('settings.set', { key: 'loops', value: loops }));
     await attempt(() => host.call('settings.set', { key: 'receipts', value: receipts }));
+    await attempt(() => host.call('settings.set', { key: 'ruleAdvice', value: ruleAdvice }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
     await attempt(() => host.call('settings.set', { key: 'sessions.runInPlace', value: runInPlace }));
     await attempt(() => host.call('settings.set', { key: 'app.keepRunningInBackground', value: keepRunning }));
     toast('Settings saved.');
+    if (workspaceId) useStore.getState().refreshRuleAdvice(workspaceId);
     set({ settingsOpen: false });
   };
 
@@ -293,6 +300,13 @@ export function SettingsDialog() {
           <label className={cx('flex min-h-11 items-start gap-2', !receipts.enabled && 'opacity-60')}>
             <input type="checkbox" checked={receipts.notify} disabled={!receipts.enabled} onChange={(e) => setReceipts({ ...receipts, notify: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
             <span>Notify me when a finished turn has something to check</span>
+          </label>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={ruleAdvice.enabled} onChange={(e) => setRuleAdvice({ ...ruleAdvice, enabled: e.target.checked })} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Suggest rules from my decisions
+              <span className="block text-[12px] text-ink-muted">ADE counts how you answer requests in this repository and offers a rule when you keep deciding the same way. Nothing is added without you.</span>
+            </span>
           </label>
           <label className="flex min-h-11 items-start gap-2">
             <input type="checkbox" checked={keepRunning} onChange={(e) => setKeepRunning(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />

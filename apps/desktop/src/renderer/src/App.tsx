@@ -14,6 +14,7 @@ import {
 } from './components/Dialogs.tsx';
 import { NewSessionDialog } from './components/NewSessionDialog.tsx';
 import { CompareDialog, HandOffDialog } from './components/ParallelDialogs.tsx';
+import { RuleSuggestionDialog } from './components/RuleAdvice.tsx';
 import { SessionSearchDialog } from './components/HistoryTools.tsx';
 import { ReviewScreen } from './components/ReviewScreen.tsx';
 import { RunScreen } from './components/RunScreen.tsx';
@@ -155,6 +156,7 @@ export function App() {
       <HelpCenter />
       <InboxDialog />
       <SettingsDialog />
+      <RuleSuggestionDialog />
       <McpDialog />
       <FirstRunDialog />
       <ProtocolDialog />

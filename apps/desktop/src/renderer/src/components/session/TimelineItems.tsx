@@ -6,7 +6,9 @@ import { memo, useState } from 'react';
 import { host } from '../../lib/bridge.ts';
 import { agentLabel, promptPreview, TOOL_STATUS_LABELS } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
+import { hintFor } from '../../lib/rule-advice.ts';
 import { ScreenshotItem } from '../HistoryTools.tsx';
+import { RuleHint } from '../RuleAdvice.tsx';
 import { CommandItem } from './CommandItem.tsx';
 import { LoopItem } from './LoopItem.tsx';
 import { ReceiptItem } from './ReceiptItem.tsx';
@@ -72,6 +74,9 @@ function statusTone(status: string) {
 
 export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, { kind: 'permission' }>; sessionId: string }) {
   const session = useStore((s) => s.sessions[sessionId]);
+  const workspaceId = session?.workspaceId ?? null;
+  // AP-09: a rule suggestion under the user's own decision; never on a pending card.
+  const suggestions = useStore((s) => (workspaceId ? s.ruleAdvice[workspaceId]?.suggestions : undefined));
   const [noteFor, setNoteFor] = useState<PermissionOption | null>(null);
   const [note, setNote] = useState('');
   const pending = item.decision === null;
@@ -82,6 +87,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
 
   if (!pending) {
     const chosen = item.decision?.outcome === 'selected' ? item.options.find((o) => o.optionId === (item.decision as { optionId: string }).optionId) : null;
+    const hint = item.decidedBy === 'user' && workspaceId ? hintFor(item, suggestions) : null;
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-line bg-surface px-3 py-2">
         <span className="font-semibold">{isQuestion ? 'Question' : 'Approval'}</span>
@@ -90,6 +96,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
           {chosen ? chosen.name : 'Cancelled'} · {item.decidedBy === 'user' ? 'by you' : item.decidedBy?.startsWith('profile:') ? `by the ${item.decidedBy.slice(8)} profile` : item.decidedBy?.startsWith('rule:') ? 'by a workspace rule' : 'automatically'}
         </span>
         {item.note ? <span className="w-full text-ink-muted">Note: {item.note}</span> : null}
+        {hint && workspaceId ? <RuleHint workspaceId={workspaceId} suggestion={hint} /> : null}
       </div>
     );
   }

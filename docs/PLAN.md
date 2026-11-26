@@ -246,7 +246,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
 - [x] **M12-T04** Host: the `events_type` index migration, `EventRepo.forWorkspace`, `RuleAdviceService`,
       the handlers in `app.ts`, rule creation stamps in `rules.save`, audit entries. Done when the cases
       of `apps/desktop/test/rule-advice.test.ts` pass on Windows and Ubuntu.
-- [ ] **M12-T05** Renderer: store slice and refresh, the hint under decided approval cards, the suggestion
+- [x] **M12-T05** Renderer: store slice and refresh, the hint under decided approval cards, the suggestion
       dialog, Suggested rules and rule insight in Settings, the setting, the palette command; and
       `e2e/rule-suggestions.spec.ts`. Done when the spec passes on Windows against the production build and
       the development renderer.
