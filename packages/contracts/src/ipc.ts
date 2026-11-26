@@ -464,6 +464,77 @@ export const RuleRisk = z.enum(['read', 'project', 'exact', 'never']);
 export type RuleRisk = z.infer<typeof RuleRisk>;
 export const RuleCaveat = z.enum(['repo-script', 'not-a-sandbox']);
 export type RuleCaveat = z.infer<typeof RuleCaveat>;
+export const RuleExample = z.object({ text: z.string().max(300), count: z.number().int().positive() });
+export type RuleExample = z.infer<typeof RuleExample>;
+export const RuleConflict = z.object({
+  text: z.string().max(300),
+  ts: z.string(),
+  sessionTitle: z.string().max(200),
+  decided: z.enum(['allowed', 'rejected']),
+});
+export type RuleConflict = z.infer<typeof RuleConflict>;
+/** AP-09: a rule replayed over the requests the user decided by hand in this repository. */
+export const RuleRehearsal = z.object({
+  /** Requests the user answered by hand, in the history window. */
+  considered: z.number().int().nonnegative(),
+  /** Of those, the ones this rule would have answered. */
+  wouldAnswer: z.number().int().nonnegative(),
+  agree: z.number().int().nonnegative(),
+  conflict: z.number().int().nonnegative(),
+  conflicts: z.array(RuleConflict).max(5),
+  covers: z.array(RuleExample).max(10),
+  moreCovers: z.number().int().nonnegative(),
+  /** The text matches, but the chain rule keeps asking. */
+  heldBack: z.number().int().nonnegative(),
+  /** Agent ids among the answered requests. */
+  agents: z.array(z.string()).max(10),
+});
+export type RuleRehearsal = z.infer<typeof RuleRehearsal>;
+export const RuleSuggestion = z.object({
+  /** `<decision>:<shape key>`. */
+  key: z.string().max(200),
+  decision: z.enum(['allow', 'deny']),
+  kind: z.literal('execute'),
+  /** Recommended: the narrowest pattern that covers the evidence. */
+  pattern: z.string().max(500),
+  /** `<stem> *` when `pattern` is exact and the risk allows it. */
+  wider: z.string().max(500).nullable(),
+  risk: RuleRisk,
+  caveats: z.array(RuleCaveat).max(4),
+  evidence: z.object({
+    allowed: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+    sessions: z.number().int().nonnegative(),
+    agents: z.array(z.string()).max(10),
+    lastTs: z.string(),
+    lastRequestId: z.string(),
+  }),
+  rehearsal: RuleRehearsal,
+});
+export type RuleSuggestion = z.infer<typeof RuleSuggestion>;
+export const RuleUsage = z.object({
+  ruleId: Id,
+  answered: z.number().int().nonnegative(),
+  lastTs: z.string().nullable(),
+  /** The rule is at least 30 days old and has not answered in 30 days. */
+  unused: z.boolean(),
+  /** Commands it answered that the user never approved by hand. */
+  unseen: z.array(RuleExample).max(10),
+  rehearsal: RuleRehearsal,
+});
+export type RuleUsage = z.infer<typeof RuleUsage>;
+/** Stored under the settings key `ruleAdvice`; read with `RuleAdviceSettings.parse(value ?? {})`. */
+export const RuleAdviceSettings = z.object({
+  enabled: z.boolean().default(true),
+  threshold: z.number().int().min(2).max(20).default(3),
+});
+export type RuleAdviceSettings = z.infer<typeof RuleAdviceSettings>;
+export const RuleAdvice = z.object({
+  suggestions: z.array(RuleSuggestion).max(10),
+  usage: z.array(RuleUsage).max(200),
+  requests: z.number().int().nonnegative(),
+});
+export type RuleAdvice = z.infer<typeof RuleAdvice>;
 
 export const SessionDetail = z.object({
   session: Session,

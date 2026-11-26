@@ -1,4 +1,17 @@
-import type { PermissionRule, RuleCaveat, RuleRisk, ToolKind } from '@ade/contracts';
+import {
+  redactSecrets,
+  type PermissionRule,
+  type RuleAdviceSettings,
+  type RuleCaveat,
+  type RuleConflict,
+  type RuleExample,
+  type RuleRehearsal,
+  type RuleRisk,
+  type RuleSuggestion,
+  type RuleUsage,
+  type SessionEvent,
+  type ToolKind,
+} from '@ade/contracts';
 
 /**
  * AP-06 / AP-09: workspace rules. Pure and agent-neutral: it reads only the text of ACP permission requests, so one
@@ -516,3 +529,335 @@ export function shapesOf(req: RequestText): Shape[] {
   const a = anatomyOf(text);
   return a.opaque ? [] : a.steps.map(shapeOfStep);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// History, suggestions, rehearsal and usage (section 6.5)
+
+export const RULE_ADVICE_LIMITS = {
+  /** Allow suggestions need this many approvals unless the settings say otherwise. */
+  threshold: 3,
+  /** Deny suggestions need this many rejections. */
+  denyThreshold: 2,
+  unusedDays: 30,
+  suggestions: 10,
+  conflicts: 5,
+  covers: 10,
+  textMax: 300,
+  patternMax: 500,
+} as const;
+
+/** One request the user, a rule or a profile answered. */
+export interface Decided {
+  requestId: string;
+  sessionId: string;
+  sessionTitle: string;
+  agentId: string;
+  ts: string;
+  req: RequestText;
+  outcome: 'allowed' | 'rejected';
+  by: 'user' | { rule: string } | 'other';
+}
+
+/** Suggestion key to `{ forever, at }`; `at` is the evidence count when it was dismissed. */
+export type Dismissed = Record<string, { forever: boolean; at: number }>;
+
+const isUser = (d: Decided) => d.by === 'user';
+const byRule = (d: Decided, id: string) => typeof d.by === 'object' && d.by.rule === id;
+
+/**
+ * Pairs each `permission.requested` with its `permission.decided`. Cancelled and undecided requests and questions
+ * (`think`) are dropped; the outcome comes from the kind of the option chosen. Input oldest first; output too.
+ */
+export function foldDecisions(
+  events: readonly SessionEvent[],
+  meta: (sessionId: string) => { title: string; agentId: string } | null,
+): Decided[] {
+  const requests = new Map<string, Extract<SessionEvent, { type: 'permission.requested' }>>();
+  const out: Decided[] = [];
+  for (const e of events) {
+    if (e.type === 'permission.requested') {
+      requests.set(e.requestId, e);
+      continue;
+    }
+    if (e.type !== 'permission.decided') continue;
+    const r = requests.get(e.requestId);
+    if (!r || r.kind === 'think' || e.decision.outcome !== 'selected') continue;
+    const optionId = e.decision.optionId;
+    const option = r.options.find((o) => o.optionId === optionId);
+    if (!option) continue;
+    requests.delete(e.requestId);
+    const m = meta(r.sessionId);
+    out.push({
+      requestId: r.requestId,
+      sessionId: r.sessionId,
+      sessionTitle: m?.title ?? '',
+      agentId: m?.agentId ?? '',
+      ts: e.ts,
+      req: { kind: r.kind, title: r.title, detail: r.detail },
+      outcome: option.kind.startsWith('allow') ? 'allowed' : 'rejected',
+      by: e.decidedBy === 'user' ? 'user' : e.decidedBy.startsWith('rule:') ? { rule: e.decidedBy.slice(5) } : 'other',
+    });
+  }
+  return out;
+}
+
+const shown = (text: string) => redactSecrets(text).slice(0, RULE_ADVICE_LIMITS.textMax);
+
+/** Distinct texts, most frequent first (ties: newest first). */
+function examples(texts: string[], max: number): { list: RuleExample[]; more: number } {
+  const counts = new Map<string, number>();
+  for (let i = texts.length - 1; i >= 0; i--) {
+    const t = shown(texts[i]!);
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  const all = [...counts].map(([text, count]) => ({ text, count })).sort((a, b) => b.count - a.count);
+  return { list: all.slice(0, max), more: Math.max(0, all.length - max) };
+}
+
+const distinct = (xs: string[], max = 10) => [...new Set(xs.filter(Boolean))].slice(0, max);
+
+/** Whether the candidate rule answers this request, given the other rules. */
+function candidateAnswer(candidate: PermissionRule, others: PermissionRule[], req: RequestText): 'allow' | 'deny' | 'held-back' | null {
+  const full = [candidate, ...others];
+  const deny = denyMatch(full, req);
+  if (deny) return deny.id === candidate.id ? 'deny' : null;
+  if (candidate.decision === 'deny') return null;
+  const alone = allowCoverage([candidate], req).coverage;
+  // Answered with the candidate, and the candidate matches the request itself or is what makes the difference.
+  if (allowCoverage(full, req).coverage === 'answers') return alone !== 'no-match' || allowCoverage(others, req).coverage !== 'answers' ? 'allow' : null;
+  return alone === 'held-back' ? 'held-back' : null;
+}
+
+/**
+ * Replays a rule over the requests the user decided by hand. The candidate replaces any rule with its id; a deny
+ * rule among the others shadows it. Example texts are redacted and cut to 300 characters.
+ */
+export function rehearse(candidate: PermissionRule, rules: PermissionRule[], history: readonly Decided[]): RuleRehearsal {
+  const others = rules.filter((r) => r.id !== candidate.id);
+  let considered = 0;
+  let agree = 0;
+  let heldBack = 0;
+  const conflicts: RuleConflict[] = [];
+  const answered: Decided[] = [];
+  for (const d of history) {
+    if (!isUser(d)) continue;
+    considered++;
+    const a = candidateAnswer(candidate, others, d.req);
+    if (a === 'held-back') heldBack++;
+    if (a !== 'allow' && a !== 'deny') continue;
+    answered.push(d);
+    if ((a === 'allow') === (d.outcome === 'allowed')) agree++;
+    else conflicts.push({ text: shown(commandText(d.req)), ts: d.ts, sessionTitle: d.sessionTitle.slice(0, 200), decided: d.outcome });
+  }
+  const covers = examples(
+    answered.map((d) => commandText(d.req)),
+    RULE_ADVICE_LIMITS.covers,
+  );
+  return {
+    considered,
+    wouldAnswer: answered.length,
+    agree,
+    conflict: conflicts.length,
+    conflicts: conflicts.reverse().slice(0, RULE_ADVICE_LIMITS.conflicts),
+    covers: covers.list,
+    moreCovers: covers.more,
+    heldBack,
+    agents: distinct(answered.map((d) => d.agentId)),
+  };
+}
+
+interface Evidence {
+  decided: Decided;
+  /** The step's text: the original text for a plain one-step request, else its tokens joined with spaces. */
+  text: string;
+  stem: string[];
+}
+
+interface Group {
+  shape: Shape;
+  allowed: Evidence[];
+  rejected: Evidence[];
+}
+
+const normal = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** Groups the user's decisions by shape. A request counts once for each distinct shape among its steps. */
+function groups(history: readonly Decided[]): Map<string, Group> {
+  const out = new Map<string, Group>();
+  for (const d of history) {
+    if (!isUser(d) || d.req.kind !== 'execute') continue;
+    const text = commandText(d.req);
+    if (!text) continue;
+    const a = anatomyOf(text);
+    if (a.opaque) continue;
+    const plain = a.steps.length === 1 && !a.wrapped;
+    const seen = new Set<string>();
+    for (const s of a.steps) {
+      const shape = shapeOfStep(s);
+      if (seen.has(shape.key)) continue;
+      seen.add(shape.key);
+      const g = out.get(shape.key) ?? { shape, allowed: [], rejected: [] };
+      g.shape = shape;
+      (d.outcome === 'allowed' ? g.allowed : g.rejected).push({ decided: d, text: plain ? text : s.join(' '), stem: shape.stem });
+      out.set(shape.key, g);
+    }
+  }
+  return out;
+}
+
+/**
+ * AP-09: rules suggested by the user's own repeated decisions. Allow: `threshold` approvals of a shape whose risk is
+ * not `never` and no rejection the pattern covers. Deny: 2 rejections and no approval it covers. Never a pattern
+ * an existing rule already answers, one with a secret in it, or one dismissed. Sorted by how much it would answer.
+ */
+export function suggest(history: readonly Decided[], rules: PermissionRule[], dismissed: Dismissed, settings: RuleAdviceSettings): RuleSuggestion[] {
+  const threshold = settings.threshold;
+  const out: RuleSuggestion[] = [];
+  for (const g of groups(history).values()) {
+    for (const decision of ['allow', 'deny'] as const) {
+      const evidence = decision === 'allow' ? g.allowed : g.rejected;
+      if (evidence.length < (decision === 'allow' ? threshold : RULE_ADVICE_LIMITS.denyThreshold)) continue;
+      if (decision === 'allow' && g.shape.risk === 'never') continue;
+      const newest = evidence.at(-1)!;
+      const stemPattern = `${newest.stem.join(' ')} *`;
+      let pattern = stemPattern;
+      let wider: string | null = null;
+      if (g.shape.risk === 'exact') pattern = newest.text;
+      else if (decision === 'allow' && evidence.every((e) => normal(e.text) === normal(newest.text))) {
+        pattern = newest.text;
+        wider = stemPattern;
+      }
+      if (pattern.length > RULE_ADVICE_LIMITS.patternMax || redactSecrets(pattern) !== pattern) continue;
+      if (wider && (wider.length > RULE_ADVICE_LIMITS.patternMax || redactSecrets(wider) !== wider)) wider = null;
+      // An existing rule already answers this step.
+      if (decideByRules(rules, { kind: 'execute', title: newest.text, detail: newest.text })) continue;
+      const key = `${decision}:${g.shape.key}`.slice(0, 200);
+      const candidate: PermissionRule = { id: `suggestion:${key}`.slice(0, 200), decision, kind: 'execute', pattern };
+      const rehearsal = rehearse(candidate, rules, history);
+      if (rehearsal.conflict > 0) continue;
+      if (wider && rehearse({ ...candidate, pattern: wider }, rules, history).conflict > 0) wider = null;
+      const count = g.allowed.length + g.rejected.length;
+      const d = dismissed[key];
+      if (d && (d.forever || count < d.at + threshold)) continue;
+      const all = [...g.allowed, ...g.rejected].map((e) => e.decided);
+      out.push({
+        key,
+        decision,
+        kind: 'execute',
+        pattern,
+        wider,
+        risk: g.shape.risk,
+        caveats: g.shape.caveats,
+        evidence: {
+          allowed: g.allowed.length,
+          rejected: g.rejected.length,
+          sessions: new Set(all.map((x) => x.sessionId)).size,
+          agents: distinct(all.map((x) => x.agentId)),
+          lastTs: newest.decided.ts,
+          lastRequestId: newest.decided.requestId,
+        },
+        rehearsal,
+      });
+    }
+  }
+  return out
+    .sort((a, b) => b.rehearsal.wouldAnswer - a.rehearsal.wouldAnswer || b.evidence.lastTs.localeCompare(a.evidence.lastTs))
+    .slice(0, RULE_ADVICE_LIMITS.suggestions);
+}
+
+/** The evidence count behind a suggestion key (stored when it is dismissed), or 0. */
+export function evidenceCount(history: readonly Decided[], key: string): number {
+  const g = groups(history).get(key.slice(key.indexOf(':') + 1));
+  return g ? g.allowed.length + g.rejected.length : 0;
+}
+
+const DAY = 86_400_000;
+
+/**
+ * Per rule: how often it answered, when it last did, which commands it answered that the user never approved by
+ * hand (allow rules only), whether it went unused for 30 days (only when its age is known), and its rehearsal.
+ */
+export function usage(rules: PermissionRule[], history: readonly Decided[], ruleAges: Record<string, string | null>, now: number): RuleUsage[] {
+  const approved = new Set(history.filter((d) => isUser(d) && d.outcome === 'allowed').map((d) => normal(commandText(d.req))));
+  const old = (ts: string) => now - Date.parse(ts) >= RULE_ADVICE_LIMITS.unusedDays * DAY;
+  return rules.map((rule) => {
+    const mine = history.filter((d) => byRule(d, rule.id));
+    const lastTs = mine.reduce<string | null>((a, d) => (a === null || d.ts > a ? d.ts : a), null);
+    const created = ruleAges[rule.id] ?? null;
+    const unseen = rule.decision === 'allow' ? mine.map((d) => commandText(d.req)).filter((t) => !approved.has(normal(t))) : [];
+    return {
+      ruleId: rule.id,
+      answered: mine.length,
+      lastTs,
+      unused: created !== null && old(created) && (lastTs === null || old(lastTs)),
+      unseen: examples(unseen, 10).list,
+      rehearsal: rehearse(rule, rules, history),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Copy (UK English, sentence case), shared by the host tests and the renderer
+
+const times = (n: number) => `${n} ${n === 1 ? 'time' : 'times'}`;
+const requestsWord = (n: number) => `${n} ${n === 1 ? 'request' : 'requests'}`;
+
+/** The command a suggestion is about: its pattern without a trailing ` *`. */
+export const suggestionSubject = (s: Pick<RuleSuggestion, 'pattern'>) => (s.pattern.endsWith(' *') ? s.pattern.slice(0, -2) : s.pattern);
+
+/** The hint under a decided request, in three parts so the command can be set in a monospaced font. */
+export function hintParts(s: Pick<RuleSuggestion, 'pattern' | 'decision' | 'evidence'>): [string, string, string] {
+  const n = s.decision === 'allow' ? s.evidence.allowed : s.evidence.rejected;
+  return [`You have ${s.decision === 'allow' ? 'allowed' : 'rejected'} `, suggestionSubject(s), ` ${times(n)} in this repository.`];
+}
+export const hintText = (s: Pick<RuleSuggestion, 'pattern' | 'decision' | 'evidence'>) => hintParts(s).join('');
+
+export const RISK_WORDS: Record<RuleRisk, string> = {
+  read: 'Reads only',
+  project: 'Runs project code',
+  exact: 'Exact command only',
+  never: 'Not offered as an allow rule',
+};
+
+export const CAVEAT_TEXT: Record<RuleCaveat, string> = {
+  'repo-script': 'Runs code from the repository, which an agent can change.',
+  'not-a-sandbox': 'A rule matches the words of a request. It is not a sandbox.',
+};
+
+export const decisionWords = (d: 'allow' | 'deny') => (d === 'allow' ? 'Allow without asking' : 'Reject without asking');
+
+export function rehearsalText(r: Pick<RuleRehearsal, 'considered' | 'wouldAnswer' | 'conflict'>): string {
+  if (r.considered === 0) return 'There are no requests you decided yourself in this repository yet.';
+  if (r.wouldAnswer === 0) return `Would not have answered any of your last ${requestsWord(r.considered)}.`;
+  const head = `Would have answered ${r.wouldAnswer} of your last ${requestsWord(r.considered)}`;
+  if (r.conflict === 0) return r.wouldAnswer === 1 ? `${head}, the way you decided.` : `${head}, each the way you decided.`;
+  return `${head}, ${r.conflict} against your decision.`;
+}
+
+export const heldBackText = (n: number) => `${n} more matched, but had extra steps or shell syntax, so ADE would still ask.`;
+
+/** "From Claude Code and Codex." with names from the caller's label function. */
+export function agentsText(ids: readonly string[], label: (id: string) => string): string {
+  const names = ids.filter(Boolean).map(label);
+  if (!names.length) return '';
+  const list = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}`;
+  return `From ${list}.`;
+}
+
+export function evidenceText(e: Pick<RuleSuggestion['evidence'], 'allowed' | 'rejected' | 'sessions'>, decision: 'allow' | 'deny'): string {
+  const [main, other, mainWord, otherWord] =
+    decision === 'allow' ? [e.allowed, e.rejected, 'Allowed', 'rejected'] : [e.rejected, e.allowed, 'Rejected', 'allowed'];
+  const second = other === 0 ? `never ${otherWord}` : `${otherWord} ${times(other)}`;
+  return `${mainWord} ${times(main)}, ${second}, in ${e.sessions} ${e.sessions === 1 ? 'session' : 'sessions'}.`;
+}
+
+export const formatRuleDate = (ts: string) => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+
+export function usageText(u: Pick<RuleUsage, 'answered' | 'lastTs'>): string {
+  if (u.answered === 0 || !u.lastTs) return 'Has not answered a request yet.';
+  return `Answered ${requestsWord(u.answered)}, last on ${formatRuleDate(u.lastTs)}.`;
+}
+
+export const UNUSED_TEXT = 'Not used in 30 days.';
+
+export const unseenText = (n: number) => `Answered ${n} ${n === 1 ? 'command' : 'commands'} you never approved yourself`;

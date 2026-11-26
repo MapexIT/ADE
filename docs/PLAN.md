@@ -240,7 +240,7 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       (moved), `decideByRules`, `shapeOfStep`, with their unit tests; `workspace-rules.ts` delegates to it.
       Done when the anatomy, matching and shape cases pass and `rules-inplace.test.ts` passes with the new
       chained-command case.
-- [ ] **M12-T03** Contracts (`RuleRisk`, `RuleRehearsal`, `RuleSuggestion`, `RuleUsage`,
+- [x] **M12-T03** Contracts (`RuleRisk`, `RuleRehearsal`, `RuleSuggestion`, `RuleUsage`,
       `RuleAdviceSettings`, the four `rules.*` methods) and the pure `foldDecisions`, `suggest`, `rehearse`,
       `usage` and copy helpers with unit tests. Done when every unit case in the test plan passes.
 - [ ] **M12-T04** Host: the `events_type` index migration, `EventRepo.forWorkspace`, `RuleAdviceService`,

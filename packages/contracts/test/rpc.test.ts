@@ -13,6 +13,7 @@ import {
   method,
   ReceiptSettings,
   RpcError,
+  RuleAdviceSettings,
   serveApi,
   SessionEvent,
 } from '../src/index.ts';
@@ -91,6 +92,13 @@ describe('WA-10 loop watch contracts', () => {
     expect(() => SessionEvent.parse({ ...detected, pattern: 'other' })).toThrow();
     expect(LoopSettings.parse({})).toEqual({ enabled: true, stopTurn: false });
     expect(LoopSettings.parse({ stopTurn: true })).toEqual({ enabled: true, stopTurn: true });
+  });
+});
+
+describe('AP-09 rule advice contracts', () => {
+  it('gives rule advice settings their defaults and bounds the threshold', () => {
+    expect(RuleAdviceSettings.parse({})).toEqual({ enabled: true, threshold: 3 });
+    expect(() => RuleAdviceSettings.parse({ threshold: 1 })).toThrow();
   });
 });
 
