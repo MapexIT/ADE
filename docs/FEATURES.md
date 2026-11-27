@@ -1,6 +1,6 @@
 # Features
 
-166 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+167 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -45,6 +45,7 @@ Linux.
 | SR-07 | Hand-off | v1 | Continue in the same worktree with another agent, given the summary and diff. |
 | SR-08 | Open in the agent's terminal UI | v1 | Resume the same session in the agent's own interface where possible. |
 | SR-09 | Mid-turn steering | Later | Add input to a running turn; needs a native adapter. |
+| SR-10 | Continue a conversation from the agent's CLI | v1 | Continue from a CLI, in the Sessions list, lists the conversations Claude Code, Codex and OpenCode keep for this repository (ACP `session/list`, filtered to the repository folder; ones ADE already continued are left out), newest first. Choosing one opens New session with that agent fixed; the session gets its own worktree, the agent loads the conversation (`session/load`, its history shows in the timeline), then the user's message is sent. A conversation the agent cannot load starts fresh, and the timeline says so. |
 
 ## Generate (GN)
 

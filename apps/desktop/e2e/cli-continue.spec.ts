@@ -1,0 +1,24 @@
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { launch, makeRepo, stubDirectoryPicker, userDataDir } from './helpers.ts';
+test('SR-10: a conversation from the agent CLI is listed and continues in a new session with its history', async () => {
+  const data = userDataDir();
+  const repo = makeRepo();
+  const { app, page } = await launch(data);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await stubDirectoryPicker(app, repo);
+  await page.keyboard.press('Control+o');
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
+  const root = realpathSync.native(repo);
+  mkdirSync(join(data, 'fake-agent'), { recursive: true });
+  writeFileSync(join(data, 'fake-agent', 'cli-1.json'), JSON.stringify({ cwd: root, modeId: 'build', title: 'Fix the flaky parser test', updatedAt: '2026-11-27T10:00:00Z', history: [{ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'Fix the flaky parser test' } }, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Earlier answer from the CLI' } }] }));
+  await page.getByRole('button', { name: 'Continue from a CLI' }).click();
+  await expect(page.getByRole('list', { name: 'CLI conversations' }).or(page.getByText('No conversations found'))).toBeVisible({ timeout: 60000 });
+  await page.getByRole('button', { name: /Fix the flaky parser test/ }).click();
+  await page.getByLabel('What should the agent do next?').fill('say carrying on');
+  await expect(page.getByRole('radio', { name: /Fake agent/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Start session' }).click();
+  await expect(page.getByText('Earlier answer from the CLI')).toBeVisible({ timeout: 30000 });
+  await app.close();
+});

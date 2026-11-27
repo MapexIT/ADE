@@ -1,4 +1,4 @@
-import { MessagesSquare, Plus, Search } from 'lucide-react';
+import { History, MessagesSquare, Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { Session } from '@ade/contracts';
@@ -64,10 +64,13 @@ export function SessionsList() {
       <Button variant="ghost" onClick={() => set({ sessionSearchOpen: true })} icon={<Search className="size-4" aria-hidden="true" />}>
         Search sessions
       </Button>
+      <Button variant="ghost" onClick={() => set({ cliSessionsOpen: true })} icon={<History className="size-4" aria-hidden="true" />}>
+        Continue from a CLI
+      </Button>
       {Object.keys(sessions).length === 0 ? (
-        // Bottom padding equals the two buttons above (2 × 44 px + 12 px gap) plus the gap below them, so the empty state
+        // Bottom padding equals the three buttons above (3 × 44 px + 2 × 12 px gaps) plus the gap below them, so the empty state
         // sits at the same height as the Inspector's on the other side.
-        <div className="flex min-h-0 flex-1 pb-[112px] [&>*]:w-full [&>*]:px-2 [&_p]:max-w-none" data-testid="sessions-empty">
+        <div className="flex min-h-0 flex-1 pb-[168px] [&>*]:w-full [&>*]:px-2 [&_p]:max-w-none" data-testid="sessions-empty">
           <EmptyState icon={<MessagesSquare className="size-5" />} title="No sessions yet" body="Start one to give an agent a task in its own worktree." />
         </div>
       ) : null}

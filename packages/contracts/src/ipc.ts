@@ -14,6 +14,7 @@ import {
   Turn,
   WorkItem,
   WorkItemRole,
+  CliSession,
   Workspace,
 } from './entities.ts';
 import { PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
@@ -220,6 +221,8 @@ export const CreateSessionInput = z.object({
   inPlace: z.boolean().optional(),
   /** GN-01: how the first prompt is generated. Anything but IO reasons once the session is ready, then sends. */
   reasoning: ReasoningSettings.optional(),
+  /** SR-10: continue this conversation from the agent's own CLI (its ACP session id) instead of starting a new one. */
+  continueFrom: z.string().min(1).max(300).optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
 
@@ -706,6 +709,11 @@ export const hostApi = defineApi({
   'sessions.list': method(z.object({ workspaceId: Id }), z.array(Session)),
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),
   'sessions.create': method(CreateSessionInput, Session),
+  /** SR-10: conversations started in the agents' own CLIs in this repository, newest first, that ADE can continue. */
+  'sessions.cliList': method(
+    z.object({ workspaceId: Id }),
+    z.object({ sessions: z.array(CliSession), problems: z.array(z.object({ agentId: AgentId, message: z.string() })) }),
+  ),
   'sessions.prompt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), Ok),
   /**
    * GN-01: sends a prompt through a reasoning method. `io` behaves like `sessions.prompt`; the others reason in the

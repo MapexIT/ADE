@@ -65,7 +65,8 @@ export function NewSessionDialog() {
     setBringChanges(false);
     setInPlace(false);
     setReasoning(DEFAULT_SETTINGS);
-    setMode(prefill?.compare ? 'compare' : (prefill?.mode ?? 'agent'));
+    setMode(prefill?.continueFrom ? 'agent' : prefill?.compare ? 'compare' : (prefill?.mode ?? 'agent'));
+    if (prefill?.continueFrom) setAgentId(prefill.continueFrom.agentId);
     void attempt(() => host.call('containment.status', {})).then((s) => {
       setContainment(s ?? null);
       setSandboxed(!!s?.defaultOn);
@@ -208,6 +209,7 @@ export function NewSessionDialog() {
         ...(prefill?.workItem ? { workItemRef: prefill.workItem.ref } : {}),
         ...(prefill?.skills?.length ? { skills: prefill.skills } : {}),
         ...(reasoning.method !== 'io' ? { reasoning } : {}),
+        ...(prefill?.continueFrom ? { continueFrom: prefill.continueFrom.sessionId } : {}),
       }),
     );
     setBusy(false);
@@ -222,9 +224,11 @@ export function NewSessionDialog() {
     <Modal
       open={open}
       onOpenChange={(o) => !o && set({ newSession: null })}
-      title="New session"
+      title={prefill?.continueFrom ? 'Continue from the CLI' : 'New session'}
       description={
-        mode === 'agent'
+        prefill?.continueFrom
+          ? `Continues “${prefill.continueFrom.title ?? 'Untitled conversation'}” from ${agents.find((a) => a.id === prefill.continueFrom!.agentId)?.label ?? 'the agent'}’s CLI in a new worktree. The conversation is loaded first, then your message is sent.`
+          : mode === 'agent'
           ? 'One conversation with one agent, in its own worktree and branch.'
           : mode === 'compare'
             ? 'The same prompt to two or three agents, each in its own worktree, compared side by side.'
@@ -263,7 +267,7 @@ export function NewSessionDialog() {
         )
       }
     >
-      <div className="mb-4">
+      <div className={cx('mb-4', prefill?.continueFrom && 'hidden')}>
         <Tabs
           label="Start with"
           value={mode}
@@ -279,7 +283,9 @@ export function NewSessionDialog() {
         <div className="flex flex-col gap-4">
           <Field
             label={
-              mode === 'agent'
+              prefill?.continueFrom
+                ? 'What should the agent do next?'
+                : mode === 'agent'
                 ? 'What should the agent do?'
                 : mode === 'compare'
                   ? 'What should the agents do?'
@@ -400,7 +406,7 @@ export function NewSessionDialog() {
                       name="ns-agent"
                       value={a.id}
                       checked={agentId === a.id}
-                      disabled={a.health === 'not-installed'}
+                      disabled={a.health === 'not-installed' || (!!prefill?.continueFrom && a.id !== prefill.continueFrom.agentId)}
                       onChange={() => setAgentId(a.id)}
                       className="accent-[var(--accent)]"
                     />

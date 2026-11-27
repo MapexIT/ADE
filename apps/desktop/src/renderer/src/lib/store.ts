@@ -1,4 +1,4 @@
-import type { AgentStatus, NeedsYouItem, PromptBlock, RuleAdvice, RuleSuggestion, Session, SessionEvent, Turn, WorkItem, Workspace } from '@ade/contracts';
+import type { AgentId, AgentStatus, NeedsYouItem, PromptBlock, RuleAdvice, RuleSuggestion, Session, SessionEvent, Turn, WorkItem, Workspace } from '@ade/contracts';
 import { activityFrom, applyActivity, applyEvent, emptyActivity, emptyView, projectSession, type Activity, type SessionView } from '@ade/session-core';
 import { create } from 'zustand';
 import { host } from './bridge.ts';
@@ -45,6 +45,8 @@ export interface NewSessionPrefill {
   handOff?: { summary?: string; checkOutput?: string };
   /** SR-06: start from this commit (an earlier turn's checkpoint). */
   baseRef?: string;
+  /** SR-10: continue this conversation from the agent's own CLI. */
+  continueFrom?: { agentId: AgentId; sessionId: string; title: string | null };
   /** Open with "Compare agents" selected (PL-03). */
   compare?: boolean;
 }
@@ -73,6 +75,8 @@ interface State {
   suggestions: Suggestion[];
   /** HI-06: the session search dialog. */
   sessionSearchOpen: boolean;
+  /** SR-10: the dialog that lists conversations from the agents' CLIs. */
+  cliSessionsOpen: boolean;
   /** The run shown in the Run tab (CR-02); see lib/runs.ts. */
   activeRun: ActiveRun | null;
   /** CR-02: a run that was asked for and has not printed anything yet; the Run tab shows a waiting animation. */
@@ -187,6 +191,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   handOffSessionId: null,
   suggestions: [],
   sessionSearchOpen: false,
+  cliSessionsOpen: false,
   activeRun: null,
   startingRun: null,
   runsVersion: 0,

@@ -379,6 +379,25 @@ export function createHost(config: HostConfig) {
       events: repos.events.list(sessionId),
       queued: sessions.queued(sessionId),
     }),
+    'sessions.cliList': async ({ workspaceId }) => {
+      const workspace = repos.workspaces.get(workspaceId);
+      if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
+      // SR-10: conversations started in each agent's own CLI in this repository. Ones ADE already continued are left out.
+      const known = new Set(repos.sessions.list(workspaceId).flatMap((s) => (s.agentSessionId ? [s.agentSessionId] : [])));
+      const baseEnv = { ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState };
+      const results = await Promise.all(
+        [...runtimes.values()].map(async (rt) => {
+          try {
+            const listed = await rt.listSessions(workspace.rootPath, baseEnv);
+            return { sessions: (listed ?? []).filter((x) => !known.has(x.sessionId)).map((x) => ({ agentId: rt.id, ...x })), problem: null };
+          } catch (err) {
+            return { sessions: [], problem: { agentId: rt.id, message: (err as Error).message.slice(0, 300) } };
+          }
+        }),
+      );
+      const all = results.flatMap((r) => r.sessions).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+      return { sessions: all, problems: results.flatMap((r) => (r.problem ? [r.problem] : [])) };
+    },
     'sessions.create': async (input) => {
       const session = await sessions.create(input);
       // The composer keeps the method the session started with.
