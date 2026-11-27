@@ -1,4 +1,4 @@
-import type { NewSessionEvent, SessionEvent } from '@ade/contracts';
+import type { DistributiveOmit, NewSessionEvent, SessionEvent } from '@ade/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   checkpointChain,
@@ -298,7 +298,7 @@ describe('lineOrigins and groupByPrompt', () => {
 
 describe('turnsOf and traceDetail', () => {
   let seq = 0;
-  const ev = (e: Omit<NewSessionEvent, 'sessionId'>): SessionEvent => ({ sessionId: 's', seq: seq++, ts: `ts${seq}`, ...e }) as SessionEvent;
+  const ev = (e: DistributiveOmit<NewSessionEvent, 'sessionId'>): SessionEvent => ({ sessionId: 's', seq: seq++, ts: `ts${seq}`, ...e }) as SessionEvent;
   const events: SessionEvent[] = [
     ev({ type: 'user.message', content: [{ type: 'text', text: 'Write alpha' }], queued: false }),
     ev({ type: 'turn.started', turnId: 'A', index: 0 }),
