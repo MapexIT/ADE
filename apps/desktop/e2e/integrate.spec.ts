@@ -18,6 +18,8 @@ test('PL-06: fit matrix, a check that passes alone and fails together, and landi
   const repo = makeRepo();
   // The check fails only when both a.txt and b.txt exist: each session passes alone, A and B together fail.
   writeFileSync(join(repo, 'check.js'), "const f = require('fs');\nprocess.exit(f.existsSync('a.txt') && f.existsSync('b.txt') ? 1 : 0);\n");
+  // The check runs through npm, so Node's own npm.cmd must resolve on Windows (it once ended with no exit code).
+  writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'demo', scripts: { test: 'node check.js' } }, null, 2));
   execFileSync('git', ['add', '-A'], { cwd: repo });
   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd: repo });
 
@@ -30,7 +32,7 @@ test('PL-06: fit matrix, a check that passes alone and fails together, and landi
   // A run configuration "both" (Run page), chosen as the check in Review after session A.
   await page.keyboard.press('Control+6');
   await page.getByLabel('Name', { exact: true }).fill('both');
-  await page.getByLabel('Command').fill('node check.js');
+  await page.getByLabel('Command').fill('npm test');
   await page.getByRole('button', { name: 'Save configuration' }).click();
   await page.keyboard.press('Control+1');
   await startSession(page, 'Session A', 'edit a.txt one');
