@@ -37,7 +37,8 @@ const NODE_NPM_CMD = [
   '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
 ].join('\r\n');
 
-describe('toSpawnable: Windows command shims run without a shell', () => {
+// Shims and their backslash paths exist only on Windows.
+describe.runIf(process.platform === 'win32')('toSpawnable: Windows command shims run without a shell', () => {
   it('reads the script of Node’s own npm.cmd, not the prefix helper it calls first', () => {
     const cli = file('node_modules/npm/bin/npm-cli.js');
     file('node_modules/npm/bin/npm-prefix.js');
