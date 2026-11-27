@@ -70,6 +70,16 @@ test('SM-20: a block is filtered by text, with context, follows a re-run, shows 
   // PowerShell under ConPTY puts the prompt line and some blank screen rows in the output too, so the total varies.
   await expect(shown.first()).toContainText('line 50 error: something broke');
 
+  // A regular expression runs in a worker; an invalid one says so.
+  await filter.getByRole('button', { name: 'Regular expression' }).click();
+  await filter.getByLabel('Filter lines').fill('line (50|120) err');
+  await expect(filter.getByRole('status')).toHaveText(/^2 of \d+ lines$/);
+  await filter.getByLabel('Filter lines').fill('line (50');
+  await expect(filter.getByRole('status')).toHaveText('This pattern is not a valid regular expression.');
+  await filter.getByRole('button', { name: 'Regular expression' }).click();
+  await filter.getByLabel('Filter lines').fill('error');
+  await expect(shown).toHaveCount(3);
+
   await filter.getByLabel('Lines of context').fill('1');
   await expect(shown).toHaveCount(9);
 
