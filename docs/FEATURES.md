@@ -172,7 +172,7 @@ Linux.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| CO-01 | Work item panel | MVP | Browse and search Shortcut stories and GitHub issues assigned to the user, by iteration, epic or project. The panel has two top-level tabs, Assigned to me and Board; under Assigned to me a Shortcut / GitHub switch picks the source. GitHub issues (Assigned to me) are picked by repository first: a list of the repositories with assigned issues and their counts, then that repository's issues by state, with All repositories to go back. Read scope only. |
+| CO-01 | Work item panel | MVP | Browse and search Shortcut stories and GitHub issues. Two top-level tabs, Assigned to me and Board; under Assigned to me a Shortcut / GitHub switch picks the source and three columns load side by side: I own (owner / assignee), I requested (requester / author) and My teams (stories of the user's Shortcut teams; GitHub issues that mention one of the user's teams), grouped by state in the first two and by team in the third. GitHub items can be narrowed to one repository. Each column scrolls on its own. Read scope only. |
 | CO-02 | Start from a work item | MVP | Opens the composer with title, description and acceptance criteria attached, shown for review before sending. |
 | CO-03 | Branch naming | MVP | The session branch is named from the work item; Shortcut items use the `sc-<id>` form. |
 | CO-04 | Linked sessions | MVP | A session shows its work item; the panel shows which items have sessions. |
