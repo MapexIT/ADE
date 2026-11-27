@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   agent,
@@ -66,7 +66,9 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
     const p = transcriptPath(s.id);
     if (!p) return;
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, JSON.stringify({ cwd: s.cwd, modeId: s.modeId, history: s.history }));
+    const first = s.history.find((u) => u.sessionUpdate === 'user_message_chunk');
+    const title = first && first.sessionUpdate === 'user_message_chunk' && first.content.type === 'text' ? first.content.text.slice(0, 80) : null;
+    writeFileSync(p, JSON.stringify({ cwd: s.cwd, modeId: s.modeId, history: s.history, title, updatedAt: new Date().toISOString() }));
   };
 
   const send = async (client: AgentContext, s: FakeSession, update: SessionUpdate) => {
@@ -276,6 +278,7 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
       protocolVersion: Math.min(params.protocolVersion, 1),
       agentCapabilities: {
         loadSession: Boolean(options.stateDir),
+        ...(options.stateDir ? { sessionCapabilities: { list: {} } } : {}),
         promptCapabilities: { image: false, audio: false, embeddedContext: true },
         mcpCapabilities: { http: false, sse: false },
       },
@@ -302,6 +305,19 @@ export function createFakeAgent(options: FakeAgentOptions = {}) {
       sessions.set(s.id, s);
       for (const update of saved.history) await send(client, s, update);
       return { modes: { currentModeId: s.modeId, availableModes: MODES }, configOptions: modelOption(s.modelId) };
+    })
+    .onRequest('session/list', async ({ params }) => {
+      // SR-10: the transcripts in the state folder, as an agent's CLI history.
+      const dir = options.stateDir;
+      if (!dir || !existsSync(dir)) return { sessions: [] };
+      const sessions = readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => {
+          const saved = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { cwd: string; title?: string | null; updatedAt?: string | null };
+          return { sessionId: f.slice(0, -5), cwd: saved.cwd, title: saved.title ?? null, updatedAt: saved.updatedAt ?? null };
+        })
+        .filter((s) => !params.cwd || s.cwd === params.cwd);
+      return { sessions };
     })
     .onRequest('session/set_mode', async ({ params, client }) => {
       const s = sessions.get(params.sessionId);

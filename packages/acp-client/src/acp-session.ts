@@ -82,6 +82,8 @@ export class AcpAgentSession implements AgentSession {
   readonly exited: Promise<{ code: number | null; error: string | null }>;
 
   private readonly listeners = new Set<(e: AgentEvent) => void>();
+  /** SR-10: events replayed before anyone listened, kept only with `replayHistory`. */
+  private backlog: AgentEvent[] | null = null;
   private permissionHandler: PermissionHandler | null = null;
   private readonly pendingPermissions = new Map<string, AbortController>();
   private readonly terminals = new Map<string, LocalTerminal>();
@@ -136,6 +138,11 @@ export class AcpAgentSession implements AgentSession {
   }
 
   private emit(event: AgentEvent) {
+    if (!this.listeners.size && this.opts.replayHistory) {
+      this.backlog ??= [];
+      if (this.backlog.length < 5000) this.backlog.push(event);
+      return;
+    }
     for (const l of this.listeners) l(event);
   }
 
@@ -347,6 +354,9 @@ export class AcpAgentSession implements AgentSession {
 
   onEvent(listener: (event: AgentEvent) => void): () => void {
     this.listeners.add(listener);
+    const replayed = this.backlog;
+    this.backlog = null;
+    for (const e of replayed ?? []) listener(e);
     return () => this.listeners.delete(listener);
   }
 

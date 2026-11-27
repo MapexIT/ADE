@@ -51,6 +51,16 @@ export const AgentCapabilities = z.object({
 });
 export type AgentCapabilities = z.infer<typeof AgentCapabilities>;
 
+/** SR-10: a conversation the agent's own CLI keeps (ACP `session/list`). */
+export const CliSession = z.object({
+  agentId: AgentId,
+  sessionId: z.string(),
+  title: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  cwd: z.string(),
+});
+export type CliSession = z.infer<typeof CliSession>;
+
 export const AgentInstall = z.object({
   id: AgentId,
   path: z.string(),

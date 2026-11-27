@@ -52,6 +52,11 @@ export interface StartOptions {
   mcpServers?: McpServerSpec[];
   /** Resume an earlier agent session with `session/load` when the agent supports it. */
   resumeSessionId?: string;
+  /**
+   * SR-10: keep what the agent replays during `session/load` and hand it to the first `onEvent` listener, so a
+   * conversation started in the agent's CLI shows in the timeline. Off for ADE's own reconnects (already stored).
+   */
+  replayHistory?: boolean;
   /** Source environment to filter through the allow-list. Defaults to `process.env`. */
   baseEnv?: NodeJS.ProcessEnv;
   /** Raw protocol messages, for the protocol inspector (WA-05). Credentials are redacted before this is called. */

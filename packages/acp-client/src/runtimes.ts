@@ -1,4 +1,5 @@
 import { AGENT_LABELS, type AgentId, type PermissionProfile, type SandboxState, type SessionMode } from '@ade/contracts';
+import { listAgentSessions, type ListedSession } from './session-list.ts';
 import { AcpAgentSession } from './acp-session.ts';
 import { buildAgentEnv, type EnvPolicy } from './env.ts';
 import { findOnPath, runForOutput, toSpawnable, type Command } from './process.ts';
@@ -147,6 +148,14 @@ export class AcpRuntime implements AgentRuntime {
     if (!launch) throw new Error(`${this.label} cannot be started: it is not installed or its adapter is missing.`);
     const env = { ...buildAgentEnv(opts.baseEnv ?? process.env, this.d.envPolicy), ...launch.env, ...sandbox?.env };
     return this.connect(launch.cmd, env, withMeta);
+  }
+
+  /** SR-10: the conversations this agent's CLI keeps for `cwd`, or null when the agent cannot list them. */
+  async listSessions(cwd: string, baseEnv: NodeJS.ProcessEnv = process.env): Promise<ListedSession[] | null> {
+    const install = await this.detect();
+    const launch = this.d.launch(install, this.locator);
+    if (!launch) return null;
+    return listAgentSessions(launch.cmd, { ...buildAgentEnv(baseEnv, this.d.envPolicy), ...launch.env }, cwd);
   }
 
   private async connect(cmd: Command, env: Record<string, string>, opts: StartOptions): Promise<AgentSession> {
