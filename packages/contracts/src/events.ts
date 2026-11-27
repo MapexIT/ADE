@@ -123,6 +123,13 @@ export type ReceiptCheck = z.infer<typeof ReceiptCheck>;
 
 export const ReasoningStepStatus = z.enum(['running', 'done', 'failed']);
 
+/**
+ * ED-05: where a user message came from. Set by the host when the message is sent; older events have none.
+ * `reject-note` is the note sent after "Reject with a note"; `after-undo` the first prompt after an undone turn.
+ */
+export const MessageOrigin = z.enum(['composer', 'interrupt', 'review-comment', 'reject-note', 'loop-redirect', 'after-undo']);
+export type MessageOrigin = z.infer<typeof MessageOrigin>;
+
 const base = { sessionId: z.string(), seq: z.number().int().nonnegative(), ts: z.string() };
 
 /**
@@ -130,7 +137,7 @@ const base = { sessionId: z.string(), seq: z.number().int().nonnegative(), ts: z
  * Raw chunks are streamed live but coalesced into one message event before storage.
  */
 export const SessionEvent = z.discriminatedUnion('type', [
-  z.object({ ...base, type: z.literal('user.message'), content: z.array(PromptBlock), queued: z.boolean() }),
+  z.object({ ...base, type: z.literal('user.message'), content: z.array(PromptBlock), queued: z.boolean(), origin: MessageOrigin.optional() }),
   z.object({ ...base, type: z.literal('turn.started'), turnId: z.string(), index: z.number().int() }),
   z.object({
     ...base,

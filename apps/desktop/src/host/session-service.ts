@@ -12,6 +12,7 @@ import {
   type PermissionRule,
   type CreateSessionInput,
   type DistributiveOmit,
+  type MessageOrigin,
   type NeedsYouItem,
   type NewSessionEvent,
   type PermissionDecision,
@@ -95,6 +96,10 @@ export class SessionService {
   mcpServersFor: (workspaceId: string, sessionId: string) => McpServerSpec[] | Promise<McpServerSpec[]> = () => [];
   /** CN-07: set by the composition root when the host sandbox is wired. */
   sandbox: SandboxProvider | null = null;
+  /** ED-05: the standing notes block for a new session's first prompt (set by the composition root). */
+  lessonNotes: ((workspaceId: string, lessonIds: string[] | undefined) => { text: string; ids: string[] } | null) | null = null;
+  /** ED-05: where each queued message came from, by queue id; recorded on its user.message. Lost on restart. */
+  private readonly origins = new Map<string, MessageOrigin>();
 
   constructor(
     private readonly repos: Repositories,
@@ -286,8 +291,11 @@ export class SessionService {
     this.repos.sessions.insert(session);
     this.append(id, { type: 'session.state_changed', from: null, to: state, reason: state === 'queued' ? 'Waiting for a free slot' : null });
     // GN-01: a reasoned first prompt is not queued: it is reasoned about once the agent is ready, then sent.
-    const reasoned = input.reasoning && input.reasoning.method !== 'io' && this.firstReasoned ? { content: input.prompt, settings: ReasoningSettings.parse(input.reasoning) } : undefined;
-    if (!reasoned) this.repos.queue.push(id, input.prompt);
+    // ED-05: standing notes go after the user's own words, in a block of their own.
+    const notes = this.lessonNotes?.(workspace.id, input.lessonIds) ?? null;
+    const prompt: PromptBlock[] = notes ? [...input.prompt, { type: 'text', text: notes.text }] : input.prompt;
+    const reasoned = input.reasoning && input.reasoning.method !== 'io' && this.firstReasoned ? { content: prompt, settings: ReasoningSettings.parse(input.reasoning) } : undefined;
+    if (!reasoned) this.origins.set(this.repos.queue.push(id, prompt), 'composer');
     this.bootOptions.set(id, {
       bringChanges: input.bringChanges ?? false,
       ...(input.modeId ? { modeId: input.modeId } : {}),
@@ -296,7 +304,7 @@ export class SessionService {
       ...(reasoned ? { reasoned } : {}),
       ...(input.continueFrom ? { continued: true } : {}),
     });
-    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace, ...(input.continueFrom ? { continuedFrom: input.continueFrom } : {}) });
+    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace, ...(input.continueFrom ? { continuedFrom: input.continueFrom } : {}), ...(notes ? { lessons: notes.ids } : {}) });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
     if (this.onCreated) this.inBackground(this.onCreated(session));
@@ -603,16 +611,23 @@ export class SessionService {
     try {
       // runTurn runs the whole turn and may start the next one itself, so the flag is cleared as soon as this
       // turn is live, and only cleared here when it never started.
-      await this.runTurn(sessionId, next.content, () => {
-        started = true;
-        this.sending.delete(sessionId);
-      });
+      const origin = this.origins.get(next.id);
+      this.origins.delete(next.id);
+      await this.runTurn(
+        sessionId,
+        next.content,
+        () => {
+          started = true;
+          this.sending.delete(sessionId);
+        },
+        origin,
+      );
     } finally {
       if (!started) this.sending.delete(sessionId);
     }
   }
 
-  private async runTurn(sessionId: string, content: PromptBlock[], onStarted?: () => void): Promise<void> {
+  private async runTurn(sessionId: string, content: PromptBlock[], onStarted?: () => void, origin?: MessageOrigin): Promise<void> {
     let session = this.repos.sessions.require(sessionId);
     const limits = this.limits();
     if (this.repos.turns.list(sessionId).length >= limits.maxTurns) {
@@ -629,7 +644,7 @@ export class SessionService {
     const turn = this.repos.turns.start(sessionId, startCommit);
     live.turn = turn;
     onStarted?.();
-    this.append(sessionId, { type: 'user.message', content, queued: false }, turn.id);
+    this.append(sessionId, { type: 'user.message', content, queued: false, ...(origin ? { origin } : {}) }, turn.id);
     this.append(sessionId, { type: 'turn.started', turnId: turn.id, index: turn.index }, turn.id);
     if (startCommit) this.append(sessionId, { type: 'checkpoint.created', turnId: turn.id, ref: startCommit, at: 'start' }, turn.id);
     if (session.state === 'interrupted') this.fire(sessionId, 'prompt', 'Reopened');
@@ -678,10 +693,11 @@ export class SessionService {
   // ---------------------------------------------------------------- user actions
 
   /** SR-01 / SR-02: send now when idle, otherwise store as a queued message. */
-  async prompt(sessionId: string, content: PromptBlock[]): Promise<{ id: string; queued: boolean }> {
+  async prompt(sessionId: string, content: PromptBlock[], origin: MessageOrigin = 'composer'): Promise<{ id: string; queued: boolean }> {
     const session = this.repos.sessions.require(sessionId);
     if (isTerminal(session.state)) throw new RpcError('session_ended', 'This session has ended.');
     const id = this.repos.queue.push(sessionId, content);
+    this.origins.set(id, origin);
     // A session that finished booting can stay in "starting" until its first turn; it is only busy while booting.
     const busy = this.hasActiveTurn(sessionId) || ['queued', 'working', 'waiting-on-user'].includes(session.state) || (session.state === 'starting' && this.booting.has(sessionId));
     if (!busy) void this.sendNext(sessionId).catch((err: Error) => this.append(sessionId, { type: 'notice', level: 'error', text: err.message }));
@@ -723,14 +739,14 @@ export class SessionService {
 
   /** SR-03: cancel the turn and send `content` as soon as it has ended. */
   async interrupt(sessionId: string, content: PromptBlock[]): Promise<void> {
-    this.repos.queue.push(sessionId, content, true);
+    this.origins.set(this.repos.queue.push(sessionId, content, true), 'interrupt');
     if (this.hasActiveTurn(sessionId)) await this.cancel(sessionId);
     else await this.sendNext(sessionId);
   }
 
   answerPermission(sessionId: string, requestId: string, optionId: string | null, note?: string): void {
     const decision: PermissionDecision = optionId ? { outcome: 'selected', optionId } : { outcome: 'cancelled' };
-    if (note?.trim()) this.repos.queue.push(sessionId, [{ type: 'text', text: note.trim() }]);
+    if (note?.trim()) this.origins.set(this.repos.queue.push(sessionId, [{ type: 'text', text: note.trim() }]), 'reject-note');
     if (!this.decide(sessionId, requestId, decision, 'user', note?.trim() || null)) {
       throw new RpcError('not_pending', 'That request is no longer waiting for an answer.');
     }

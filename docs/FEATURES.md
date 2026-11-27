@@ -1,6 +1,6 @@
 # Features
 
-170 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+171 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -229,6 +229,7 @@ Node types: agent, command, gate, loop, branch, fan-out, connector, land.
 | ED-02 | Open in my editor | MVP | Opens a worktree in the configured external editor. |
 | ED-03 | Language servers | v1 | Diagnostics, hover, go to definition. |
 | ED-04 | Instruction files | v1 | Shows which instruction files each agent reads and flags divergence. |
+| ED-05 | Lessons | v1 | ADE recognises the user's corrections (the message sent when declining a request, Interrupt and send, review comments sent to the agent, the first prompt after an undo; no model call) and, when the same correction appears in two sessions or to two agents, offers it as a lesson in the user's own words under the newest correction ("Lesson suggested"; Not now, Never suggest this, switchable off in Settings). Review lesson shows the sentence (editable), each occasion with session, agent and date, the route and an optional watch pattern with a rehearsal; nothing is added without Add lesson. Routes: with the first prompt (a "Standing notes from the user" block after the user's words in each new session; switchable per session in New session) or in a marked block of AGENTS.md in the checkout (uncommitted; says which agents read it and offers CLAUDE.md). A matching watch pattern adds one "Lesson not followed" notice per lesson per turn and counts it; nothing is blocked. Settings lists lessons with route, occasions, last sent, times not followed, on/off, Edit and Remove; a first-prompt lesson not sent in 30 days is marked. |
 | HI-01 | History | MVP | Every session is stored and can be reopened read-only; it continues when the agent supports `session/load`. |
 | HI-02 | Audit log | MVP | Append-only record of agent, version, permission decisions and landing actions per workspace. |
 | HI-03 | Usage | MVP | Tokens and cost per session when reported, otherwise "not reported". |

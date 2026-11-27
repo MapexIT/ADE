@@ -1,7 +1,7 @@
 import { Bot, Check, CircleAlert, CircleHelp, CirclePause, Download, ExternalLink, FolderGit2, FolderOpen, Gauge, GitMerge, GitPullRequest, Hand, Info, MessagesSquare, Navigation, Repeat, RefreshCw, Save, ShieldQuestion, SquareTerminal, Trash2, Unplug, type LucideIcon } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge, Button, cx, Kbd, Logo, SectionLabel } from '@ade/ui';
-import { LoopSettings, ReceiptSettings, RuleAdviceSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
+import { LessonAdviceSettings, LoopSettings, ReceiptSettings, RuleAdviceSettings, type ContainmentStatus, type ProtocolMessage } from '@ade/contracts';
 import { Command } from 'cmdk';
 import { useEffect, useMemo, useState } from 'react';
 import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
@@ -12,6 +12,7 @@ import { Field, inputClass, Modal } from './Modal.tsx';
 import { TelegramSettings } from './TelegramSettings.tsx';
 import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
 import { WorkspaceRules } from './WorkspaceRules.tsx';
+import { LessonsSettings } from './Lessons.tsx';
 import { PersonalMcpSettings, WorkItemSyncSettings } from './ConnectorSettings.tsx';
 import { ExportAuditButton, InstructionFiles } from './HistoryTools.tsx';
 
@@ -219,6 +220,7 @@ export function SettingsDialog() {
   const [loops, setLoops] = useState<LoopSettings>({ enabled: true, stopTurn: false });
   const [receipts, setReceipts] = useState<ReceiptSettings>({ enabled: true, notify: true });
   const [ruleAdvice, setRuleAdvice] = useState<RuleAdviceSettings>({ enabled: true, threshold: 3 });
+  const [lessonAdvice, setLessonAdvice] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -240,6 +242,10 @@ export function SettingsDialog() {
       const parsed = RuleAdviceSettings.safeParse(v.value ?? {});
       setRuleAdvice(parsed.success ? parsed.data : { enabled: true, threshold: 3 });
     });
+    void host.call('settings.get', { key: 'lessonAdvice' }).then((v) => {
+      const parsed = LessonAdviceSettings.safeParse(v.value ?? {});
+      setLessonAdvice(parsed.success ? parsed.data.enabled : true);
+    });
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
@@ -252,6 +258,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'loops', value: loops }));
     await attempt(() => host.call('settings.set', { key: 'receipts', value: receipts }));
     await attempt(() => host.call('settings.set', { key: 'ruleAdvice', value: ruleAdvice }));
+    await attempt(() => host.call('settings.set', { key: 'lessonAdvice', value: { enabled: lessonAdvice } }));
     await attempt(() => host.call('settings.set', { key: 'connectors.shareWithAgents', value: share }));
     await attempt(() => host.call('settings.set', { key: 'workflows.autoTriggers', value: autoTriggers }));
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
@@ -259,6 +266,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'app.keepRunningInBackground', value: keepRunning }));
     toast('Settings saved.');
     if (workspaceId) useStore.getState().refreshRuleAdvice(workspaceId);
+    if (workspaceId) useStore.getState().refreshLessonAdvice(workspaceId);
     set({ settingsOpen: false });
   };
 
@@ -306,6 +314,13 @@ export function SettingsDialog() {
             <span>
               Suggest rules from my decisions
               <span className="block text-[12px] text-ink-muted">ADE counts how you answer requests in this repository and offers a rule when you keep deciding the same way. Nothing is added without you.</span>
+            </span>
+          </label>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={lessonAdvice} onChange={(e) => setLessonAdvice(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Suggest lessons from my corrections
+              <span className="block text-[12px] text-ink-muted">When you correct agents the same way in two sessions or to two agents, ADE offers to keep it as a lesson. No model reads your messages.</span>
             </span>
           </label>
           <label className="flex min-h-11 items-start gap-2">
@@ -406,6 +421,7 @@ export function SettingsDialog() {
           </label>
         </section>
         {workspaceId ? <WorkspaceRules workspaceId={workspaceId} /> : null}
+        {workspaceId ? <LessonsSettings workspaceId={workspaceId} /> : null}
         {workspaceId ? <WorkItemSyncSettings workspaceId={workspaceId} /> : null}
         {workspaceId ? <InstructionFiles workspaceId={workspaceId} /> : null}
         {workspaceId ? (

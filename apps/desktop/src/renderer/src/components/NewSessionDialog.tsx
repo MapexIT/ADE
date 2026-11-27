@@ -10,6 +10,7 @@ import { PROFILE_LABELS, promptPreview, textPrompt } from '../lib/format.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
 import { AgentOverrideFields, useAgentOverrides } from './workflows/AgentOverrides.tsx';
+import { SessionLessons, useSessionLessons } from './Lessons.tsx';
 
 const PROFILES: { id: PermissionProfile; hint: string }[] = [
   { id: 'ask', hint: 'Ask before edits and commands.' },
@@ -53,6 +54,9 @@ export function NewSessionDialog() {
   const [reasoning, setReasoning] = useState<ReasoningSettings>(DEFAULT_SETTINGS);
   const workflow = workflows.find((w) => w.id === workflowId) ?? null;
   const stand = useAgentOverrides(workflow?.agents ?? [], open && mode === 'workflow');
+  // ED-05: the first-prompt lessons, each switchable off for this session.
+  const sessionLessons = useSessionLessons(workspaceId, open);
+  const lessonIds = sessionLessons.lessons.length ? { lessonIds: sessionLessons.ids } : {};
 
   useEffect(() => {
     if (!open) return;
@@ -150,6 +154,7 @@ export function NewSessionDialog() {
         hostSandbox: sandboxOn,
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(baseRef.trim() && baseRef.trim() !== 'HEAD' ? { baseRef: baseRef.trim() } : {}),
+        ...lessonIds,
       }),
     );
     setBusy(false);
@@ -210,6 +215,7 @@ export function NewSessionDialog() {
         ...(prefill?.skills?.length ? { skills: prefill.skills } : {}),
         ...(reasoning.method !== 'io' ? { reasoning } : {}),
         ...(prefill?.continueFrom ? { continueFrom: prefill.continueFrom.sessionId } : {}),
+        ...lessonIds,
       }),
     );
     setBusy(false);
@@ -314,6 +320,7 @@ export function NewSessionDialog() {
               className={inputClass}
             />
           </Field>
+          {mode !== 'workflow' ? <SessionLessons state={sessionLessons} /> : null}
           {mode === 'agent' ? (
             <div className="flex flex-col gap-1.5">
               <span className="text-[12px] font-semibold text-ink-muted">How the first prompt is generated</span>

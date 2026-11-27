@@ -9,6 +9,7 @@ import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { hintFor } from '../../lib/rule-advice.ts';
 import { ScreenshotItem } from '../HistoryTools.tsx';
 import { RuleHint } from '../RuleAdvice.tsx';
+import { LessonHintFor } from '../Lessons.tsx';
 import { CommandItem } from './CommandItem.tsx';
 import { LoopItem } from './LoopItem.tsx';
 import { ReceiptItem } from './ReceiptItem.tsx';
@@ -97,6 +98,7 @@ export function ApprovalCard({ item, sessionId }: { item: Extract<TimelineItem, 
         </span>
         {item.note ? <span className="w-full text-ink-muted">Note: {item.note}</span> : null}
         {hint && workspaceId ? <RuleHint workspaceId={workspaceId} suggestion={hint} /> : null}
+        <LessonHintFor sessionId={sessionId} itemKey={item.key} />
       </div>
     );
   }
@@ -161,16 +163,20 @@ export const TimelineRow = memo(function TimelineRow({ item, sessionId }: { item
   switch (item.kind) {
     case 'user':
       return (
-        <div className="ml-auto max-w-[75%] rounded-[var(--radius)] bg-accent-tint px-3 py-2.5 whitespace-pre-wrap">
-          {item.content.map((b, i) =>
-            b.type === 'text' ? (
-              <span key={i}>{b.text}</span>
-            ) : (
-              <Badge key={i} tone="accent" className="mr-1">
-                {b.type === 'resource' ? b.name : 'Image'}
-              </Badge>
-            ),
-          )}
+        <div className="flex flex-col gap-2">
+          <div className="ml-auto max-w-[75%] rounded-[var(--radius)] bg-accent-tint px-3 py-2.5 whitespace-pre-wrap">
+            {item.content.map((b, i) =>
+              b.type === 'text' ? (
+                <span key={i}>{b.text}</span>
+              ) : (
+                <Badge key={i} tone="accent" className="mr-1">
+                  {b.type === 'resource' ? b.name : 'Image'}
+                </Badge>
+              ),
+            )}
+          </div>
+          {/* ED-05: a lesson suggestion under the user's newest correction in this session. */}
+          <LessonHintFor sessionId={sessionId} itemKey={item.key} />
         </div>
       );
     case 'agent-message':
