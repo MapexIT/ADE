@@ -25,8 +25,9 @@ export function SessionsList() {
   const inbox = useStore((s) => s.inbox);
   const set = useStore((s) => s.set);
   const waitingTerminals = useTerminals(
-    useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')),
+    useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting' || t.attention[x.id])),
   );
+  const attention = useTerminals((t) => t.attention);
   const [showDone, setShowDone] = useState(false);
   const workspaceId = useStore((s) => s.workspaceId);
   /** HI-13: deletes ended sessions (one, or every ended one) with their stored history. */
@@ -81,6 +82,9 @@ export function SessionsList() {
               : pending[0].title,
         attention: true,
       };
+    // SM-19: a fired watch reads as its reason ("Failed · exit 1").
+    const watched = waitingTerminals.find((t) => t.sessionId === s.id && attention[t.id]);
+    if (watched) return { text: `Terminal: ${attention[watched.id]!.text}`, attention: true };
     if (waitingTerminals.some((t) => t.sessionId === s.id))
       return { text: 'Agent terminal is waiting', attention: true };
     return { text: STATE_LABELS[s.state], attention: false };

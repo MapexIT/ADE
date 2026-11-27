@@ -8,6 +8,7 @@ import { reviewActions } from './review.ts';
 import { attempt, useStore } from './store.ts';
 import { fixNewProblems, latestProblems, problemKey, useProblems } from './problems.ts';
 import { useTerminals } from './terminals.ts';
+import { runTerminalShortcut, TERMINAL_SHORTCUTS, type TerminalShortcut } from './terminal-shortcuts.ts';
 
 /** One action the user can take (Command pattern). Every action is reachable from the palette (UI rule). */
 export interface Command {
@@ -69,6 +70,20 @@ export function buildCommands(): Command[] {
     { id: 'app.restart-host', title: 'Restart the host process', group: 'App', run: () => void main('main.restartProcess', { which: 'host' }) },
     { id: 'app.restart-pty', title: 'Restart the terminal process', group: 'App', run: () => void main('main.restartProcess', { which: 'pty' }) },
   ];
+  // SM-19 to SM-21: act on the active terminal; they say so when there is nothing to act on.
+  for (const [action, spec] of Object.entries(TERMINAL_SHORTCUTS) as [TerminalShortcut, (typeof TERMINAL_SHORTCUTS)[TerminalShortcut]][]) {
+    cmds.push({
+      id: `terminal.${action}`,
+      title: spec.title,
+      group: 'Terminal',
+      shortcut: spec.keys,
+      // The palette closes first, so the button is clicked once it has gone.
+      run: () =>
+        void setTimeout(() => {
+          if (!runTerminalShortcut(action)) s.toast(action === 'watch' ? 'Open a smart terminal to watch a command.' : 'Run a command in a smart terminal first.', 'danger');
+        }, 50),
+    });
+  }
   // SM-18: on the active terminal's latest block that has problems; absent when there is none.
   const terms = useTerminals.getState();
   const problems = terms.active ? latestProblems(useProblems.getState().byBlock, terms.active, terms.blocks[terms.active] ?? []) : null;

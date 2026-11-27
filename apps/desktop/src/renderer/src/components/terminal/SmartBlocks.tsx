@@ -1,47 +1,22 @@
 import { ClearHistoryButton } from '../ClearHistoryButton.tsx';
 import { copyText } from '../../lib/clipboard.ts';
-import { CircleStop, Copy, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
+import { CircleStop, Copy, GitCompareArrows, ListFilter, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { host, main, pty } from '../../lib/bridge.ts';
-import { attachmentText, clock, duration, joinPath } from '../../lib/format.ts';
+import { useEffect, useRef, useState } from 'react';
+import { host, pty } from '../../lib/bridge.ts';
+import { attachmentText, clock, duration } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
 import { clearBlocks, useTerminals } from '../../lib/terminals.ts';
 import { runInTerminal, sendChecked } from '../../lib/guards.ts';
 import { InlineViewer } from './InlineViewer.tsx';
 import { BlockProblems } from './BlockProblems.tsx';
-
-const LINK = /(https?:\/\/[^\s'"<>]+)|((?:[A-Za-z]:)?[\w./\\-]+\.[A-Za-z0-9]{1,8}):(\d+)(?::(\d+))?/g;
-
-/** SM-07: file paths with line numbers open in the editor; links open in the browser. */
-function Linkified({ text, cwd, sessionId }: { text: string; cwd: string | null; sessionId: string | null }) {
-  const openEditor = useStore((s) => s.openEditor);
-  const out: ReactNode[] = [];
-  let last = 0;
-  for (const m of text.matchAll(LINK)) {
-    const idx = m.index ?? 0;
-    out.push(text.slice(last, idx));
-    if (m[1]) {
-      const url = m[1];
-      out.push(
-        <a key={idx} href={url} className="text-accent underline" onClick={(e) => (e.preventDefault(), void attempt(() => main('main.openExternal', { url })))}>
-          {url}
-        </a>,
-      );
-    } else if (m[2] && cwd) {
-      const path = /^([A-Za-z]:|\/)/.test(m[2]) ? m[2] : joinPath(cwd, m[2]);
-      out.push(
-        <button key={idx} type="button" className="text-accent underline" onClick={() => openEditor(path, sessionId, Number(m[3]))}>
-          {m[0]}
-        </button>,
-      );
-    } else out.push(m[0]);
-    last = idx + m[0].length;
-  }
-  out.push(text.slice(last));
-  return <>{out}</>;
-}
+import { BlockFilter } from './BlockFilter.tsx';
+import { Linkified } from './Linkified.tsx';
+import { WatchControl } from './WatchControl.tsx';
+import { ComparisonTable, useFanOutTargets } from './Comparison.tsx';
+import { comparisonKey, openFanOut, useComparisons } from '../../lib/comparisons.ts';
+import { filterKey, followFilters, useBlockFilters } from '../../lib/block-filters.ts';
 
 export function blockAsText(b: CommandBlock) {
   return `$ ${b.command}\n${b.output.trimEnd()}\n[exit ${b.exitCode ?? 'unknown'}]`;
@@ -59,10 +34,21 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
   const listRef = useRef<HTMLDivElement>(null);
   const running = blocks.find((b) => b.endedAt === null);
   const sessionId = terminal?.sessionId ?? null;
+  const filters = useBlockFilters((s) => s.byCommand);
+  const openFilter = useBlockFilters((s) => s.open);
+  const comparisons = useComparisons((s) => s.byOrigin);
+  const canFanOut = useFanOutTargets(sessionId).some((t) => !t.ranHere) && terminal?.kind === 'smart';
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [blocks.length]);
+
+  // SM-20: a filter follows its command, so a re-run opens already filtered.
+  useEffect(() => {
+    const cur = useBlockFilters.getState().byCommand;
+    const next = followFilters(cur, terminalId, blocks);
+    if (next !== cur) useBlockFilters.setState({ byCommand: next });
+  }, [blocks, terminalId]);
 
   const fixWithAgent = async (b: CommandBlock) => {
     if (!sessionId) return toast('Open this terminal in a session worktree to send it to an agent.', 'danger');
@@ -84,14 +70,18 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
           <span className="text-ink-muted">Running</span>
           <span>{running.command}</span>
           <span className="text-ink-muted">since {clock(running.startedAt)}</span>
-          <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" className="ml-auto" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
-            Stop
-          </Button>
+          <div className="ml-auto flex gap-2 font-sans">
+            {terminal ? <WatchControl terminal={terminal} running /> : null}
+            <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
+              Stop
+            </Button>
+          </div>
         </div>
       ) : null}
       <div
         ref={listRef}
         className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-3"
+        data-blocks-for={terminalId}
         tabIndex={0}
         aria-label="Command blocks. Alt and arrow keys jump between blocks."
         onKeyDown={(e) => {
@@ -114,10 +104,14 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
           const failed = b.exitCode !== null && b.exitCode !== 0;
           const done = b.endedAt !== null;
           const isCollapsed = collapsed.has(b.id);
+          const filter = done ? filters[filterKey(terminalId, b.command)] : undefined;
+          const filtered = filter?.blockId === b.id;
           return (
             <section
               key={b.id}
               data-block={i}
+              data-block-id={b.id}
+              data-focused={focus === i || undefined}
               aria-label={`Command block, ${done ? (failed ? 'failed' : 'succeeded') : 'running'}`}
               className={cx('flex flex-col gap-1.5 rounded-[var(--radius-small)] border border-l-[3px] border-line px-3 py-2', failed ? 'border-l-danger bg-danger-tint' : done ? 'border-l-accent' : 'border-l-attention', focus === i && 'outline outline-accent')}
             >
@@ -129,13 +123,15 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   {done ? `exit ${b.exitCode ?? '?'} · ${duration((b.endedAt ?? 0) - b.startedAt)} · ${clock(b.startedAt)}` : 'running'}
                 </span>
               </div>
-              {!isCollapsed && b.output.trim() ? (
+              {!isCollapsed && filtered ? <BlockFilter terminalId={terminalId} block={b} blocks={blocks} cwd={b.cwd ?? terminal?.cwd ?? null} sessionId={sessionId} /> : null}
+              {!isCollapsed && !filtered && b.output.trim() ? (
                 <pre className="m-0 max-h-72 overflow-auto whitespace-pre-wrap text-ink-muted">
                   <Linkified text={b.output.trimEnd()} cwd={b.cwd ?? terminal?.cwd ?? null} sessionId={sessionId} />
                 </pre>
               ) : null}
               {!isCollapsed && done ? <InlineViewer block={b} cwd={b.cwd ?? terminal?.cwd ?? null} /> : null}
               {!isCollapsed && done ? <BlockProblems terminalId={terminalId} blockId={b.id} /> : null}
+              {done && comparisons[comparisonKey(terminalId, b.id)] ? <ComparisonTable id={comparisonKey(terminalId, b.id)} /> : null}
               {done ? (
                 <div className="flex flex-wrap gap-2 font-sans text-[13px]">
                   {failed ? (
@@ -169,6 +165,24 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={() => void copyText(blockAsText(b))}>
                     Copy output
                   </Button>
+                  <Button
+                    icon={<ListFilter className="size-4" aria-hidden="true" />}
+                    size="dense"
+                    data-action="filter"
+                    aria-pressed={filtered}
+                    title="Filter this block's output (Ctrl+Shift+L)"
+                    onClick={() => {
+                      if (isCollapsed) setCollapsed((c) => { const n = new Set(c); n.delete(b.id); return n; });
+                      openFilter(terminalId, b);
+                    }}
+                  >
+                    Filter
+                  </Button>
+                  {canFanOut && b.command.trim() ? (
+                    <Button icon={<GitCompareArrows className="size-4" aria-hidden="true" />} size="dense" data-action="compare" title="Run this command in other worktrees (Ctrl+Shift+E)" onClick={() => openFanOut(terminalId, b.id)}>
+                      Run in other worktrees…
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </section>

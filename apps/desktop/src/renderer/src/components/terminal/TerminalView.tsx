@@ -9,6 +9,7 @@ import { pty } from '../../lib/bridge.ts';
 import { useStore } from '../../lib/store.ts';
 import { destructiveReason, isMultiLinePaste } from '../../lib/terminal-intel.ts';
 import { scrollback, subscribeData } from '../../lib/terminals.ts';
+import { terminalShortcut } from '../../lib/terminal-shortcuts.ts';
 
 // Terminal output stays inside black, white and violet: every ANSI hue maps onto them.
 const THEME = {
@@ -69,6 +70,8 @@ export function TerminalView({ id, autoFocus }: { id: string; autoFocus?: boolea
     const input = term.onData((data) => void pty.call('pty.write', { id, data }));
     let confirmed = false;
     term.attachCustomKeyEventHandler((e) => {
+      // SM-19 to SM-21: the app handles these (the event still bubbles to the window); the shell never sees them.
+      if (terminalShortcut(e)) return false;
       if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         setSearch('');
         return false;

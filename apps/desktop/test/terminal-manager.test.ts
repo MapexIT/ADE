@@ -1,4 +1,4 @@
-import type { CommandBlock, TerminalInfo } from '@ade/contracts';
+import { ptyApi, WatchRule, type CommandBlock, type TerminalInfo, type WatchFired } from '@ade/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { TerminalManager, type PtyLike } from '../src/pty/terminal-manager.ts';
 
@@ -39,15 +39,144 @@ function setup() {
   const blocks: CommandBlock[] = [];
   const changed: TerminalInfo[] = [];
   const runs: { runId: string; exitCode: number | null; output: string }[] = [];
+  const fired: WatchFired[] = [];
   const manager = new TerminalManager((file, args) => new FakePty(file, args), {
     data: () => undefined,
     block: (_id, b) => blocks.push(b),
     exit: () => undefined,
     changed: (i) => changed.push(i),
     runFinished: (runId, exitCode, output) => runs.push({ runId, exitCode, output }),
+    watchFired: (f) => fired.push(f),
   });
-  return { manager, blocks, changed, runs };
+  return { manager, blocks, changed, runs, fired };
 }
+
+const smart = (manager: TerminalManager) => manager.create({ kind: 'smart', shell: 'bash', cwd: '/repo', cols: 80, rows: 24, sessionId: 's1' });
+const PROMPT = `${OSC('133;A')}$ ${OSC('133;B')}`;
+
+describe('TerminalManager: watch (SM-19)', () => {
+  it('publishes one watchFired when a watched command ends, and clears the watch', () => {
+    const { manager, fired, changed } = setup();
+    const info = smart(manager);
+    FakePty.last.emit(PROMPT);
+    manager.watch(info.id, WatchRule.parse({ end: 'fail', match: 'ready' }));
+    expect(changed.at(-1)?.watch).toMatchObject({ end: 'fail', match: 'ready' });
+    FakePty.last.emit(`${OSC('633;E;node watch.mjs')}${OSC('133;C')}ready on 3000\r\n`);
+    FakePty.last.emit(`bye\r\n${OSC('133;D;1')}${PROMPT}`);
+    expect(fired.map((f) => [f.reason, f.command, f.exitCode, f.line])).toEqual([
+      ['matched', 'node watch.mjs', null, 'ready on 3000'],
+      ['failed', 'node watch.mjs', 1, null],
+    ]);
+    expect(fired[0]?.id).toBe(info.id);
+    expect(changed.at(-1)?.watch).toBeNull();
+  });
+
+  it('fires quiet from its timer while the command runs', () => {
+    vi.useFakeTimers();
+    try {
+      const { manager, fired } = setup();
+      const info = smart(manager);
+      FakePty.last.emit(`${PROMPT}${OSC('633;E;npm login')}${OSC('133;C')}Username: `);
+      manager.watch(info.id, WatchRule.parse({ end: 'none', quietSeconds: 5 }));
+      vi.advanceTimersByTime(4900);
+      expect(fired).toHaveLength(0);
+      vi.advanceTimersByTime(200);
+      expect(fired.map((f) => f.reason)).toEqual(['quiet']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('publishes nothing when the terminal is killed (its pty exits mid-command)', () => {
+    vi.useFakeTimers();
+    try {
+      const { manager, fired } = setup();
+      const info = smart(manager);
+      FakePty.last.emit(`${PROMPT}${OSC('633;E;sleep 100')}${OSC('133;C')}`);
+      manager.watch(info.id, WatchRule.parse({ quietSeconds: 5 }));
+      // The real kill() ends the process tree; the fake pty only reports the exit, which is what the manager sees.
+      FakePty.last.exit(1);
+      vi.advanceTimersByTime(10_000);
+      expect(fired).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a plain terminal', () => {
+    const { manager } = setup();
+    const info = manager.create({ kind: 'plain', shell: 'bash', cwd: '/repo', cols: 80, rows: 24, sessionId: null });
+    expect(() => manager.watch(info.id, WatchRule.parse({}))).toThrow(/smart terminal/);
+  });
+});
+
+describe('TerminalManager: runWhenReady (SM-21)', () => {
+  it('writes nothing before the prompt, then the command once when the prompt arrives', async () => {
+    const { manager } = setup();
+    const info = smart(manager);
+    const result = manager.runWhenReady(info.id, 'pnpm test');
+    expect(FakePty.last.written).toEqual([]);
+    FakePty.last.emit(PROMPT);
+    await expect(result).resolves.toEqual({ started: true });
+    FakePty.last.emit(PROMPT);
+    expect(FakePty.last.written).toEqual(['pnpm test\r']);
+  });
+
+  it('writes at once when the shell is idle at its prompt', async () => {
+    const { manager } = setup();
+    const info = smart(manager);
+    FakePty.last.emit(PROMPT);
+    await expect(manager.runWhenReady(info.id, 'ls')).resolves.toEqual({ started: true });
+    expect(FakePty.last.written).toEqual(['ls\r']);
+  });
+
+  it('waits while a command runs', async () => {
+    const { manager } = setup();
+    const info = smart(manager);
+    FakePty.last.emit(`${PROMPT}${OSC('633;E;sleep 5')}${OSC('133;C')}`);
+    const result = manager.runWhenReady(info.id, 'ls');
+    expect(FakePty.last.written).toEqual([]);
+    FakePty.last.emit(`${OSC('133;D;0')}${PROMPT}`);
+    await expect(result).resolves.toEqual({ started: true });
+    expect(FakePty.last.written).toEqual(['ls\r']);
+  });
+
+  it('answers not-smart after the integration grace period and timeout without a prompt', async () => {
+    vi.useFakeTimers();
+    try {
+      const { manager } = setup();
+      const a = smart(manager);
+      const fellBack = manager.runWhenReady(a.id, 'ls');
+      vi.advanceTimersByTime(6000);
+      await expect(fellBack).resolves.toEqual({ started: false, reason: 'not-smart' });
+
+      const b = smart(manager);
+      FakePty.last.emit(`${PROMPT}${OSC('633;E;sleep 100')}${OSC('133;C')}`);
+      const late = manager.runWhenReady(b.id, 'ls');
+      vi.advanceTimersByTime(15_001);
+      await expect(late).resolves.toEqual({ started: false, reason: 'timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('answers gone after the terminal exits, or when it does not exist', async () => {
+    const { manager } = setup();
+    const info = smart(manager);
+    const result = manager.runWhenReady(info.id, 'ls');
+    FakePty.last.exit(0);
+    await expect(result).resolves.toEqual({ started: false, reason: 'gone' });
+    await expect(manager.runWhenReady('nope', 'ls')).resolves.toEqual({ started: false, reason: 'gone' });
+  });
+
+  it('the contract refuses a command with a newline or over 4,000 characters', () => {
+    const input = ptyApi['pty.runWhenReady'].input;
+    expect(input.safeParse({ id: 't', command: 'a\nb' }).success).toBe(false);
+    expect(input.safeParse({ id: 't', command: 'a\rb' }).success).toBe(false);
+    expect(input.safeParse({ id: 't', command: 'x'.repeat(4001) }).success).toBe(false);
+    expect(input.safeParse({ id: 't', command: 'pnpm test' }).success).toBe(true);
+  });
+});
 
 describe('TerminalManager', () => {
   it('turns shell-integration output into a failed block (M4 gate)', () => {

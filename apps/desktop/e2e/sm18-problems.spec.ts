@@ -101,7 +101,8 @@ test('SM-18: problems in a block are compared with the previous run, open at the
   await problems.getByRole('button', { name: 'Fix new problems with agent' }).click();
   await expect(page.getByText('Sent to the agent.')).toBeVisible();
   await page.keyboard.press('Control+1');
-  await page.getByRole('tab', { name: 'Session', exact: true }).click();
+  // The Session tab is named after the selected session ("Session · Problems").
+  await page.getByRole('tab', { name: /^Session · / }).click();
   await expect(page.getByText('Turn 2 · finished')).toBeVisible();
   await expect(page.getByText('New problems: node problems.mjs').first()).toBeVisible();
   await app.close();

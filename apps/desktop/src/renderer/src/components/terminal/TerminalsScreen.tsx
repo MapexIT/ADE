@@ -13,6 +13,7 @@ import { AskBar, HistoryDialog, SuggestionsBar, useTerminalLayout } from './Term
 import { SmartBlocks } from './SmartBlocks.tsx';
 import { SplitPane } from '../SplitPane.tsx';
 import { TerminalView } from './TerminalView.tsx';
+import { WatchControl } from './WatchControl.tsx';
 
 import { AGENT_COMMANDS } from '../../lib/agent-ui.ts';
 
@@ -96,10 +97,19 @@ export function NewTerminalMenu({ cwd, sessionId, compact }: { cwd: string | nul
   );
 }
 
+/** SM-19: the Watch button for the next command, shown while nothing runs (the running header has its own). */
+export function IdleWatch({ terminal }: { terminal: TerminalInfo & { exited: boolean } }) {
+  const running = useTerminals((t) => (t.blocks[terminal.id] ?? EMPTY).some((b) => b.endedAt === null));
+  if (running || terminal.kind === 'agent-ui') return null;
+  return <WatchControl terminal={terminal} running={false} />;
+}
+
 export function TerminalBody({ terminal }: { terminal: TerminalInfo & { exited: boolean } }) {
+  const watched = useTerminals((t) => !!t.attention[terminal.id]);
+  const clearAttention = useTerminals((t) => t.clearAttention);
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className={cx('flex min-h-0 flex-1', terminal.kind === 'agent-ui' && terminal.agentState === 'waiting' && 'attention-ring border-2')}>
+    <div className="flex h-full min-h-0 flex-col" onPointerDownCapture={watched ? () => clearAttention(terminal.id) : undefined}>
+      <div className={cx('flex min-h-0 flex-1', ((terminal.kind === 'agent-ui' && terminal.agentState === 'waiting') || watched) && 'attention-ring border-2')}>
         {terminal.smart ? (
           // The terminal and its command blocks share the width; the divider is dragged and the split remembered.
           <SplitPane
@@ -125,6 +135,7 @@ export function TerminalsScreen() {
   const active = useTerminals((t) => t.active);
   const setActive = useTerminals((t) => t.setActive);
   const close = useTerminals((t) => t.close);
+  const attention = useTerminals((t) => t.attention);
   const sessions = useStore((s) => s.sessions);
   const session = useStore(selectedSession);
   const workspace = useStore(currentWorkspace);
@@ -153,15 +164,26 @@ export function TerminalsScreen() {
                 key={t.id}
                 type="button"
                 onClick={() => setActive(t.id)}
+                data-attention={attention[t.id] ? attention[t.id]!.reason : undefined}
                 className={cx(
                   'flex min-h-11 flex-col gap-0.5 rounded-[var(--radius)] border px-3 py-2 text-left',
-                  t.agentState === 'waiting' ? 'border-2 border-attention-line bg-attention-tint' : t.id === active ? 'border-2 border-accent bg-accent-tint' : 'border-line',
+                  attention[t.id]
+                    ? 'attention-ring border-2 border-attention-line bg-attention-tint'
+                    : t.agentState === 'waiting'
+                      ? 'border-2 border-attention-line bg-attention-tint'
+                      : t.id === active
+                        ? 'border-2 border-accent bg-accent-tint'
+                        : 'border-line',
                 )}
               >
                 <span className="font-semibold">{t.title}</span>
-                <span className="text-ink-muted">
-                  {t.exited ? 'Exited' : t.agentState === 'waiting' ? 'Waiting for you' : t.agentState === 'working' ? 'Working' : t.smart ? 'Smart' : 'Plain'}
-                </span>
+                {attention[t.id] ? (
+                  <span className={cx('text-ink', attention[t.id]!.reason === 'failed' && 'font-semibold')}>{attention[t.id]!.text}</span>
+                ) : (
+                  <span className="text-ink-muted">
+                    {t.exited ? 'Exited' : t.agentState === 'waiting' ? 'Waiting for you' : t.agentState === 'working' ? 'Working' : t.watch ? 'Watching' : t.smart ? 'Smart' : 'Plain'}
+                  </span>
+                )}
               </button>
             ))}
           </section>
@@ -196,6 +218,7 @@ export function TerminalsScreen() {
               <Badge>{current.smart ? 'Smart' : current.kind === 'agent-ui' ? 'Agent UI' : 'Plain · no blocks, no status bar'}</Badge>
               <span className="truncate font-mono text-[12px] text-ink-muted">{current.cwd}</span>
               <span className="ml-auto" />
+              <IdleWatch terminal={current} />
               <SavedCommands terminalId={current.id} disabled={current.exited || current.kind === 'agent-ui'} />
               <Button size="dense" variant="ghost" onClick={() => void close(current.id)}>
                 Close terminal
@@ -224,6 +247,7 @@ export function TerminalPanel() {
   const active = useTerminals((t) => t.active);
   const setActive = useTerminals((t) => t.setActive);
   const close = useTerminals((t) => t.close);
+  const attention = useTerminals((t) => t.attention);
   const sessionId = liveWorktree(session) ? session!.id : null;
   const list = Object.values(terminals).filter((t) => t.sessionId === sessionId);
   const current = list.find((t) => t.id === active) ?? list[0];
@@ -233,9 +257,18 @@ export function TerminalPanel() {
       <div className="flex flex-wrap items-center gap-1 border-b border-line px-2">
         {list.map((t) => (
           <span key={t.id} className="flex items-center">
-            <button type="button" onClick={() => setActive(t.id)} className={cx('min-h-9 border-b-2 px-3 text-[12.5px]', current?.id === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-muted', t.agentState === 'waiting' && 'text-attention')}>
+            <button
+              type="button"
+              onClick={() => setActive(t.id)}
+              className={cx(
+                'min-h-9 border-b-2 px-3 text-[12.5px]',
+                current?.id === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-muted',
+                (t.agentState === 'waiting' || attention[t.id]) && 'text-attention',
+                attention[t.id] && 'attention-ring rounded-t-[var(--radius-small)] border-2 font-semibold',
+              )}
+            >
               {t.title}
-              {t.agentState === 'waiting' ? ' · waiting' : ''}
+              {attention[t.id] ? ` · ${attention[t.id]!.text}` : t.agentState === 'waiting' ? ' · waiting' : ''}
             </button>
             <button type="button" aria-label={`Close ${t.title}`} onClick={() => void close(t.id)} className="min-h-9 min-w-7 text-ink-muted hover:text-ink">
               ×
@@ -243,6 +276,11 @@ export function TerminalPanel() {
           </span>
         ))}
         <NewTerminalMenu cwd={cwd} sessionId={sessionId} compact />
+        {current ? (
+          <span className="ml-auto">
+            <IdleWatch terminal={current} />
+          </span>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1">
         {current ? <TerminalBody key={current.id} terminal={current} /> : <p className="m-0 p-3 text-ink-muted">{cwd ? 'No terminals in this worktree yet. Use + to open one.' : 'Open a repository to use terminals.'}</p>}

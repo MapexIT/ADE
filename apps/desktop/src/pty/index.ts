@@ -25,6 +25,7 @@ const manager = new TerminalManager(
     exit: (id, exitCode) => broadcast('pty.exit', { id, exitCode }),
     changed: (info) => broadcast('pty.changed', info),
     runFinished: (runId, exitCode, output) => broadcast('pty.runFinished', { runId, exitCode, output }),
+    watchFired: (fired) => broadcast('pty.watchFired', fired),
   },
   process.env.ADE_SHELL_SCRIPTS || undefined,
 );
@@ -55,6 +56,11 @@ const handlers: Handlers<PtyApi> = {
     return { ok: true };
   },
   'pty.run': (o) => manager.run(o),
+  'pty.watch': ({ id, rule }) => {
+    manager.watch(id, rule);
+    return { ok: true };
+  },
+  'pty.runWhenReady': ({ id, command }) => manager.runWhenReady(id, command),
 };
 
 parent.on('message', (event: { data: unknown; ports: MessagePortMain[] }) => {
