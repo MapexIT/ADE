@@ -1,6 +1,6 @@
 import { ClearHistoryButton } from '../ClearHistoryButton.tsx';
 import { copyText } from '../../lib/clipboard.ts';
-import { CircleStop, Copy, ListFilter, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
+import { CircleStop, Copy, GitCompareArrows, ListFilter, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
 import { useEffect, useRef, useState } from 'react';
@@ -14,6 +14,8 @@ import { BlockProblems } from './BlockProblems.tsx';
 import { BlockFilter } from './BlockFilter.tsx';
 import { Linkified } from './Linkified.tsx';
 import { WatchControl } from './WatchControl.tsx';
+import { ComparisonTable, useFanOutTargets } from './Comparison.tsx';
+import { comparisonKey, openFanOut, useComparisons } from '../../lib/comparisons.ts';
 import { filterKey, followFilters, useBlockFilters } from '../../lib/block-filters.ts';
 
 export function blockAsText(b: CommandBlock) {
@@ -34,6 +36,8 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
   const sessionId = terminal?.sessionId ?? null;
   const filters = useBlockFilters((s) => s.byCommand);
   const openFilter = useBlockFilters((s) => s.open);
+  const comparisons = useComparisons((s) => s.byOrigin);
+  const canFanOut = useFanOutTargets(sessionId).some((t) => !t.ranHere) && terminal?.kind === 'smart';
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -127,6 +131,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
               ) : null}
               {!isCollapsed && done ? <InlineViewer block={b} cwd={b.cwd ?? terminal?.cwd ?? null} /> : null}
               {!isCollapsed && done ? <BlockProblems terminalId={terminalId} blockId={b.id} /> : null}
+              {done && comparisons[comparisonKey(terminalId, b.id)] ? <ComparisonTable id={comparisonKey(terminalId, b.id)} /> : null}
               {done ? (
                 <div className="flex flex-wrap gap-2 font-sans text-[13px]">
                   {failed ? (
@@ -173,6 +178,11 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   >
                     Filter
                   </Button>
+                  {canFanOut && b.command.trim() ? (
+                    <Button icon={<GitCompareArrows className="size-4" aria-hidden="true" />} size="dense" data-action="compare" title="Run this command in other worktrees (Ctrl+Shift+E)" onClick={() => openFanOut(terminalId, b.id)}>
+                      Run in other worktrees…
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </section>

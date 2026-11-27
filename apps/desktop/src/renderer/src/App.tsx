@@ -39,6 +39,8 @@ import { useStore } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
 import { wireRuns } from './lib/runs.ts';
 import { wireWatch } from './lib/watch.ts';
+import { wireComparisons } from './lib/comparisons.ts';
+import { FanOutDialog } from './components/terminal/Comparison.tsx';
 import { recordBlock } from './lib/problems.ts';
 
 // SM-11: every finished terminal command goes into the searchable history. SM-18: the same (single) listener reads
@@ -76,6 +78,7 @@ function useWiring() {
           wireTerminals();
           wireRuns();
           wireWatch();
+          wireComparisons();
         }
       }),
       host.on('session.event', (e) => useStore.getState().onEvent(e)),
@@ -171,6 +174,7 @@ export function App() {
       <CommandPalette />
       <HelpCenter />
       <InboxDialog />
+      <FanOutDialog />
       <SettingsDialog />
       <RuleSuggestionDialog />
       <LessonDialog />
