@@ -2,7 +2,7 @@ import { isLive, openItems } from '@ade/session-core';
 import { redirectLoop } from './loops.ts';
 import { askForProof, receiptsOf } from './receipts.ts';
 import { host, main } from './bridge.ts';
-import { PAGES } from './pages.ts';
+import { PAGES, pageShortcut } from './pages.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from './layout.ts';
 import { reviewActions } from './review.ts';
 import { attempt, useStore } from './store.ts';
@@ -37,7 +37,7 @@ export function buildCommands(): Command[] {
     })),
     { id: 'session.new', title: 'New session', group: 'Session', shortcut: 'Ctrl N', run: () => s.set({ newSession: {} }) },
     { id: 'inbox.open', title: 'Open the Needs-you inbox', group: 'Navigate', shortcut: 'Ctrl I', run: () => s.set({ inboxOpen: true }) },
-    ...PAGES.map((t, i) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: `Ctrl ${i + 1}`, run: () => s.setTab(t.tab) })),
+    ...PAGES.map((t) => ({ id: `nav.${t.tab}`, title: `Go to ${t.title}`, group: 'Navigate' as const, shortcut: pageShortcut(t.tab), run: () => s.setTab(t.tab) })),
     ...PANELS.map((p) => ({
       id: `panel.${p.id}`,
       title: `Show the ${p.title.toLowerCase()} panel`,

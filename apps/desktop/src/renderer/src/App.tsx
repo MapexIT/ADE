@@ -1,4 +1,5 @@
 import { GitScreen } from './components/GitScreen.tsx';
+import { IntegrateScreen } from './components/IntegrateScreen.tsx';
 import { McpDialog } from './components/McpDialog.tsx';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
@@ -30,7 +31,7 @@ import { SkillsScreen } from './components/SkillsScreen.tsx';
 import { WorkItemsScreen } from './components/WorkItemsScreen.tsx';
 import { host, onMain, pty } from './lib/bridge.ts';
 import { buildCommands } from './lib/commands.ts';
-import { PAGES } from './lib/pages.ts';
+import { pageForKey } from './lib/pages.ts';
 import { TooltipProvider } from './components/Tooltip.tsx';
 import { useStore } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
@@ -106,7 +107,7 @@ function useShortcuts() {
         void buildCommands()
           .find((c) => c.id === 'workspace.open')
           ?.run();
-      else if (/^[1-9]$/.test(key) && PAGES[Number(key) - 1]) s.setTab(PAGES[Number(key) - 1]!.tab);
+      else if (/^[0-9]$/.test(key) && pageForKey(key)) s.setTab(pageForKey(key)!.tab);
       else return;
       e.preventDefault();
     };
@@ -148,6 +149,7 @@ export function App() {
               {tab === 'review' ? <ReviewScreen /> : null}
             {tab === 'observe' ? <ObserveScreen /> : null}
               {tab === 'git' ? <GitScreen /> : null}
+              {tab === 'integrate' ? <IntegrateScreen /> : null}
             </ErrorBoundary>
           </motion.div>
         ) : null}
