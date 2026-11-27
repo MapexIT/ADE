@@ -13,6 +13,7 @@ import {
   SessionState,
   Turn,
   WorkItem,
+  WorkItemRole,
   Workspace,
 } from './entities.ts';
 import { PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
@@ -945,7 +946,7 @@ export const hostApi = defineApi({
   ),
   'skills.sync': method(z.object({ workspaceId: Id.nullable(), id: z.string(), enabled: z.boolean() }), Skill),
   'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
-  'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional() }), z.array(WorkItem)),
+  'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional(), role: WorkItemRole.default('owner') }), z.array(WorkItem)),
 });
 export type HostApi = typeof hostApi;
 

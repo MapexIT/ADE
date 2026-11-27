@@ -748,7 +748,7 @@ export function createHost(config: HostConfig) {
     },
     'workItems.sources': () => workItems.sources(),
     'connectors.status': ({ workspaceId }) => connectionStatus.status(rootOrNull(workspaceId)),
-    'workItems.list': ({ source, query }) => workItems.list(source, query),
+    'workItems.list': ({ source, query, role }) => workItems.list(source, query, role),
   };
 
   // CO-04: connectors are passed to agents as MCP servers only when the user opted in, because the agent then

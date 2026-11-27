@@ -57,11 +57,25 @@ export function resultList(result: ToolResult): Record<string, unknown>[] {
 }
 
 /** The member in a get_whoami result (`{ entity: { member: { id, mention_name } } }`). Pure. */
-export function parseWhoami(result: ToolResult): { id: string; mentionName: string } | null {
+export function parseWhoami(result: ToolResult): ShortcutMember | null {
   const [data] = resultList(result);
   const entity = (data?.entity ?? data) as Record<string, unknown> | undefined;
   const member = (entity?.member ?? entity) as Record<string, unknown> | undefined;
-  return member && typeof member.id === 'string' && typeof member.mention_name === 'string' ? { id: member.id, mentionName: member.mention_name } : null;
+  if (!member || typeof member.id !== 'string' || typeof member.mention_name !== 'string') return null;
+  // `teams` is `{ entities: [{ id, name }] }` (checked 2026-11-27); Shortcut's API calls teams "groups".
+  const t = member.teams as { entities?: unknown[] } | unknown[] | undefined;
+  const teams = (Array.isArray(t) ? t : (t?.entities ?? []))
+    .map((x) => x as { id?: unknown; name?: unknown })
+    .filter((x) => typeof x.id === 'string' && typeof x.name === 'string')
+    .map((x) => ({ id: x.id as string, name: x.name as string }));
+  return { id: member.id, mentionName: member.mention_name, teams };
+}
+
+export interface ShortcutMember {
+  id: string;
+  mentionName: string;
+  /** The teams (groups) the member is in. */
+  teams: { id: string; name: string }[];
 }
 
 /** The cursor of the next page, read from a paged result's `next_page_url`. Pure. */
@@ -91,12 +105,12 @@ export function toStories(list: Record<string, unknown>[]): (ShortcutStory & { o
     });
 }
 
-const memberCache = new WeakMap<Client, { id: string; mentionName: string }>();
+const memberCache = new WeakMap<Client, ShortcutMember>();
 /**
  * The signed-in member, from get_whoami. Shortcut's search takes `owner:<mention name>`; `owner:me` matches
  * nothing (checked against the hosted server on 2026-11-27).
  */
-export async function shortcutMember(client: Client): Promise<{ id: string; mentionName: string }> {
+export async function shortcutMember(client: Client): Promise<ShortcutMember> {
   const cached = memberCache.get(client);
   if (cached) return cached;
   const result = (await client.callTool({ name: 'get_whoami', arguments: {} })) as ToolResult;
