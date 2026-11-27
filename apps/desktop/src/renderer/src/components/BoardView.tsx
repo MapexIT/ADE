@@ -70,7 +70,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
       {settings ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
@@ -137,18 +137,19 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
           action={repos?.current ? <Button onClick={() => chooseRepo(repos.current!)}>Use {repos.current}</Button> : undefined}
         />
       ) : problem ? (
-        <>
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <EmptyState icon={<CircleAlert className="size-5" />} title="The board could not be loaded" body={problem} action={<Button icon={<Settings className="size-4" aria-hidden="true" />} onClick={() => set({ settingsOpen: true })}>Open settings</Button>} />
           {settings ? <ConnectionGuide key={settings.source} source={settings.source} onChecked={() => void load()} /> : null}
-        </>
+        </div>
       ) : board ? (
         <>
           <h2 className="m-0 text-[14px] font-semibold">{board.title}</h2>
           {board.columns.length === 0 ? <p className="m-0 text-ink-muted">No items on this board.</p> : null}
-          <div className="flex min-h-0 gap-3 overflow-x-auto pb-2">
+          {/* Columns that do not fit scroll sideways; each column scrolls its own cards, so the sideways scrollbar stays in view. */}
+          <div className="flex min-h-0 min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden pb-2" tabIndex={0} aria-label="Board columns">
             {board.columns.map((col) => (
-              <section key={col.name} aria-label={col.name} className="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius)] bg-surface-sunken p-2">
-                <h3 className="m-0 px-1 text-[12px] font-semibold text-ink-muted">
+              <section key={col.name} aria-label={col.name} className="flex max-h-full w-72 shrink-0 flex-col gap-2 overflow-y-auto rounded-[var(--radius)] bg-surface-sunken p-2">
+                <h3 className="sticky -top-2 z-10 m-0 -mx-2 -mt-2 bg-surface-sunken px-3 pb-1 pt-2 text-[12px] font-semibold text-ink-muted">
                   {col.name} · {col.items.length}
                 </h3>
                 {col.items.map((item) => (

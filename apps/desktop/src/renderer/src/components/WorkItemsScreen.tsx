@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, ExternalLink, FolderGit2, Inbox, Play } from 'lucide-react';
-import { Badge, Button, EmptyState, Tabs, Waiting } from '@ade/ui';
+import { Badge, Button, cx, EmptyState, Tabs, Waiting } from '@ade/ui';
 import type { WorkItem } from '@ade/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
@@ -73,17 +73,8 @@ export function WorkItemsScreen() {
   }, [shown]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 pt-2">
-        <Tabs
-          label="Source"
-          value={source}
-          onChange={setSource}
-          items={[
-            { value: 'shortcut', label: 'Shortcut' },
-            { value: 'github', label: 'GitHub' },
-          ]}
-        />
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 pt-2">
         <Tabs
           label="View"
           value={view}
@@ -93,18 +84,34 @@ export function WorkItemsScreen() {
             { value: 'board', label: 'Board' },
           ]}
         />
-        <label htmlFor="wi-search" className="sr-only">
-          Search work items
-        </label>
-        <input
-          id="wi-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by title or id"
-          className={`${inputClass} mb-2 ml-auto min-w-72`}
-        />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      {view === 'list' ? (
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
+          <Segmented
+            label="Source"
+            value={source}
+            onChange={(v) => {
+              setSource(v);
+              setRepo(null);
+            }}
+            items={[
+              { value: 'shortcut', label: 'Shortcut' },
+              { value: 'github', label: 'GitHub' },
+            ]}
+          />
+          <label htmlFor="wi-search" className="sr-only">
+            Search work items
+          </label>
+          <input
+            id="wi-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by title or id"
+            className={`${inputClass} ml-auto w-72 max-w-full`}
+          />
+        </div>
+      ) : null}
+      <div className={cx('min-h-0 min-w-0 flex-1 p-4', view === 'board' ? 'flex flex-col overflow-hidden' : 'overflow-auto')}>
         {view === 'board' ? (
           workspaceId ? (
             <BoardView workspaceId={workspaceId} />
@@ -211,6 +218,46 @@ export function WorkItemsScreen() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A small single-choice switch, used for the source under "Assigned to me". Arrow keys move the choice. */
+function Segmented<T extends string>({ label, value, onChange, items }: { label: string; value: T; onChange: (v: T) => void; items: { value: T; label: string }[] }) {
+  const move = (dir: number) => {
+    const i = items.findIndex((it) => it.value === value);
+    const next = items[(i + dir + items.length) % items.length]!;
+    onChange(next.value);
+    requestAnimationFrame(() => document.getElementById(`seg-${label}-${next.value}`)?.focus());
+  };
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-0.5 rounded-[var(--radius)] border border-line bg-surface-sunken p-0.5">
+      {items.map((it) => {
+        const on = it.value === value;
+        return (
+          <button
+            key={it.value}
+            id={`seg-${label}-${it.value}`}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onChange(it.value)}
+            onKeyDown={(e) => {
+              const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+              if (!dir) return;
+              e.preventDefault();
+              move(dir);
+            }}
+            className={cx(
+              'min-h-8 rounded-[var(--radius-small)] px-3 text-[13px] transition-colors duration-[var(--motion)]',
+              on ? 'bg-accent-tint font-semibold text-ink' : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            {it.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

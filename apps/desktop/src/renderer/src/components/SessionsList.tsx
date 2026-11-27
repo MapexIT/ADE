@@ -67,7 +67,7 @@ export function SessionsList() {
       {Object.keys(sessions).length === 0 ? (
         // Bottom padding equals the two buttons above (2 × 44 px + 12 px gap) plus the gap below them, so the empty state
         // sits at the same height as the Inspector's on the other side.
-        <div className="flex min-h-0 flex-1 pb-[112px]" data-testid="sessions-empty">
+        <div className="flex min-h-0 flex-1 pb-[112px] [&>*]:w-full [&>*]:px-2 [&_p]:max-w-none" data-testid="sessions-empty">
           <EmptyState icon={<MessagesSquare className="size-5" />} title="No sessions yet" body="Start one to give an agent a task in its own worktree." />
         </div>
       ) : null}
