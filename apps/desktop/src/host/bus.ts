@@ -1,4 +1,4 @@
-import type { NeedsYouItem, Session, SessionEvent, TelegramStatus, WorkflowRunView } from '@ade/contracts';
+import type { AgentInstallState, NeedsYouItem, Session, SessionEvent, TelegramStatus, WorkflowRunView } from '@ade/contracts';
 
 export interface HostEvents {
   'session.event': SessionEvent;
@@ -8,6 +8,7 @@ export interface HostEvents {
   /** `target: 'inbox'` for notifications without a session (pull requests): clicking opens Needs you. */
   notify: { sessionId: string; title: string; body: string; target?: 'inbox' };
   'telegram.status': TelegramStatus;
+  'agents.install': AgentInstallState;
 }
 
 type Listener<T> = (payload: T) => void;

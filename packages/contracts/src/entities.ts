@@ -70,6 +70,31 @@ export const AgentStatus = z.object({
 });
 export type AgentStatus = z.infer<typeof AgentStatus>;
 
+/** ST-07: how ADE would install a coding CLI on this machine: the OS package manager when it has the package, else npm. */
+export const InstallManager = z.enum(['winget', 'pacman', 'zypper', 'npm']);
+export type InstallManager = z.infer<typeof InstallManager>;
+export const AgentInstallPlan = z.object({
+  agentId: AgentId,
+  /** Null when nothing on this machine can install it; `problem` then says why. */
+  manager: InstallManager.nullable(),
+  /** The exact command, for display. */
+  command: z.string().nullable(),
+  /** Runs through pkexec, so the system asks for a password. */
+  elevated: z.boolean(),
+  problem: z.string().nullable(),
+});
+export type AgentInstallPlan = z.infer<typeof AgentInstallPlan>;
+export const AgentInstallState = z.object({
+  agentId: AgentId,
+  state: z.enum(['running', 'done', 'failed']),
+  manager: InstallManager,
+  command: z.string(),
+  /** The last part of the installer's output. */
+  output: z.string(),
+  error: z.string().nullable(),
+});
+export type AgentInstallState = z.infer<typeof AgentInstallState>;
+
 export const Workspace = z.object({
   id: z.string(),
   rootPath: z.string(),

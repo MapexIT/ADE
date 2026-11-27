@@ -49,6 +49,7 @@ function reportBackground() {
 host.bus.on('inbox.changed', (e) => broadcast('inbox.changed', e));
 host.bus.on('workflow.run', (e) => broadcast('workflow.run', e));
 host.bus.on('telegram.status', (e) => broadcast('telegram.status', e));
+host.bus.on('agents.install', (e) => broadcast('agents.install', e));
 host.bus.on('notify', (e) => {
   broadcast('notify', e);
   parent.postMessage({ type: 'notify', ...e });

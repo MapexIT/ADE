@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   AgentId,
+  AgentInstallPlan,
+  AgentInstallState,
   AgentStatus,
   AuditEntry,
   FileChange,
@@ -685,6 +687,10 @@ export const hostApi = defineApi({
   'settings.set': method(z.object({ key: z.string().min(1).max(100), value: z.unknown() }), Ok),
 
   'agents.status': method(z.object({ refresh: z.boolean().default(false) }), z.array(AgentStatus)),
+  'agents.installPlans': method(z.object({}), z.array(AgentInstallPlan)),
+  /** Starts the install and returns at once; progress arrives on the `agents.install` topic. */
+  'agents.install': method(z.object({ agentId: AgentId }), AgentInstallState),
+  'agents.installStates': method(z.object({}), z.array(AgentInstallState)),
   'containment.status': method(z.object({ refresh: z.boolean().default(false) }), ContainmentStatus),
   'commands.list': method(z.object({ workspaceId: Id }), z.array(SavedCommand)),
   'commands.save': method(z.object({ workspaceId: Id, commands: z.array(SavedCommand).max(100) }), Ok),
@@ -951,6 +957,7 @@ export const hostTopics = defineTopics({
   'workflow.run': WorkflowRunView,
   'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string(), target: z.literal('inbox').optional() }),
   'telegram.status': TelegramStatus,
+  'agents.install': AgentInstallState,
 });
 export type HostTopics = typeof hostTopics;
 
