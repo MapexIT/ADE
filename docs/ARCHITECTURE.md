@@ -176,6 +176,10 @@ deleted files, renames, binary files and CRLF line endings.
   as working, waiting or finished. Waiting terminals get the attention ring and join the Needs-you inbox.
 - Status bar segments: location, Git, session, process, ports, resources, usage, work item.
 - Scrollback is serialised on exit and restored on start. Processes are not resurrected.
+- Watch (SM-19): `pty.watch` sets a `WatchRule` on a smart terminal; the pty process feeds the pure
+  `watchStep` reducer from the parser and publishes `pty.watchFired`; `TerminalInfo.watch` carries the rule.
+- Run when ready (SM-21): `pty.runWhenReady` types one line into a smart shell once its prompt is ready.
+- Block filters (SM-20) and comparisons (SM-21) are renderer state only, not persisted.
 - Problems (SM-18): when a smart block finishes, the renderer runs `extractProblems` from
   `@ade/shell-integration/problems` over the block's stored output, the host stores a snapshot per workspace,
   scope (session or checkout) and command (`problems.record`) and returns the previous one, and the checkout's

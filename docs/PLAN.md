@@ -289,3 +289,21 @@ fake agent) and `e2e/m6-workflows.spec.ts` (the same flow through the UI). Not y
       renderer. What the Claude Code and Codex adapters send was read from the installed packages (see the facts
       in `docs/DECISIONS.md`). Not yet verified: CI on Ubuntu (the branch is not pushed), OpenCode's request
       text, and real sessions' command phrasing against the thresholds (open questions kept).
+
+## M13 - Watch, filter and run in other worktrees
+
+- [x] **M13-T01** Feature rows SM-19, SM-20 and SM-21 and the count in `docs/FEATURES.md`; decisions, verified
+      facts and open questions in `docs/DECISIONS.md`; the pty paragraph in `docs/ARCHITECTURE.md`. Done when
+      `apps/desktop/test/help.test.ts` passes with 174 features.
+- [x] **M13-T02** SM-20: `lib/block-filter.ts`, the worker, `lib/block-filters.ts`, `BlockFilter.tsx` and the
+      Filter button; Ctrl+Shift+L. Done when `apps/desktop/test/block-filter.test.ts` passes.
+- [x] **M13-T03** SM-19 and SM-21 contracts (`WatchRule`, `WatchFired`, `pty.watch`, `pty.watchFired`,
+      `pty.runWhenReady`, `TerminalInfo.watch`), the `watchStep` reducer and `TerminalManager`. Done when
+      `packages/shell-integration/test/watch.test.ts` and `apps/desktop/test/terminal-manager.test.ts` pass.
+- [x] **M13-T04** SM-19 renderer: Watch control, attention ring and words, Needs-you entry, sessions list,
+      toast and notification, automatic watch and its setting; Ctrl+Shift+M.
+- [x] **M13-T05** SM-21 renderer: `lib/fan-out.ts`, `lib/comparisons.ts`, the dialog and the comparison table;
+      Ctrl+Shift+E. Done when `apps/desktop/test/fan-out.test.ts` passes.
+- [ ] **M13-T06** `e2e/sm19-21-smart-terminal.spec.ts` on Windows against the production build and the development
+      renderer, and CI green on Ubuntu. Verified on Windows 11 with PowerShell 5.1 and the fake agent; Linux shells
+      (bash, zsh, fish) are covered by CI's Ubuntu run only.

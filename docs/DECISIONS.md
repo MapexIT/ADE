@@ -188,6 +188,10 @@ Standing notes from the user:
 | Shortcut stories you own (CO-01, CO-09) | Shortcut's search takes `owner:<mention name>`; `owner:me` matched nothing on the hosted MCP server (checked 2026-11-27), which left the Shortcut list empty. The mention name and member id come from `get_whoami` (`entity.member.mention_name`, `entity.member.id`), cached per connection. The server wraps lists as `{ entities: [...] }`, which the parsers now unwrap; paged results carry `next_page_url`, whose `cursor` goes back as `search_stories({ cursor, fields })`. The board runs `owner:<name> !is:done` and `owner:<name> is:done completed:>` two weeks ago (up to 5 pages of 100 each), keeps only stories whose `owners` include the member, and groups them by workflow state. | Everyone in a team shares one iteration (Continues Kanban here), so the iteration board showed other people's work. |
 | Owner, requester and team work items (CO-01) | Shortcut: `owner:`, `requester:` and `team:"<name>"` searches with the member's mention name, teams from `get_whoami` (`member.teams.entities`; Shortcut's API calls teams groups). GitHub: `gh search issues --assignee=@me`, `--author=@me`, and `--team-mentions org/slug` for each team from `gh api user/teams` (needs `read:org`; GitHub search has no other team filter). All checked on 2026-11-27 against the live services. |
 | Continuing CLI conversations (SR-10) | Probed on 2026-11-27 with `initialize`: claude-agent-acp 0.109, codex-acp 2.8 and OpenCode 1.19 all advertise `sessionCapabilities.list` and `loadSession`; `session/list` with `cwd` returns `{ sessionId, cwd, title, updatedAt }` (ACP SDK 2.8 `SessionInfo`). ADE lists only conversations whose folder is the repository root, and loads the chosen one with the new worktree as `cwd`. The history the agent replays during `session/load` is kept and shown. |
+| Watch a command (SM-19) | Decided in the pty process by the pure reducer `watchStep` (`packages/shell-integration/src/watch.ts`, exported as `./watch`), fed from the parser's events between OSC 133;C and D; one re-armed timer per terminal (`nextWakeAt`). Matching is plain text, case-insensitive, on completed lines and, after 300 ms of silence, on the unfinished last line; chunks with nothing printable and output within 250 ms of a resize do not count; the quiet rule pauses on the alternate screen and fires at most three times per command. A watch belongs to one command: it ends (and `TerminalInfo.watch` goes back to null) when the command ends; Enter on an empty line does not consume it. The reducer returns a list of fires, not one, because a command can print the watched text in its last line and end in the same step. `pty.watch` refuses plain terminals (`not_supported`). The attention lives in the renderer's terminal store (`attention[terminalId]`); it is set even when the terminal is on screen and clears when the terminal is selected or clicked. The automatic watch is a renderer timer (every 5 s) for a smart terminal whose running command is 30 s old and which is not the active terminal or whose window is not focused; setting `terminals.autoWatch` (default on). | Only the pty process sees output while a command runs, even when no window shows the terminal; the rest reuses the existing attention ring, inbox and `main.notify`. |
+| Filter a block's output (SM-20) | Renderer only (`lib/block-filter.ts`, pure; `lib/block-filters.ts`, a zustand store keyed by terminal and `commandKey`). The filter is shown on the latest finished run of its command, so a re-run opens already filtered and earlier runs show their plain output. Plain text and the two presets run on the main thread; a regular expression runs in a module worker (`block-filter.worker.ts?worker`) that is terminated after 250 ms. "Changed since last run" is a set difference on lines with digit runs collapsed, not a multiset: on Windows ConPTY repaints the last screen of the previous output at the start of the next block (seen with PowerShell 5.1, node-pty 1.1.0, 30 rows), and a multiset flagged those repeats as changes. With an empty query the block's output is shown as before. Attachments are named "Filtered output: <command>" and start with the heading "Filtered output of `<command>`: N of M lines, filter: ...". | No IPC and no new contract; a runaway pattern cannot freeze the window. |
+| Run in other worktrees (SM-21) | The renderer orchestrates (`lib/fan-out.ts` pure, `lib/comparisons.ts` store); the pty process adds `pty.runWhenReady`, which writes `command + "\r"` once the shell is at a prompt (OSC 133;B, or 200 ms after OSC 133;A because fish emits no B) and no block runs, and answers `not-smart`, `timeout` (15 s) or `gone`. Terminals open with `pty.create` directly so the active terminal does not change. Targets: the workspace's sessions with a live worktree (not in-place sessions), newest first, the first six ticked; the checkout last, unticked; the origin is listed as "Ran here". "Run again in all" runs the command again in the other worktrees (reusing their terminals); the origin row stays the block the user ran. The origin's `shell` must still be in `pty.shells`. | The renderer cannot know when a new shell is ready to read; typing through the pty is the same path as Re-run. |
+| Terminal shortcuts (SM-19 to SM-21) | Ctrl+Shift+M, Ctrl+Shift+L and Ctrl+Shift+E are taken from xterm in `attachCustomKeyEventHandler` (returning false; Ctrl+M would otherwise press Enter in the shell) and handled by the window's key handler, which clicks the visible button of the active terminal (the focused block, else the latest finished one). They are listed in the palette and the help centre's shortcuts. | One code path for button and key; works from the terminal and from its blocks. |
 
 ## Facts to verify (`VERIFY` markers in the docs)
 
@@ -233,6 +237,16 @@ Standing notes from the user:
 - ~~`FileChange.path` form (SM-18).~~ Verified in M11-T06: `changedFiles` reads `git diff --name-status -z`, whose
   paths are relative to the worktree root with `/` on every platform; the end-to-end test tags `src/b.ts` from it on
   Windows. The renderer still turns `\` into `/` before comparing.
+
+- ~~Ctrl+Shift+M, Ctrl+Shift+L and Ctrl+Shift+E against Electron menu accelerators (SM-19 to SM-21).~~ ADE sets no
+  application menu (`autoHideMenuBar` only), so Electron's default menu applies. Checked on Windows 11 by `e2e/sm19-21-smart-terminal.spec.ts`
+  against the production build (not the packaged installer) and the development renderer: each key reaches ADE
+  from inside the terminal and the shell does not see it. Still `VERIFY`: the packaged app on Linux.
+- ~~`worker-src` in the CSP (SM-20).~~ `index.html` allows `worker-src 'self' blob:`; the regular expression worker
+  starts from the `file://` production build and from the development server (same spec).
+- ~~`main.notify` when OS notifications are unavailable (SM-19).~~ Read in `apps/desktop/src/main/index.ts`:
+  `notify` returns without error when `Notification.isSupported()` is false or the window is focused, so the ring,
+  the inbox entry and the toast still appear. Not checked on a Linux desktop without a notification daemon.
 
 ## Open questions
 
@@ -334,6 +348,16 @@ Standing notes from the user:
   and fall into one group; the dialog shows each occasion and the user words the lesson. Default: accept.
 - **Lessons: watch scope (ED-05).** The watch applies to every session created after the lesson, including sessions
   where the user switched the lesson off in New session and lessons on the instruction-file route. Default: accept.
+
+- **ConPTY repaints in block output (SM-18, SM-20).** On Windows a smart block's stored output can start with a
+  repaint of the screen (the prompt line and blank rows, or the last screenful of the previous command's output).
+  SM-20 counts those lines in "N of M lines" and its set difference ignores them for "Changed since last run".
+  Default: accept; trimming them belongs in `BlockBuilder` and needs fixtures first.
+- **Watch attention on the terminal on screen (SM-19).** A fired watch flags the terminal even when it is the
+  active one; the ring clears on click or selection. Default: keep, since the user asked to be told.
+- **"Run again in all" (SM-21)** runs the other worktrees again and leaves the origin row as the block the user ran.
+  Default: keep; re-running the origin starts a new block and so a new comparison.
+- **Comparisons and filters are not persisted (SM-20, SM-21).** Both live for the app session only, as designed.
 
 ## References
 
