@@ -11,6 +11,11 @@ export const PAGES: readonly { tab: Tab; title: string; description: string }[] 
   { tab: 'review', title: 'Review', description: 'Review the changes of a session and land them' },
   { tab: 'observe', title: 'Observe', description: 'Watch every agent work, live, and see what it did' },
   { tab: 'git', title: 'Git', description: 'Branches and commits as a graph, with each commit in full' },
+  { tab: 'integrate', title: 'Integrate', description: 'See how finished sessions fit together and land them in order' },
 ];
 
-export const pageShortcut = (tab: Tab) => `Ctrl ${PAGES.findIndex((p) => p.tab === tab) + 1}`;
+/** Ctrl 1 to 9 for the first nine pages; the tenth (Integrate) is Ctrl 0, the key after 9. */
+export const pageKey = (index: number) => (index === 9 ? '0' : String(index + 1));
+export const pageShortcut = (tab: Tab) => `Ctrl ${pageKey(PAGES.findIndex((p) => p.tab === tab))}`;
+/** The page a Ctrl digit opens, if any. */
+export const pageForKey = (key: string) => PAGES.find((_, i) => pageKey(i) === key);

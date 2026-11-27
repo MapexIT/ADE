@@ -16,6 +16,8 @@
 | Telemetry | None. |
 | Positioning | Depth over breadth: review, containment, smart terminal, workflows with skills. |
 | Purpose | A personal tool first. Nothing in the design may block selling it later. |
+| Page shortcuts past nine (PL-06) | Ctrl 1 to 9 open the first nine pages in top-bar order; the tenth page, Integrate, is Ctrl 0 (the key after 9 on the number row). The palette and tooltips show the same keys. A later eleventh page gets no digit shortcut and is reached from the palette. |
+| Integrate lands by applying (PL-06) | Land in order applies each session to the checkout as uncommitted changes (RV-07 "apply"), in order, so the checkout's HEAD does not move and every session ends as landed. Committing in order is left to the user. Resolve reuses RV-11's move: the adapting session's branch is reset to the trial commit before it and its files become the merge result, so its later diff is only its own part. |
 
 ## Release gates (not code tasks; a human must clear them)
 
@@ -217,6 +219,13 @@ probed yet; CI runs the fake-agent suite on Ubuntu.
   match, so other cursor moves are left alone) and `BlockBuilder` applies it before `stripAnsi`. The raw captures
   are fixtures in `packages/shell-integration/test/fixtures`. Not checked: PowerShell 7, Git Bash, and terminals
   resized while a command prints.
+- ~~**`git merge-tree --write-tree` for Integrate (PL-06).**~~ Checked against Git 2.55 (`git merge-tree -h` and
+  the git-merge-tree documentation): `--write-tree` (Git 2.38+) prints the merged tree id on the first line and
+  exits 0 when clean, 1 when there are conflicts, and other codes on error; `--name-only` lists each conflicted
+  path once after the tree id; `--no-messages` leaves out the informational messages; `--merge-base=<commit>`
+  (Git 2.40+) sets the base explicitly, which lets ADE merge worktree snapshots whose base commits differ. No
+  ref, index or worktree is touched; the tree and blobs go to the object database. ADE then uses `commit-tree`
+  and `update-ref` under `refs/ade/integrate/` so the trial commits are not garbage-collected.
 - ~~`FileChange.path` form (SM-18).~~ Verified in M11-T06: `changedFiles` reads `git diff --name-status -z`, whose
   paths are relative to the worktree root with `/` on every platform; the end-to-end test tags `src/b.ts` from it on
   Windows. The renderer still turns `\` into `/` before comparing.

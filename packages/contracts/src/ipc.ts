@@ -19,6 +19,7 @@ import {
 } from './entities.ts';
 import { PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
 import { defineApi, defineTopics, method } from './rpc.ts';
+import { IntegrateChanged, IntegrateInputs, IntegrateLandItem, IntegrateLandResult, IntegrateOverview, IntegrateTrial } from './integrate.ts';
 
 const Id = z.string().min(1).max(200);
 
@@ -1011,6 +1012,16 @@ export const hostApi = defineApi({
   'skills.sync': method(z.object({ workspaceId: Id.nullable(), id: z.string(), enabled: z.boolean() }), Skill),
   'workItems.sources': method(z.object({}), z.array(z.object({ source: z.enum(['shortcut', 'github']), connected: z.boolean() }))),
   'workItems.list': method(z.object({ source: z.enum(['shortcut', 'github']), query: z.string().optional(), role: WorkItemRole.default('owner') }), z.array(WorkItem)),
+  /** PL-06: how ready sessions fit together, a trial merge in order, and landing them in order. */
+  'integrate.overview': method(IntegrateInputs.overview, IntegrateOverview),
+  'integrate.trial': method(IntegrateInputs.trial, IntegrateTrial),
+  'integrate.get': method(IntegrateInputs.get, IntegrateTrial),
+  'integrate.current': method(IntegrateInputs.current, IntegrateTrial.nullable()),
+  'integrate.cancel': method(IntegrateInputs.cancel, Ok),
+  'integrate.resolvePrompt': method(IntegrateInputs.resolvePrompt, z.object({ prompt: z.string(), onto: z.string() })),
+  'integrate.resolve': method(IntegrateInputs.resolve, Ok),
+  'integrate.landPreview': method(IntegrateInputs.landPreview, z.array(IntegrateLandItem)),
+  'integrate.land': method(IntegrateInputs.land, IntegrateLandResult),
 });
 export type HostApi = typeof hostApi;
 
@@ -1025,6 +1036,7 @@ export const hostTopics = defineTopics({
   'notify': z.object({ sessionId: z.string(), title: z.string(), body: z.string(), target: z.literal('inbox').optional() }),
   'telegram.status': TelegramStatus,
   'agents.install': AgentInstallState,
+  'integrate.changed': IntegrateChanged,
 });
 export type HostTopics = typeof hostTopics;
 

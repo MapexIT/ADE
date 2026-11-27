@@ -234,6 +234,26 @@ export const MIGRATIONS: string[] = [
   `
   CREATE INDEX IF NOT EXISTS events_type ON events(type, session_id);
   `,
+  // PL-06: integration trials (ordered trial merges of ready sessions). Steps and check results are JSON.
+  `
+  CREATE TABLE IF NOT EXISTS integration_trials (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    order_json TEXT NOT NULL,
+    head TEXT NOT NULL,
+    members_json TEXT NOT NULL,
+    steps_json TEXT NOT NULL,
+    checks_json TEXT NOT NULL,
+    run_checks INTEGER NOT NULL DEFAULT 0,
+    sandboxed INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error TEXT,
+    landed_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS integration_trials_workspace ON integration_trials(workspace_id, created_at);
+  `,
 ];
 
 export function migrate(db: Database): number {
