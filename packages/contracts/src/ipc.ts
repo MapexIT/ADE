@@ -1072,6 +1072,43 @@ export const CommandBlock = z.object({
 });
 export type CommandBlock = z.infer<typeof CommandBlock>;
 
+/** SM-19: what a watched command should report. */
+export const WatchRule = z.object({
+  /** Tell when it ends: any end, only a failure, or not at all. */
+  end: z.enum(['any', 'fail', 'none']).default('any'),
+  quietSeconds: z.number().int().min(5).max(3600).nullable().default(null),
+  /** Plain text, matched case-insensitively. Not a regular expression, so no pattern can stall the pty process. */
+  match: z.string().min(1).max(200).nullable().default(null),
+  /** Set by ADE for a long command in a terminal the user is not looking at. */
+  auto: z.boolean().default(false),
+});
+export type WatchRule = z.infer<typeof WatchRule>;
+
+export const WatchReason = z.enum(['finished', 'failed', 'quiet', 'matched']);
+export type WatchReason = z.infer<typeof WatchReason>;
+
+export const WatchFired = z.object({
+  id: z.string(),
+  blockId: z.string(),
+  reason: WatchReason,
+  command: z.string().max(500),
+  exitCode: z.number().int().nullable(),
+  /** The matched line (for the app only; never put in an OS notification). */
+  line: z.string().max(300).nullable(),
+  /** Seconds of silence for a quiet watch. */
+  quietSeconds: z.number().int().nullable().default(null),
+  auto: z.boolean().default(false),
+  at: z.number(),
+});
+export type WatchFired = z.infer<typeof WatchFired>;
+
+/** One line typed into a shell (SM-21); a newline would run more than the user saw. */
+export const OneLineCommand = z
+  .string()
+  .min(1)
+  .max(4000)
+  .refine((c) => !/[\r\n]/.test(c), 'one line only');
+
 export const TerminalInfo = z.object({
   id: z.string(),
   kind: TerminalKind,
@@ -1082,6 +1119,8 @@ export const TerminalInfo = z.object({
   pid: z.number().nullable(),
   smart: z.boolean(),
   agentState: z.enum(['none', 'working', 'waiting', 'finished']),
+  /** SM-19: the watch set on this terminal's running or next command. */
+  watch: WatchRule.nullable().default(null),
 });
 export type TerminalInfo = z.infer<typeof TerminalInfo>;
 
@@ -1115,6 +1154,13 @@ export const ptyApi = defineApi({
     z.object({ command: z.array(z.string()).min(1), cwd: AbsPath, sessionId: z.string().nullable(), runId: Id, env: z.record(z.string(), z.string()).optional() }),
     z.object({ terminalId: z.string() }),
   ),
+  /** SM-19: watches the running command, or the next one; null stops watching. */
+  'pty.watch': method(z.object({ id: Id, rule: WatchRule.nullable() }), Ok),
+  /** SM-21: types one command into a smart shell once its prompt is ready. */
+  'pty.runWhenReady': method(
+    z.object({ id: Id, command: OneLineCommand }),
+    z.object({ started: z.boolean(), reason: z.enum(['not-smart', 'timeout', 'gone']).optional() }),
+  ),
 });
 export type PtyApi = typeof ptyApi;
 
@@ -1124,6 +1170,7 @@ export const ptyTopics = defineTopics({
   'pty.exit': z.object({ id: z.string(), exitCode: z.number().int().nullable() }),
   'pty.changed': TerminalInfo,
   'pty.runFinished': z.object({ runId: z.string(), exitCode: z.number().int().nullable(), output: z.string() }),
+  'pty.watchFired': WatchFired,
 });
 export type PtyTopics = typeof ptyTopics;
 
