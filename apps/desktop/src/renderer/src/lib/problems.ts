@@ -5,6 +5,7 @@ import { host } from './bridge.ts';
 import { attachmentText, clock } from './format.ts';
 import { sendChecked } from './guards.ts';
 import { attempt, useStore } from './store.ts';
+import { liveWorktree } from './format.ts';
 
 /** SM-18: what ADE found in one finished block, compared with the previous run of the same command. */
 export interface BlockProblemsState {
@@ -56,7 +57,7 @@ export async function recordBlock(terminal: TerminalInfo, block: CommandBlock): 
     const s = useStore.getState();
     const workspace = s.workspaces.find((w) => w.id === s.workspaceId);
     const session = terminal.sessionId ? s.sessions[terminal.sessionId] : undefined;
-    const root = session?.worktreePath ?? workspace?.rootPath ?? null;
+    const root = liveWorktree(session) ?? workspace?.rootPath ?? null;
     if (!workspace || !root || !block.command.trim()) return;
     const sessionId = session ? session.id : null;
     const { problems, cut } = extractProblems(block.output, { cwd: block.cwd ?? terminal.cwd, root });

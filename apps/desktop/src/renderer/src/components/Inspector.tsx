@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { host, main } from '../lib/bridge.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../lib/store.ts';
 import { FileTree } from './FileTree.tsx';
+import { liveWorktree } from '../lib/format.ts';
 
 export function TurnPicker({ sessionId, value, onChange }: { sessionId: string; value: number | null; onChange: (v: number | null) => void }) {
   const turns = useStore((s) => s.turns[sessionId] ?? EMPTY);
@@ -93,7 +94,7 @@ export function Inspector() {
     );
   }
 
-  const root = session.worktreePath ?? workspace?.rootPath ?? '';
+  const root = liveWorktree(session) ?? workspace?.rootPath ?? '';
   const ended = session.state === 'landed' || session.state === 'discarded';
   return (
     <aside aria-label="Inspector" className="flex h-full flex-col gap-3 overflow-hidden bg-surface p-3">
