@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pageForKey, pageShortcut } from '../src/renderer/src/lib/pages.ts';
 import { briefing, checkVerdict, classifyFit, defaultOrder, sharedPaths, staleness } from '../src/host/integrate-plan.ts';
 
 describe('PL-06 matrix cells', () => {
@@ -90,5 +91,15 @@ describe('PL-06 briefing', () => {
     const text = briefing({ order: ['A', 'B'], position: 1, before: [{ title: 'A', files, lastMessage: 'x'.repeat(2000) }], onto: 'abc', conflicts: [], failed: [] });
     expect(text).toContain('and 10 more');
     expect(text).toContain(`${'x'.repeat(1500)}…`);
+  });
+});
+
+describe('PL-06 page shortcut', () => {
+  it('opens Integrate with Ctrl 0 and keeps Ctrl 1 to 9', () => {
+    expect(pageShortcut('integrate')).toBe('Ctrl 0');
+    expect(pageShortcut('git')).toBe('Ctrl 9');
+    expect(pageShortcut('sessions')).toBe('Ctrl 1');
+    expect(pageForKey('0')?.tab).toBe('integrate');
+    expect(pageForKey('9')?.tab).toBe('git');
   });
 });
