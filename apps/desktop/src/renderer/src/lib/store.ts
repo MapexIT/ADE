@@ -7,7 +7,7 @@ import type { ActiveRun } from './runs.ts';
 import { AGENT_LABELS } from '@ade/contracts';
 import type { Lesson, LessonAdvice, LessonSuggestion } from '@ade/contracts';
 
-export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review' | 'observe' | 'git';
+export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review' | 'observe' | 'git' | 'integrate';
 
 /** SM-09, SM-10: a command proposed by an agent, waiting for the user to run or dismiss it. */
 export interface Suggestion {

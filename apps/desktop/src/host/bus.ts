@@ -9,6 +9,8 @@ export interface HostEvents {
   notify: { sessionId: string; title: string; body: string; target?: 'inbox' };
   'telegram.status': TelegramStatus;
   'agents.install': AgentInstallState;
+  /** PL-06: a trial changed; the page reloads it. */
+  'integrate.changed': { workspaceId: string; trialId: string };
 }
 
 type Listener<T> = (payload: T) => void;
