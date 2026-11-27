@@ -1,5 +1,5 @@
 import { Check, Copy, GitBranch as GitBranchIcon, Maximize2, MessagesSquare, RefreshCw } from 'lucide-react';
-import { Badge, Button, cx } from '@ade/ui';
+import { Badge, Button, cx, Waiting } from '@ade/ui';
 import type { GitBranch, GitCommit, GitGraph } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -89,12 +89,20 @@ export function BranchGraph({
       .join('|'),
   );
 
+  /** The first load failed; the graph area says so instead of waiting for ever. */
+  const [failed, setFailed] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     const g = await attempt(() => host.call('git.graph', { workspaceId, limit: 400, remotes }));
     setLoading(false);
+    setFailed(!g);
     if (g) setGraph(g);
   }, [workspaceId, remotes]);
+  // Another repository waits for its own graph rather than showing the last one.
+  useEffect(() => {
+    setGraph(null);
+    setFailed(false);
+  }, [workspaceId]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 300);
@@ -200,6 +208,12 @@ export function BranchGraph({
         className="min-h-32 flex-1 overflow-auto rounded-[var(--radius)] border border-line bg-bg outline-none focus-visible:border-accent"
       >
         {graph && !rows.length ? <p className="m-3 text-ink-muted">This repository has no commits yet.</p> : null}
+        {!graph && !failed ? (
+          <div className="flex h-full min-h-32 items-center justify-center" data-testid="git-loading">
+            <Waiting className="text-[13px]">Loading the branch graph…</Waiting>
+          </div>
+        ) : null}
+        {!graph && failed ? <p className="m-3 text-ink-muted">The branch graph could not be loaded. Press Refresh branches to try again.</p> : null}
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((v) => {
             const row = rows[v.index]!;

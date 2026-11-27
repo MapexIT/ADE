@@ -906,6 +906,8 @@ export const hostApi = defineApi({
   /** `workspaceId` names the workspace when the folder is outside it (scratchpad and selection runs). */
   'runs.record': method(Run.omit({ id: true }).extend({ workspaceId: Id.optional() }), Run),
   'runs.history': method(z.object({ workspaceId: Id }), z.array(Run)),
+  /** CR-15: deletes the given runs from the workspace's history, or all of them when `runIds` is left out. */
+  'runs.delete': method(z.object({ workspaceId: Id, runIds: z.array(Id).min(1).max(500).optional() }), z.object({ deleted: z.number().int() })),
 
   'audit.list': method(z.object({ workspaceId: Id }), z.array(AuditEntry)),
 

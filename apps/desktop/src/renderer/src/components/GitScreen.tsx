@@ -72,7 +72,11 @@ function CommitInfo({ hash, detail, file, onFile, onSelect }: { hash: string | n
   if (!detail) {
     return (
       <section aria-label="Commit details" className="hidden min-h-0 items-center justify-center lg:flex">
-        <EmptyState icon={<GitCommitHorizontal className="size-5" />} title={hash ? 'Loading the commit…' : 'Select a commit'} body="Its message, parents and changed files appear here." />
+        {hash ? (
+          <Waiting className="text-[13px]">Loading the commit…</Waiting>
+        ) : (
+          <EmptyState icon={<GitCommitHorizontal className="size-5" />} title="Select a commit" body="Its message, parents and changed files appear here." />
+        )}
       </section>
     );
   }

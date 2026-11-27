@@ -1,4 +1,4 @@
-import { ExternalLink, Play, Save, SendHorizontal, SlidersHorizontal } from 'lucide-react';
+import { ExternalLink, Play, Save, SendHorizontal, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel, Tabs, Waiting } from '@ade/ui';
 import type { EnvSet, Run, RunConfig } from '@ade/contracts';
 import { useCallback, useEffect, useState } from 'react';
@@ -43,6 +43,13 @@ export function RunScreen() {
   const [editingEnv, setEditingEnv] = useState(false);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [comparing, setComparing] = useState<string[]>([]);
+  /** CR-15: "Clear history" asks for a second press within 4 seconds. */
+  const [clearArmed, setClearArmed] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const t = setTimeout(() => setClearArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [clearArmed]);
 
   const refresh = useCallback(async () => {
     if (!workspace) return;
@@ -52,7 +59,20 @@ export function RunScreen() {
     setEnvSets(e);
     setConfigId((id) => (id && c.some((x) => x.id === id) ? id : (c[0]?.id ?? '')));
     setEnvSetId((id) => (id && e.some((x) => x.id === id) ? id : ''));
+    setSelectedRun((id) => (id && h.some((r) => r.id === id) ? id : null));
+    setComparing((ids) => ids.filter((id) => h.some((r) => r.id === id)));
   }, [workspace]);
+
+  /** CR-15: deletes one run, or the whole history of this workspace without ids. */
+  const deleteRuns = async (runIds?: string[]) => {
+    if (!workspace) return;
+    const res = await attempt(() => host.call('runs.delete', runIds ? { workspaceId: workspace.id, runIds } : { workspaceId: workspace.id }));
+    setClearArmed(false);
+    if (res) {
+      if (!runIds) toast(res.deleted === 1 ? 'Deleted 1 run.' : `Deleted ${res.deleted} runs.`);
+      void refresh();
+    }
+  };
 
   useEffect(() => {
     void refresh();
@@ -167,6 +187,17 @@ export function RunScreen() {
             {comparing.length ? (
               <span className="ml-auto text-[12px] text-ink-muted">{comparing.length === 1 ? 'Choose one more run to compare' : ''}</span>
             ) : null}
+            {history.length ? (
+              <Button
+                size="dense"
+                variant={clearArmed ? 'attention' : 'ghost'}
+                className={cx(!comparing.length && 'ml-auto')}
+                icon={<Trash2 className="size-4" aria-hidden="true" />}
+                onClick={() => (clearArmed ? void deleteRuns() : setClearArmed(true))}
+              >
+                {clearArmed ? 'Delete all runs' : 'Clear history'}
+              </Button>
+            ) : null}
           </div>
           {history.length === 0 ? <p className="m-0 text-ink-muted">No runs yet.</p> : null}
           {history.map((r) => (
@@ -176,6 +207,9 @@ export function RunScreen() {
                   {r.command.join(' ')}
                 </button>
                 <Badge tone={r.exitCode === 0 ? 'ok' : 'danger'}>{r.exitCode === 0 ? 'Passed' : `Failed · exit ${r.exitCode}`}</Badge>
+                <Button size="dense" variant="ghost" className="w-9 shrink-0 px-0" aria-label={`Delete run ${r.command.join(' ')}`} title="Delete this run" onClick={() => void deleteRuns([r.id])}>
+                  <Trash2 className="size-4" aria-hidden="true" />
+                </Button>
               </div>
               <span className="text-[12px] text-ink-muted">
                 {new Date(r.startedAt).toLocaleString('en-GB')} · {r.sessionId ? (sessions[r.sessionId]?.title ?? 'session') : 'your checkout'}

@@ -33,6 +33,9 @@ test('HI-12: the Git page is the branch graph; moving through it shows each comm
   const graph = git.getByRole('listbox', { name: 'Commit graph' });
   const details = git.getByRole('region', { name: 'Commit details' });
   const diffPane = git.getByRole('region', { name: 'File diff' });
+  // The graph shows a waiting animation until it has loaded, then goes.
+  await expect(graph.getByTestId('git-loading')).toBeVisible();
+  await expect(graph.getByTestId('git-loading')).toHaveCount(0, { timeout: 15_000 });
   await expect(graph.getByRole('option', { name: /^Merge feature\/login/ })).toHaveAttribute('aria-selected', 'true');
   await expect(details.getByRole('heading', { name: 'Merge feature/login' })).toBeVisible();
   await expect(details).toContainText('Merge of');

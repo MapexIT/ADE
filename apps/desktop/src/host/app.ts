@@ -699,6 +699,7 @@ export function createHost(config: HostConfig) {
       return saved;
     },
     'runs.history': ({ workspaceId }) => repos.runs.history(workspaceId),
+    'runs.delete': ({ workspaceId, runIds }) => ({ deleted: repos.runs.delete(workspaceId, runIds) }),
     'audit.list': ({ workspaceId }) => repos.audit.list(workspaceId),
     'workflows.list': ({ workspaceId }) => listWorkflows(workspaceId ? workspaceRoot(workspaceId) : null),
     'workflows.start': (input) => workflows.start(input),

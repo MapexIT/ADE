@@ -1,6 +1,6 @@
 # Features
 
-165 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+166 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -166,6 +166,7 @@ Linux.
 | CR-12 | Watch mode | Later | Re-run on file change. |
 | CR-13 | Debugging | Later | Breakpoints and stepping. |
 | CR-14 | Container runs | Later | Run inside a dev container. |
+| CR-15 | Delete run history | v1 | Each run in the history has a delete button; "Clear history" deletes every run of the workspace after a second press ("Delete all runs", armed for 4 seconds). Only that workspace's runs are touched, and deleted runs stay gone after a restart. |
 
 ## Connectors (CO)
 
@@ -220,7 +221,7 @@ Node types: agent, command, gate, loop, branch, fan-out, connector, land.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| HI-12 | Git page and branch graph | v1 | A Git page (Ctrl 9) is built around the repository's branch graph, in the middle: lanes and merges, branch, remote (optional) and tag labels, HEAD, and a list of branches with the session that owns each, where it is checked out, and how many commits it is ahead of or behind the checkout. The selected commit is shown on both sides: on the left its message, author, time, hash (copy), parents (each a link) and changed files with line counts; on the right the selected file's diff against the first parent (inline or side by side). Arrow keys, Page Up and Down, Home and End move through the graph and the details follow. The Inspector has the same graph in a Branches tab, with a larger view. Read-only: ADE's own checkpoint refs are never shown, and nothing here changes the repository. The graph reloads when a session changes state. |
+| HI-12 | Git page and branch graph | v1 | A Git page (Ctrl 9) is built around the repository's branch graph, in the middle: lanes and merges, branch, remote (optional) and tag labels, HEAD, and a list of branches with the session that owns each, where it is checked out, and how many commits it is ahead of or behind the checkout. The selected commit is shown on both sides: on the left its message, author, time, hash (copy), parents (each a link) and changed files with line counts; on the right the selected file's diff against the first parent (inline or side by side). Arrow keys, Page Up and Down, Home and End move through the graph and the details follow. The Inspector has the same graph in a Branches tab, with a larger view. Read-only: ADE's own checkpoint refs are never shown, and nothing here changes the repository. The graph reloads when a session changes state. The graph shows a waiting animation until it has loaded (and says so if loading fails); the commit details wait the same way. |
 | ED-01 | Editor | MVP | Monaco with syntax highlighting, file tree, search and go to file for the checkout and every worktree. Saving detects external changes. The file tree is virtualised, with compact folders, indent guides, file-type icons, the session's changes marked on files and counted on folders, a "Changed only" view, a filter that opens the folders it matches in, the editor's file revealed, and WAI-ARIA tree keyboard navigation with type-ahead. |
 | ED-02 | Open in my editor | MVP | Opens a worktree in the configured external editor. |
 | ED-03 | Language servers | v1 | Diagnostics, hover, go to definition. |
