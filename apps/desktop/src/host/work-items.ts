@@ -1,4 +1,4 @@
-import type { WorkItem } from '@ade/contracts';
+import type { WorkItem, WorkItemRole } from '@ade/contracts';
 
 /**
  * A source of work items (CO-01). Implementations talk to a connector's MCP server; the panel only sees
@@ -7,7 +7,8 @@ import type { WorkItem } from '@ade/contracts';
 export interface WorkItemProvider {
   readonly source: WorkItem['source'];
   connected(): Promise<boolean>;
-  list(query?: string): Promise<WorkItem[]>;
+  /** Items for `role`; for 'team' each item's group is its team's name. */
+  list(query?: string, role?: WorkItemRole): Promise<WorkItem[]>;
 }
 
 /** Registry of connected providers. Unconnected sources answer with an empty list, never an error. */
@@ -27,10 +28,10 @@ export class WorkItemService {
     return Promise.all(all.map(async (source) => ({ source, connected: (await this.providers.get(source)?.connected().catch(() => false)) ?? false })));
   }
 
-  async list(source: WorkItem['source'], query?: string): Promise<WorkItem[]> {
+  async list(source: WorkItem['source'], query?: string, role: WorkItemRole = 'owner'): Promise<WorkItem[]> {
     const p = this.providers.get(source);
     if (!p) return [];
-    const items = await p.list(query);
+    const items = await p.list(query, role);
     const q = query?.trim().toLowerCase();
     return q ? items.filter((i) => i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q)) : items;
   }

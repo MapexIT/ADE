@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { findOnPath } from '@ade/acp-client';
-import type { ConnectorSecret, WorkItem } from '@ade/contracts';
-import { shortcutMember } from './shortcut-actions.ts';
+import type { ConnectorSecret, WorkItem, WorkItemRole } from '@ade/contracts';
+import { nextCursor, shortcutMember } from './shortcut-actions.ts';
 import type { WorkItemProvider } from './work-items.ts';
 
 /** Connector tokens, held in memory only. Main decrypts them from safeStorage and hands them over (rule 7). */
@@ -59,28 +59,49 @@ export class GitHubCliProvider implements WorkItemProvider {
     return (await this.run(this.gh, ['auth', 'status'], process.env)).code === 0;
   }
 
-  async list(): Promise<WorkItem[]> {
+  /**
+   * CO-01: owner is `--assignee=@me`, requester `--author=@me`, and team the issues that mention one of the user's
+   * teams (`--team-mentions org/slug`, the only team filter GitHub search has), grouped by team.
+   */
+  async list(_query?: string, role: WorkItemRole = 'owner'): Promise<WorkItem[]> {
     if (!this.gh) throw new Error('The GitHub CLI (gh) is not installed.');
+    const gh = this.gh;
     const token = this.creds.get('github');
     const env = { ...process.env, GH_PROMPT_DISABLED: '1', ...(token ? { GH_TOKEN: token } : {}) };
-    const res = await this.run(
-      this.gh,
-      ['search', 'issues', '--assignee=@me', '--state=open', '--limit', '100', '--json', 'number,title,body,state,url,repository,labels'],
-      env,
-    );
-    if (res.code !== 0) throw new Error(res.stderr.trim() || 'gh could not list your issues. Sign in with `gh auth login`.');
-    const issues = JSON.parse(res.stdout || '[]') as GhIssue[];
-    return issues.map((i) => ({
-      ref: `${i.repository.nameWithOwner}#${i.number}`,
-      source: 'github',
-      title: i.title,
-      description: i.body ?? '',
-      state: i.labels?.length ? `Open · ${i.labels.map((l) => l.name).join(', ')}` : 'Open',
-      url: i.url,
-      group: i.repository.nameWithOwner,
-    }));
+    const search = async (filter: string, group?: string): Promise<WorkItem[]> => {
+      const res = await this.run(gh, ['search', 'issues', filter, '--state=open', '--limit', '100', '--json', 'number,title,body,state,url,repository,labels'], env);
+      if (res.code !== 0) throw new Error(res.stderr.trim() || 'gh could not list your issues. Sign in with `gh auth login`.');
+      return (JSON.parse(res.stdout || '[]') as GhIssue[]).map((i) => ({
+        ref: `${i.repository.nameWithOwner}#${i.number}`,
+        source: 'github',
+        title: i.title,
+        description: i.body ?? '',
+        state: i.labels?.length ? `Open · ${i.labels.map((l) => l.name).join(', ')}` : 'Open',
+        url: i.url,
+        group: group ?? i.repository.nameWithOwner,
+      }));
+    };
+    if (role === 'owner') return search('--assignee=@me');
+    if (role === 'requester') return search('--author=@me');
+    const res = await this.run(gh, ['api', 'user/teams', '--paginate', '--jq', '.[] | [.organization.login, .slug, .name] | @tsv'], env);
+    if (res.code !== 0) throw new Error(`GitHub did not list your teams; that needs the read:org scope (gh auth refresh -s read:org). ${res.stderr.trim()}`.trim());
+    const lists = await Promise.all(parseGhTeams(res.stdout).map((t) => search(`--team-mentions=${t.org}/${t.slug}`, `${t.name} · ${t.org}`)));
+    return lists.flat();
   }
 }
+
+/** Teams from `gh api user/teams --jq '... | @tsv'`: one `org<TAB>slug<TAB>name` line each. Pure. */
+export function parseGhTeams(stdout: string): { org: string; slug: string; name: string }[] {
+  return stdout
+    .split(/\r?\n/)
+    .map((l) => l.split('\t'))
+    .filter((p) => p.length >= 2 && !!p[0] && !!p[1])
+    .map(([org, slug, name]) => ({ org: org!, slug: slug!, name: name || slug! }));
+}
+
+/** Fields the work item list reads from a Shortcut search (see parseStories). */
+const STORY_FIELDS = ['id', 'name', 'description', 'app_url', 'workflow_state', 'iterations', 'epic'];
+type ToolResult = { content?: { type: string; text?: string }[]; isError?: boolean };
 
 /** Thin Adapter over the official MCP client for one HTTP server. */
 export class McpHttpConnection {
@@ -174,15 +195,36 @@ export class ShortcutMcpProvider implements WorkItemProvider {
     return this.conn;
   }
 
-  async list(query?: string): Promise<WorkItem[]> {
+  /**
+   * CO-01: open stories the member owns (`owner:`), requested (`requester:`), or that belong to one of their teams
+   * (`team:"name"`, teams from get_whoami), grouped by team. Operators checked against the hosted server on 2026-11-27.
+   */
+  async list(query?: string, role: WorkItemRole = 'owner'): Promise<WorkItem[]> {
     const client = await this.conn.ensure();
     const { tools } = await client.listTools();
     const tool = pickSearchTool(tools as ToolInfo[]);
     if (!tool) throw new Error('The Shortcut MCP server did not offer a story search tool ADE recognises.');
+    const props = (tools as ToolInfo[]).find((t) => t.name === tool.name)?.inputSchema?.properties ?? {};
     // `owner:me` matches nothing on Shortcut; the search needs the member's mention name.
     const me = await shortcutMember(client);
-    const result = await client.callTool({ name: tool.name, arguments: { [tool.queryArg]: `owner:${me.mentionName} !is:done ${query ?? ''}`.trim() } });
-    return parseStories(result as { content?: { type: string; text?: string }[] });
+    const fields = 'fields' in props ? { fields: STORY_FIELDS } : {};
+    const search = async (filter: string, group?: string): Promise<WorkItem[]> => {
+      const args: Record<string, unknown> = { [tool.queryArg]: `${filter} !is:done ${query ?? ''}`.trim(), ...fields, ...('limit' in props ? { limit: 100 } : {}) };
+      const out: WorkItem[] = [];
+      let result = (await client.callTool({ name: tool.name, arguments: args })) as ToolResult;
+      for (let page = 0; page < 3; page++) {
+        if (result.isError) throw new Error(`Shortcut search failed: ${result.content?.find((c) => c.type === 'text')?.text?.slice(0, 300) ?? 'unknown error'}`);
+        out.push(...parseStories(result).map((i) => (group ? { ...i, group } : i)));
+        const cursor = 'cursor' in props ? nextCursor(result) : null;
+        if (!cursor) break;
+        result = (await client.callTool({ name: tool.name, arguments: { cursor, ...fields } })) as ToolResult;
+      }
+      return out;
+    };
+    if (role === 'owner') return search(`owner:${me.mentionName}`);
+    if (role === 'requester') return search(`requester:${me.mentionName}`);
+    const lists = await Promise.all(me.teams.map((t) => search(`team:"${t.name.replace(/"/g, '')}"`, t.name)));
+    return lists.flat();
   }
 
   async reset() {

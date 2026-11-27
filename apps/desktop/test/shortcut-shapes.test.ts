@@ -29,7 +29,7 @@ const search = text({
 
 describe('CO-01, CO-09 Shortcut response shapes', () => {
   it('reads the member from get_whoami', () => {
-    expect(parseWhoami(text({ entity: { entity_type: 'whoami', member: { id: ME, mention_name: 'someone', name: 'Someone' } } }))).toEqual({ id: ME, mentionName: 'someone' });
+    expect(parseWhoami(text({ entity: { entity_type: 'whoami', member: { id: ME, mention_name: 'someone', name: 'Someone' } } }))).toEqual({ id: ME, mentionName: 'someone', teams: [] });
     expect(parseWhoami(text({ entity: {} }))).toBeNull();
   });
 

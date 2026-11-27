@@ -229,3 +229,7 @@ export const WorkItem = z.object({
   group: z.string().nullable(),
 });
 export type WorkItem = z.infer<typeof WorkItem>;
+
+/** CO-01: whose work items to list: ones the user owns, ones they requested, or their teams' (grouped by team). */
+export const WorkItemRole = z.enum(['owner', 'requester', 'team']);
+export type WorkItemRole = z.infer<typeof WorkItemRole>;
