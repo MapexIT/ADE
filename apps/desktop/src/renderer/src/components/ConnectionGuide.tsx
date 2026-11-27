@@ -1,3 +1,4 @@
+import { copyText } from '../lib/clipboard.ts';
 import { Check, Copy, ExternalLink, GitBranch, KeyRound, ListTodo, RefreshCw, Settings, SquareTerminal } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { ConnectionStatus } from '@ade/contracts';
@@ -38,7 +39,6 @@ function useConnection(onChecked?: () => void) {
 
 /** A command to run in a terminal, with a copy button. */
 function Command({ text }: { text: string }) {
-  const toast = useStore((s) => s.toast);
   return (
     <div className="flex items-center gap-2 rounded-[var(--radius-small)] border border-line bg-surface-sunken py-1 pr-1 pl-3">
       <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[12px] whitespace-nowrap text-ink">{text}</code>
@@ -46,7 +46,7 @@ function Command({ text }: { text: string }) {
         size="dense"
         variant="ghost"
         aria-label={`Copy ${text}`}
-        onClick={() => void navigator.clipboard.writeText(text).then(() => toast('Copied.'), () => toast('Could not copy.'))}
+        onClick={() => void copyText(text)}
       >
         <Copy className="size-3.5" aria-hidden="true" />
       </Button>
@@ -90,8 +90,7 @@ function Shell({ icon, title, body, checking, onCheck, children }: { icon: React
           <h2 className="m-0 text-[17px] font-semibold tracking-[-0.01em]">{title}</h2>
           <p className="m-0 text-ink-muted">{body}</p>
         </div>
-        <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={checking} onClick={onCheck}>
-          <RefreshCw className={cx('size-3.5', checking && 'animate-spin')} aria-hidden="true" />
+        <Button icon={<RefreshCw className="size-4" aria-hidden="true" />} busy={checking} size="dense" disabled={checking} onClick={onCheck}>
           {checking ? 'Checking…' : 'Check again'}
         </Button>
       </header>

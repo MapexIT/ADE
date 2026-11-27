@@ -1,3 +1,4 @@
+import { copyText } from '../../lib/clipboard.ts';
 import { CircleStop, Copy, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
@@ -159,7 +160,7 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
                   <Button icon={<RotateCcw className="size-4" aria-hidden="true" />} size="dense" onClick={() => runInTerminal(terminalId, b.command)}>
                     Re-run
                   </Button>
-                  <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={() => void navigator.clipboard.writeText(blockAsText(b)).then(() => toast('Copied.'))}>
+                  <Button icon={<Copy className="size-4" aria-hidden="true" />} size="dense" onClick={() => void copyText(blockAsText(b))}>
                     Copy output
                   </Button>
                 </div>

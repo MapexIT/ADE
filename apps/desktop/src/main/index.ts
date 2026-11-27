@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, type NativeImage } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, type NativeImage } from 'electron';
 import { backgroundMessage, hideOnClose, type BackgroundState } from './background.ts';
 import { isLocalPreviewUrl } from './preview.ts';
 import { SmokeRun, type SmokeCheck, type SmokeReport } from './smoke.ts';
@@ -150,6 +150,10 @@ const handlers: Handlers<MainApi> = {
   'main.pickDirectory': async ({ title }) => {
     const res = await dialog.showOpenDialog(window!, { title: title ?? 'Open a repository', properties: ['openDirectory'] });
     return { path: res.canceled ? null : (res.filePaths[0] ?? null) };
+  },
+  'main.copyText': ({ text }) => {
+    clipboard.writeText(text);
+    return { ok: true };
   },
   'main.openExternal': async ({ url }) => {
     await shell.openExternal(url);
