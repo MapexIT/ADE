@@ -111,8 +111,9 @@ describe('changedLines', () => {
     expect([...changedLines(next, lines)]).toEqual([4]);
   });
 
-  it('respects duplicates as a multiset', () => {
-    expect([...changedLines(['x', 'x', 'y'], ['x', 'y'])]).toEqual([1]);
+  it('does not count a line printed more often than before (ConPTY repaints the previous screen)', () => {
+    expect([...changedLines(['x', 'x', 'y'], ['x', 'y'])]).toEqual([]);
+    expect([...changedLines(['x', 'z', 'z'], ['x'])]).toEqual([1, 2]);
   });
 
   it('selects changed lines through selectLines', () => {

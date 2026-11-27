@@ -153,21 +153,16 @@ export function tryFilterLines(lines: string[], opts: FilterOptions): FilterOutc
 export const normaliseLine = (line: string) => line.trim().replace(/\d+/g, '0');
 
 /**
- * "Changed since last run": the indexes of lines in `current` the previous run did not print. A multiset difference,
- * so a line printed twice now and once before counts once as changed.
+ * "Changed since last run": the indexes of lines in `current` the previous run did not print at all. A set
+ * difference, not a multiset one: on Windows ConPTY repaints the last screen of the previous output at the start of
+ * the next block, so a line printed more often now than before is not taken as a change (docs/DECISIONS.md).
  */
 export function changedLines(current: string[], previous: string[]): Set<number> {
-  const counts = new Map<string, number>();
-  for (const l of previous) {
-    const k = normaliseLine(l);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
+  const before = new Set(previous.map(normaliseLine));
   const out = new Set<number>();
   current.forEach((l, i) => {
     const k = normaliseLine(l);
-    const left = counts.get(k) ?? 0;
-    if (left > 0) counts.set(k, left - 1);
-    else if (k !== '') out.add(i);
+    if (k !== '' && !before.has(k)) out.add(i);
   });
   return out;
 }

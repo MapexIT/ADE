@@ -2,7 +2,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { Bell, BellRing } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { TerminalInfo, WatchRule } from '@ade/contracts';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { pty } from '../../lib/bridge.ts';
 import { attempt } from '../../lib/store.ts';
 
@@ -20,6 +20,7 @@ const inputClass = 'min-h-9 rounded border border-line bg-bg px-2 text-[13px] te
  */
 export function WatchControl({ terminal, running }: { terminal: TerminalInfo & { exited?: boolean }; running: boolean }) {
   const [open, setOpen] = useState(false);
+  const uid = useId();
   const watching = terminal.watch !== null;
   const [end, setEnd] = useState<WatchRule['end']>('any');
   const [quietOn, setQuietOn] = useState(false);
@@ -95,7 +96,7 @@ export function WatchControl({ terminal, running }: { terminal: TerminalInfo & {
               <legend className="mb-1 p-0 text-[13px] font-semibold text-ink">{running ? 'Tell me when this command' : 'Tell me when the next command'}</legend>
               {END_OPTIONS.map((o) => (
                 <label key={o.id} className="flex min-h-8 items-center gap-2">
-                  <input type="radio" name={`watch-end-${id}`} checked={end === o.id} onChange={() => setEnd(o.id)} className="size-4 accent-[var(--accent)]" />
+                  <input type="radio" name={`watch-end-${uid}`} checked={end === o.id} onChange={() => setEnd(o.id)} className="size-4 accent-[var(--accent)]" />
                   {o.label}
                 </label>
               ))}
@@ -105,10 +106,10 @@ export function WatchControl({ terminal, running }: { terminal: TerminalInfo & {
                 <input type="checkbox" checked={quietOn} onChange={(e) => setQuietOn(e.target.checked)} className="size-4 accent-[var(--accent)]" />
                 Goes quiet for
               </label>
-              <label htmlFor={`watch-quiet-${id}`} className="sr-only">
+              <label htmlFor={`watch-quiet-${uid}`} className="sr-only">
                 Seconds without output
               </label>
-              <input id={`watch-quiet-${id}`} type="number" min={5} max={3600} value={quiet} disabled={!quietOn} onChange={(e) => setQuiet(Math.floor(Number(e.target.value)))} className={cx(inputClass, 'w-20 font-mono')} />
+              <input id={`watch-quiet-${uid}`} type="number" min={5} max={3600} value={quiet} disabled={!quietOn} onChange={(e) => setQuiet(Math.floor(Number(e.target.value)))} className={cx(inputClass, 'w-20 font-mono')} />
               <span className="text-ink-muted">seconds</span>
             </div>
             {!quietValid ? <p className="m-0 text-[12px] font-semibold text-ink">Choose between 5 and 3,600 seconds.</p> : null}
@@ -117,20 +118,20 @@ export function WatchControl({ terminal, running }: { terminal: TerminalInfo & {
                 <input type="checkbox" checked={matchOn} onChange={(e) => setMatchOn(e.target.checked)} className="size-4 accent-[var(--accent)]" />
                 Prints
               </label>
-              <label htmlFor={`watch-match-${id}`} className="sr-only">
+              <label htmlFor={`watch-match-${uid}`} className="sr-only">
                 Text to watch for
               </label>
               <input
-                id={`watch-match-${id}`}
+                id={`watch-match-${uid}`}
                 value={match}
                 maxLength={200}
                 disabled={!matchOn}
                 placeholder="for example: listening on"
-                aria-describedby={`watch-match-help-${id}`}
+                aria-describedby={`watch-match-help-${uid}`}
                 onChange={(e) => setMatch(e.target.value)}
                 className={cx(inputClass, 'font-mono')}
               />
-              <span id={`watch-match-help-${id}`} className="text-[12px] text-ink-muted">
+              <span id={`watch-match-help-${uid}`} className="text-[12px] text-ink-muted">
                 Plain text, not case sensitive.
               </span>
             </div>

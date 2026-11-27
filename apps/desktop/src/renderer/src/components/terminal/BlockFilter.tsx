@@ -1,7 +1,7 @@
 import { Copy, Paperclip, X } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
 import type { CommandBlock } from '@ade/contracts';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   changedLines,
   countText,
@@ -73,6 +73,8 @@ export function BlockFilter({ terminalId, block, blocks, cwd, sessionId }: { ter
   const attach = useStore((s) => s.attach);
   const toast = useStore((s) => s.toast);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Unique per mount: the same block can be on screen in the Terminals page and, hidden, in the sessions panel.
+  const inputId = useId();
   const lines = useMemo(() => splitLines(block.output.trimEnd()), [block.output]);
   const prev = useMemo(() => previousRun(blocks, block), [blocks, block]);
   const prevLines = useMemo(() => (prev ? splitLines(prev.output.trimEnd()) : null), [prev]);
@@ -150,11 +152,11 @@ export function BlockFilter({ terminalId, block, blocks, cwd, sessionId }: { ter
     <section aria-label="Filter" className="flex flex-col gap-2 font-sans text-[13px]">
       <div className="ade-pop flex flex-col gap-2 rounded-[var(--radius-small)] border border-line bg-surface px-2 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={`filter-${block.id}`} className="text-[12px] text-ink-muted">
+          <label htmlFor={inputId} className="text-[12px] text-ink-muted">
             Filter lines
           </label>
           <input
-            id={`filter-${block.id}`}
+            id={inputId}
             ref={inputRef}
             value={f.preset ? '' : f.query}
             placeholder="Text to find"
