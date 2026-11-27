@@ -115,6 +115,15 @@ export function toSpawnable(path: string, nodePath: string = process.execPath): 
     const script = resolve(dirname(path), js[1]);
     if (existsSync(script)) return { command: nodePath, args: [script] };
   }
+  // Node's own npm.cmd and npx.cmd set the script in a variable, then run "%NODE_EXE%" "%NPM_CLI_JS%" %*.
+  const sets = new Map<string, string>();
+  for (const m of text.matchAll(/SET "(\w+)=%~?dp0%?\\([^"]+)"/gi)) sets.set(m[1]!.toUpperCase(), m[2]!);
+  const call = /"%(\w+)%"\s+"%(\w+)%"\s+%\*/i.exec(text);
+  const viaVar = call ? sets.get(call[2]!.toUpperCase()) : undefined;
+  if (viaVar && /\.(?:c|m)?js$/i.test(viaVar)) {
+    const script = resolve(dirname(path), viaVar);
+    if (existsSync(script)) return { command: nodePath, args: [script] };
+  }
   // Native binary wrapped by a shim: "%dp0%\node_modules\pkg\bin\tool.exe" %*
   const exe = /"%~?dp0%?\\([^"]+\.exe)"/i.exec(text);
   if (exe?.[1]) {
