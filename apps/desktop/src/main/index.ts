@@ -59,7 +59,7 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
     env: { ADE_USER_DATA: userData, ...(devFakeAgent ? { ADE_FAKE_AGENT_ENTRY: join(__dirname, 'fake-agent.js') } : {}) },
     onStatus: (status) => publish('process.status', { which: 'host', status }),
     onReady: () => {
-      sendCredentials();
+      void sendCredentials();
       supervisors.host.post({ type: 'background-query' });
       smoke?.markReady('host');
     },
@@ -95,11 +95,11 @@ const supervisors: Record<ProcessName, ProcessSupervisor> = {
 };
 
 /** Connector tokens go to the host in memory on every (re)start and after every change; never to disk unencrypted. */
-function sendCredentials() {
+async function sendCredentials() {
   const values: Record<string, string> = {};
   for (const key of ['shortcut', 'github', 'telegram', 'telegram-password'] as const) {
     try {
-      const v = credentials.get(key);
+      const v = await credentials.get(key);
       if (v) values[key] = v;
     } catch {
       // unreadable entry: leave it out
@@ -171,15 +171,15 @@ const handlers: Handlers<MainApi> = {
     notify(title, body, sessionId);
     return { ok: true };
   },
-  'main.credentials.status': () => ({ available: credentials.available(), backend: credentials.backend(), stored: credentials.stored() }),
-  'main.credentials.set': ({ key, secret }) => {
-    credentials.set(key, secret);
-    sendCredentials();
+  'main.credentials.status': async () => ({ available: await credentials.available(), backend: credentials.backend(), stored: credentials.stored() }),
+  'main.credentials.set': async ({ key, secret }) => {
+    await credentials.set(key, secret);
+    await sendCredentials();
     return { ok: true };
   },
-  'main.credentials.delete': ({ key }) => {
+  'main.credentials.delete': async ({ key }) => {
     credentials.delete(key);
-    sendCredentials();
+    await sendCredentials();
     return { ok: true };
   },
   'main.info': () => ({ version: app.getVersion(), platform: process.platform, userData, isPackaged: app.isPackaged }),
@@ -188,18 +188,22 @@ const handlers: Handlers<MainApi> = {
     return { ok: true };
   },
   // CR-11: secret values of environment sets. They go to the renderer only to start a run with them.
-  'main.envSecret.set': ({ key, value }) => {
-    credentials.set(key as `env:${string}`, value);
+  'main.envSecret.set': async ({ key, value }) => {
+    await credentials.set(key as `env:${string}`, value);
     return { ok: true };
   },
   'main.envSecret.delete': ({ key }) => {
     credentials.delete(key as `env:${string}`);
     return { ok: true };
   },
-  'main.envSecret.get': ({ keys }) => Object.fromEntries(keys.flatMap((k) => {
-    const v = credentials.get(k as `env:${string}`);
-    return v === null ? [] : [[k, v]];
-  })),
+  'main.envSecret.get': async ({ keys }) => {
+    const out: Record<string, string> = {};
+    for (const k of keys) {
+      const v = await credentials.get(k as `env:${string}`);
+      if (v !== null) out[k] = v;
+    }
+    return out;
+  },
   'main.saveText': async ({ title, defaultName, content }) => {
     const res = await dialog.showSaveDialog(window!, { title, defaultPath: defaultName, filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (res.canceled || !res.filePath) return { path: null };
