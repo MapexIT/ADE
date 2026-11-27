@@ -1,7 +1,7 @@
-import { Archive, Check, Columns2, FileInput, FileQuestion, GitCommitHorizontal, GitCompareArrows, History, MessageSquarePlus, MessagesSquare, MousePointerClick, Pencil, Rows2, SendHorizontal, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import { Archive, Check, Columns2, FileInput, FileQuestion, GitCommitHorizontal, GitCompareArrows, History, ListTree, MessageSquarePlus, MessagesSquare, MousePointerClick, Pencil, Rows2, SendHorizontal, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
 import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
-import type { DiffText, PullRequestStatus, ReviewAssessment } from '@ade/contracts';
+import type { DiffText, PullRequestStatus, ReviewAssessment, TraceFile, TraceLine } from '@ade/contracts';
 import { isLive } from '@ade/session-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
@@ -14,6 +14,8 @@ import { AssistantPanel, BaseBanner, BatchReviewPanel, ChecksPanel, OpenReceipts
 import { landWarning, nextUnreviewed, receiptLandWarning, reviewActions, type ReviewComment, type ReviewStates } from '../lib/review.ts';
 import { useReceipts } from '../lib/receipts.ts';
 import { ReviewBadge, useReviewProgress } from './ReviewProgress.tsx';
+import { PromptsList, TraceCard } from './ReviewTrace.tsx';
+import { commentPrefill, gutterLabel, indexTrace, sameOrigin, traceLabel } from '../lib/trace.ts';
 
 const RISK_TONE = { high: 'danger', medium: 'attention', low: 'neutral' } as const;
 const RISK_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -59,6 +61,13 @@ export function ReviewScreen() {
     setCommitMessage('');
   }, [session?.id]);
   const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
+  // RV-17: Trace. The origins of the active file's changed lines, the line whose card is open, Files or Prompts.
+  const [listMode, setListMode] = useState<'files' | 'prompts'>('files');
+  const [trace, setTrace] = useState<TraceFile | null>(null);
+  const [traced, setTraced] = useState<{ path: string; line: number; side: 'new' | 'old' } | null>(null);
+  const [mounted, setMounted] = useState(0);
+  const reveal = useRef<{ path: string; line: number; side: 'new' | 'old' } | null>(null);
+  const openTraceRef = useRef<(side: 'new' | 'old', line: number) => void>(() => undefined);
 
   // RV-15: mark the active file with the fingerprint shown (AC5), then move to the next file not reviewed.
   const activeEntry = active ? progress?.files.find((f) => f.path === active) : undefined;
@@ -102,6 +111,7 @@ export function ReviewScreen() {
 
   // RV-15 (AC6): "Since my review" applies to one file at a time, and only while it is changed since review.
   useEffect(() => setSinceReview(false), [sessionId, active, turnIndex]);
+  useEffect(() => setTraced((t) => (t && t.path === active ? t : null)), [sessionId, active]);
   const showingSince = sinceReview && progress?.files.find((f) => f.path === active)?.state === 'changed';
 
   useEffect(() => {
@@ -125,6 +135,85 @@ export function ReviewScreen() {
     };
   }, [session, active, turnIndex, showingSince]);
 
+  // RV-17: the trace covers all turns (base to now), so it is shown with "All turns" and the full diff.
+  const traceable = turnIndex === null && !showingSince;
+  useEffect(() => {
+    setTrace(null);
+    if (!sessionId || !active || !traceable) return;
+    let live = true;
+    void host.call('sessions.trace', { sessionId, path: active }).then(
+      (t) => live && setTrace(t),
+      () => live && setTrace({ path: active, binary: false, lines: [] }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [sessionId, active, traceable, changes]);
+  const traceIndex = useMemo(() => (trace && trace.path === active ? indexTrace(trace.lines) : null), [trace, active]);
+  const tracedOrigin: TraceLine | null = traced && traceIndex ? (traceIndex[traced.side].get(traced.line) ?? null) : null;
+
+  useEffect(() => {
+    openTraceRef.current = (side, line) => {
+      if (!active) return;
+      if (!traceable) {
+        useStore.getState().toast('Trace covers all turns. Choose All turns and the full diff to trace a line.');
+        return;
+      }
+      setTraced({ path: active, line, side });
+    };
+  }, [active, traceable]);
+
+  // RV-17: the turn of each line next to its number, "Not reported" lines marked, the selected line's turn highlighted.
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed || !traceIndex) return;
+    const sides = [
+      [ed.getModifiedEditor(), traceIndex.new],
+      [ed.getOriginalEditor(), traceIndex.old],
+    ] as const;
+    const collections = sides.map(([editor, lines]) => {
+      editor.updateOptions({
+        lineNumbers: (n: number) => {
+          const o = lines.get(n);
+          return o ? `${gutterLabel(o)}  ${n}` : String(n);
+        },
+        lineNumbersMinChars: 8,
+      });
+      const decorations: Monaco.editor.IModelDeltaDecoration[] = [];
+      for (const o of lines.values()) {
+        const same = tracedOrigin ? sameOrigin(o, tracedOrigin) : false;
+        const unreported = o.kind === 'unreported';
+        decorations.push({
+          range: { startLineNumber: o.line, startColumn: 1, endLineNumber: o.line, endColumn: 1 },
+          options: {
+            isWholeLine: true,
+            className: same ? 'ade-trace-same' : null,
+            lineNumberClassName: cx(unreported && 'ade-trace-unreported', same && 'ade-trace-same-number') || null,
+            linesDecorationsClassName: cx(unreported && 'ade-trace-unreported-bar', same && 'ade-trace-same-bar') || null,
+            lineNumberHoverMessage: { value: traceLabel(o) },
+          },
+        });
+      }
+      return editor.createDecorationsCollection(decorations);
+    });
+    return () => {
+      for (const c of collections) c.clear();
+      for (const [editor] of sides) editor.updateOptions({ lineNumbers: 'on', lineNumbersMinChars: 5 });
+    };
+  }, [traceIndex, tracedOrigin, mounted, diff]);
+
+  // RV-17: a hunk picked in the Prompts list opens its file at the line.
+  useEffect(() => {
+    const r = reveal.current;
+    const ed = editorRef.current;
+    if (!r || !ed || !diff || diff.path !== r.path) return;
+    reveal.current = null;
+    const editor = r.side === 'new' ? ed.getModifiedEditor() : ed.getOriginalEditor();
+    editor.revealLineInCenter(r.line);
+    editor.setPosition({ lineNumber: r.line, column: 1 });
+    editor.focus();
+  }, [diff, mounted]);
+
   if (!session) return <EmptyState icon={<GitCompareArrows className="size-5" />} title="Nothing to review" body="Select a session; its changes against the base commit appear here." action={<Button icon={<MessagesSquare className="size-4" aria-hidden="true" />} onClick={() => set({ tab: 'sessions' })}>Go to sessions</Button>} />;
 
   const busy = isLive(session.state);
@@ -132,6 +221,14 @@ export function ReviewScreen() {
   const files = [...selected];
   const warning = [landWarning(files, reviewStates), receiptLandWarning(receiptOpen)].filter(Boolean).join(' ');
   const withWarning = (body: string) => (warning ? `${body} ${warning}` : body);
+
+  const traceAtCursor = () => {
+    const ed = editorRef.current;
+    const original = ed?.getOriginalEditor();
+    const side = original?.hasTextFocus() ? 'old' : 'new';
+    const editor = side === 'old' ? original : ed?.getModifiedEditor();
+    openTraceRef.current(side, editor?.getPosition()?.lineNumber ?? 1);
+  };
 
   const addToReview = () => {
     if (!comment || !active || !comment.text.trim()) return;
@@ -198,7 +295,27 @@ export function ReviewScreen() {
               {changes.length} files · {changes.filter((c) => reviewStates.get(c.path) === 'reviewed').length} reviewed · computed from Git
             </SectionLabel>
             {changes.length ? <AssistantPanel session={session} onResult={onAssessment} /> : null}
-            {ordered.map((c) => (
+            {changes.length && turnIndex === null ? (
+              <div role="group" aria-label="Group changes by" className="flex gap-1.5">
+                {(['files', 'prompts'] as const).map((m) => (
+                  <Button key={m} size="dense" className="flex-1" aria-pressed={listMode === m} variant={listMode === m ? 'primary' : 'secondary'} onClick={() => setListMode(m)}>
+                    {m === 'files' ? 'Files' : 'Prompts'}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+            {listMode === 'prompts' && turnIndex === null && changes.length ? (
+              <PromptsList
+                sessionId={session.id}
+                changes={changes}
+                onOpen={(path, line, side) => {
+                  reveal.current = { path, line, side };
+                  if (path === active && diff?.path === path) setDiff({ ...diff });
+                  setActive(path);
+                }}
+              />
+            ) : null}
+            {(listMode === 'files' || turnIndex !== null ? ordered : []).map((c) => (
               <div key={c.path} className={cx('flex flex-col gap-1.5 rounded-[var(--radius)] border p-2.5', active === c.path ? 'border-2 border-accent bg-accent-tint' : 'border-line')}>
                 <div className="flex items-center gap-2">
                   <input
@@ -281,6 +398,9 @@ export function ReviewScreen() {
                     >
                       Comment on line
                     </Button>
+                    <Button icon={<ListTree className="size-4" aria-hidden="true" />} size="dense" aria-keyshortcuts="T" title="Which turn, tool call and prompt wrote the line at the cursor (T in the diff)" disabled={diff.binary} onClick={traceAtCursor}>
+                      Trace line
+                    </Button>
                   </div>
                 </div>
                 <div className="min-h-64 flex-1 overflow-hidden rounded-[var(--radius)] border border-line">
@@ -292,7 +412,23 @@ export function ReviewScreen() {
                       original={diff.oldText}
                       modified={diff.newText}
                       language={languageOf(active)}
-                      onMount={(e) => (editorRef.current = e)}
+                      onMount={(e, monaco) => {
+                        editorRef.current = e;
+                        // RV-17: T on a line of either side opens its trace.
+                        for (const [editor, side] of [
+                          [e.getModifiedEditor(), 'new'],
+                          [e.getOriginalEditor(), 'old'],
+                        ] as const) {
+                          editor.addAction({
+                            id: 'ade.trace',
+                            label: 'Trace this line',
+                            keybindings: [monaco.KeyCode.KeyT],
+                            contextMenuGroupId: 'navigation',
+                            run: (ed) => openTraceRef.current(side, ed.getPosition()?.lineNumber ?? 1),
+                          });
+                        }
+                        setMounted((n) => n + 1);
+                      }}
                       options={{ ...EDITOR_OPTIONS, readOnly: true, renderSideBySide: !inline, originalEditable: false }}
                     />
                   )}
@@ -376,6 +512,21 @@ export function ReviewScreen() {
               </div>
             </div>
           </main>
+          {traced && active === traced.path ? (
+            <TraceCard
+              session={session}
+              path={traced.path}
+              line={traced.line}
+              side={traced.side}
+              origin={tracedOrigin}
+              loading={!traceIndex}
+              onComment={(origin, prompt) => setComment({ line: traced.line, text: origin ? commentPrefill(origin, prompt) : '' })}
+              onClose={() => {
+                setTraced(null);
+                (traced.side === 'old' ? editorRef.current?.getOriginalEditor() : editorRef.current?.getModifiedEditor())?.focus();
+              }}
+            />
+          ) : null}
         </div>
       )}
     </div>

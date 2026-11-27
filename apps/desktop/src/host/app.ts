@@ -7,6 +7,7 @@ import { EventBus } from './bus.ts';
 import { migrate, openDatabase } from './db.ts';
 import { Repositories } from './repositories.ts';
 import { ReviewService } from './review-service.ts';
+import { TraceService } from './trace.ts';
 import { AgentInstaller } from './agent-install.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
@@ -120,6 +121,7 @@ export function createHost(config: HostConfig) {
   );
   sessions.sandbox = containment;
   const review = new ReviewService(repos, sessions, paths);
+  const trace = new TraceService(repos);
   const workspaces = new WorkspaceService(repos);
   const agents = new AgentService(runtimes);
   // ST-07: installs a missing coding CLI when the user asks; health is detected again afterwards.
@@ -566,6 +568,9 @@ export function createHost(config: HostConfig) {
     'sessions.markReviewed': ({ sessionId, files }) => review.markReviewed(sessionId, files),
     'sessions.unmarkReviewed': ({ sessionId, paths }) => review.unmarkReviewed(sessionId, paths),
     'sessions.diffSinceReviewed': ({ sessionId, path }) => review.diffSinceReviewed(sessionId, path),
+    'sessions.trace': ({ sessionId, path }) => trace.trace(sessionId, path),
+    'sessions.traceDetail': ({ sessionId, turnIndex, toolCallId }) => trace.detail(sessionId, turnIndex, toolCallId),
+    'sessions.changesByPrompt': ({ sessionId }) => trace.changesByPrompt(sessionId),
     'checks.settings': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
       return checks.settings(workspaceId);
