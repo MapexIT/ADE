@@ -36,7 +36,8 @@ function fakeShortcut(): { calls: unknown[][] } & ShortcutActions {
       { id: 700, name: 'Done', type: 'done', position: 3 },
     ],
     currentIteration: async () => ({ id: 9, name: 'Sprint 9' }),
-    iterationStories: async () => [
+    iterationStories: async () => [],
+    ownedStories: async () => [
       { id: 42, name: 'Parser', url: 'https://app.shortcut.com/s/42', state: 500 },
       { id: 43, name: 'Docs', url: null, state: 'Ready' },
     ],
@@ -196,7 +197,7 @@ describe('CO-05 and CO-08 with Shortcut', () => {
   it('builds the iteration board with session badges', async () => {
     const { ws, session } = await start('say hi', 'sc-42');
     const board = await host.handlers['board.get']({ workspaceId: ws.id });
-    expect(board.title).toBe('Sprint 9');
+    expect(board.title).toBe('Shortcut stories you own');
     expect(board.columns.map((c) => c.name)).toEqual(['Ready', 'In progress']);
     expect(board.columns[1]!.items[0]).toMatchObject({ ref: 'sc-42', title: 'Parser', sessions: [{ id: session.id }] });
   }, 40_000);
