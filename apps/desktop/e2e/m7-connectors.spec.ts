@@ -36,6 +36,9 @@ test('M7-T04: a personal MCP server reaches the agent; the board explains what i
   await page.getByRole('tab', { name: 'Board' }).click();
   await expect(source).toBeHidden();
   await expect(page.getByText('The board could not be loaded')).toBeVisible();
+  // Refresh is as tall as the board's dropdowns.
+  const [select, refresh] = await Promise.all([page.getByRole('combobox', { name: 'Board', exact: true }).boundingBox(), page.getByRole('button', { name: 'Refresh' }).boundingBox()]);
+  expect(Math.round(refresh!.height)).toBe(Math.round(select!.height));
   await expect(page.getByText('Connect Shortcut in Settings first.')).toBeVisible();
   await app.close();
 });
