@@ -188,8 +188,8 @@ export function ReviewScreen() {
           options: {
             isWholeLine: true,
             className: same ? 'ade-trace-same' : null,
-            lineNumberClassName: unreported ? 'ade-trace-unreported' : null,
-            linesDecorationsClassName: unreported ? 'ade-trace-unreported-bar' : null,
+            lineNumberClassName: cx(unreported && 'ade-trace-unreported', same && 'ade-trace-same-number') || null,
+            linesDecorationsClassName: cx(unreported && 'ade-trace-unreported-bar', same && 'ade-trace-same-bar') || null,
             lineNumberHoverMessage: { value: traceLabel(o) },
           },
         });

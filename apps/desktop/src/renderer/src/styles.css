@@ -693,3 +693,13 @@ textarea,
   border-left: 3px solid var(--attention-line);
   margin-left: 3px;
 }
+/* The diff's inserted-line background is opaque, so the selected turn is also marked in the margin. */
+.monaco-editor .line-numbers.ade-trace-same-number {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+.monaco-editor .ade-trace-same-bar {
+  background: var(--accent);
+  width: 4px !important;
+  margin-left: 3px;
+}
