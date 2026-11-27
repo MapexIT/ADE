@@ -86,7 +86,7 @@ const titleFrom = (content: PromptBlock[]) => {
  */
 export class SessionService {
   private readonly live = new Map<string, LiveSession>();
-  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string; skills?: string[]; reasoned?: { content: PromptBlock[]; settings: ReasoningSettings } }>();
+  private readonly bootOptions = new Map<string, { bringChanges: boolean; modeId?: string; modelId?: string; skills?: string[]; reasoned?: { content: PromptBlock[]; settings: ReasoningSettings }; continued?: boolean }>();
   /** GN-01: sends the first prompt through a reasoning method once the session is ready (set by the host). */
   firstReasoned: ((sessionId: string, content: PromptBlock[], settings: ReasoningSettings) => Promise<unknown>) | null = null;
   private readonly booting = new Set<string>();
@@ -277,7 +277,8 @@ export class SessionService {
       containment,
       inPlace,
       compareGroup: extra.compareGroup ?? null,
-      agentSessionId: null,
+      // SR-10: a conversation from the agent's own CLI is resumed with session/load once the worktree is ready.
+      agentSessionId: input.continueFrom ?? null,
       workItemRef: input.workItemRef ?? null,
       createdAt: new Date().toISOString(),
       endedAt: null,
@@ -293,8 +294,9 @@ export class SessionService {
       ...(input.modelId ? { modelId: input.modelId } : {}),
       ...(input.skills?.length ? { skills: input.skills } : {}),
       ...(reasoned ? { reasoned } : {}),
+      ...(input.continueFrom ? { continued: true } : {}),
     });
-    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace });
+    this.audit(session, 'session.created', { agent: input.agentId, profile: input.permissionProfile, baseCommit, branch: session.branch, containment, inPlace, ...(input.continueFrom ? { continuedFrom: input.continueFrom } : {}) });
     this.bus.emit('session.changed', { workspaceId: workspace.id, session });
     if (state === 'starting') void this.boot(id);
     if (this.onCreated) this.inBackground(this.onCreated(session));
@@ -357,7 +359,7 @@ export class SessionService {
       const workspace = this.repos.workspaces.get(session.workspaceId)!;
       if (session.inPlace) {
         this.append(sessionId, { type: 'notice', level: 'warning', text: 'This session works in your checkout. Discard puts every file back to the snapshot taken when it started.' });
-        await this.startAgent(sessionId);
+        await this.startAgent(sessionId, opts.continued ? 'cli' : false);
         await this.sendNext(sessionId);
         if (opts.reasoned) {
           await this.firstReasoned?.(sessionId, opts.reasoned.content, opts.reasoned.settings);
@@ -387,7 +389,7 @@ export class SessionService {
         const copied = await this.installSkills(workspace.rootPath, session.worktreePath!, session.agentId, opts.skills);
         this.append(sessionId, { type: 'notice', level: 'info', text: `Loaded skills for this session: ${opts.skills.join(', ')}${copied.length < opts.skills.length ? ' (the repository already has some of them)' : ''}.` });
       }
-      await this.startAgent(sessionId);
+      await this.startAgent(sessionId, opts.continued ? 'cli' : false);
       if (opts.modeId) await this.setMode(sessionId, opts.modeId).catch(() => undefined);
       if (opts.modelId) {
         await this.live.get(sessionId)!.agent.setModel(opts.modelId);
@@ -441,7 +443,8 @@ export class SessionService {
     return { ok: true };
   }
 
-  private async startAgent(sessionId: string, resume = false): Promise<LiveSession> {
+  /** `resume`: true reconnects ADE's own conversation; 'cli' continues one started in the agent's CLI (SR-10). */
+  private async startAgent(sessionId: string, resume: boolean | 'cli' = false): Promise<LiveSession> {
     const session = this.repos.sessions.require(sessionId);
     const runtime = this.runtimes.get(session.agentId);
     if (!runtime) throw new Error(`Agent ${session.agentId} is not available`);
@@ -460,6 +463,7 @@ export class SessionService {
         permissionProfile: session.permissionProfile,
         mcpServers,
         ...(resumeSessionId ? { resumeSessionId } : {}),
+        ...(resume === 'cli' ? { replayHistory: true } : {}),
         baseEnv: { ...process.env, ADE_FAKE_STATE_DIR: this.paths.fakeAgentState },
         onProtocolMessage: (direction, body) => {
           protocol.push({ ts: new Date().toISOString(), direction, body });
@@ -485,7 +489,15 @@ export class SessionService {
     void agent.exited.then((exit) => {
       if (this.live.get(sessionId) === live && !live.closing) this.onCrash(sessionId, live, exit.error ?? `The agent exited (code ${exit.code}).`);
     });
-    if (resume) {
+    if (resume === 'cli') {
+      this.append(sessionId, {
+        type: 'notice',
+        level: reloaded ? 'info' : 'warning',
+        text: reloaded
+          ? 'Continued the conversation from the agent’s CLI. The agent now works in this session’s worktree, not in the folder the conversation started in.'
+          : 'The agent could not load the conversation from its CLI, so this session starts fresh.',
+      });
+    } else if (resume) {
       this.append(sessionId, {
         type: 'notice',
         level: 'info',
