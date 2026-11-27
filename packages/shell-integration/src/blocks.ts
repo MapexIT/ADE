@@ -16,6 +16,11 @@ export class BlockBuilder {
   private inPrompt = false;
   private nextId = 1;
   readonly blocks: CommandBlock[] = [];
+
+  /** HI-13: forgets finished blocks; the running one (if any) carries on. */
+  clearFinished(): void {
+    this.blocks.length = 0;
+  }
   /** True once any integration sequence was seen; a shell without it falls back to plain (SM-02). */
   integrated = false;
 

@@ -96,6 +96,25 @@ export class SessionRepo {
     return r ? this.map(r) : null;
   }
 
+  /**
+   * HI-13: deletes ended (landed or discarded) sessions of one workspace with everything stored for them, except the
+   * audit log, which stays append-only. All ended sessions without ids. Returns the ids that were deleted.
+   */
+  deleteEnded(workspaceId: string, sessionIds?: string[]): string[] {
+    const filter = sessionIds ? ` AND id IN (${sessionIds.map(() => '?').join(', ')})` : '';
+    const ids = this.db
+      .all<R>(`SELECT id FROM sessions WHERE workspace_id = ? AND state IN ('landed', 'discarded')${filter}`, workspaceId, ...(sessionIds ?? []))
+      .map((r) => String(r.id));
+    if (!ids.length) return [];
+    const marks = ids.map(() => '?').join(', ');
+    this.db.transaction(() => {
+      for (const table of ['review_marks', 'queued_messages', 'permission_requests', 'events', 'turns']) this.db.run(`DELETE FROM ${table} WHERE session_id IN (${marks})`, ...ids);
+      this.db.run(`DELETE FROM settings WHERE key IN (${marks})`, ...ids.map((id) => `composer.${id}`));
+      this.db.run(`DELETE FROM sessions WHERE id IN (${marks})`, ...ids);
+    });
+    return ids;
+  }
+
   require(id: string): Session {
     const s = this.get(id);
     if (!s) throw new Error(`Unknown session ${id}`);
@@ -524,6 +543,12 @@ export class WorkflowRunRepo {
     return this.db.all<R>('SELECT * FROM workflow_runs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 100', workspaceId).map(this.map);
   }
 
+  /** HI-13: deletes finished runs (succeeded, failed or cancelled) of one workspace; all of them without ids. */
+  deleteFinished(workspaceId: string, runIds?: string[]): number {
+    const filter = runIds ? ` AND id IN (${runIds.map(() => '?').join(', ')})` : '';
+    return Number(this.db.run(`DELETE FROM workflow_runs WHERE workspace_id = ? AND status IN ('succeeded', 'failed', 'cancelled')${filter}`, workspaceId, ...(runIds ?? [])).changes);
+  }
+
   /** Every session a workflow step ever started. */
   allSessionIds(): string[] {
     const ids: string[] = [];
@@ -597,6 +622,13 @@ export class CommandHistoryRepo {
       'INSERT INTO command_history (id, workspace_id, session_id, command, cwd, exit_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       randomUUID(), e.workspaceId, e.sessionId, e.command, e.cwd, e.exitCode, now(),
     );
+  }
+
+  /** HI-13: forgets commands typed in terminals: the given ones (by text), or all of them. Per workspace when given. */
+  clear(workspaceId?: string, commands?: string[]): number {
+    const ws = workspaceId ? ' AND workspace_id = ?' : '';
+    const only = commands ? ` AND command IN (${commands.map(() => '?').join(', ')})` : '';
+    return Number(this.db.run(`DELETE FROM command_history WHERE 1 = 1${ws}${only}`, ...(workspaceId ? [workspaceId] : []), ...(commands ?? [])).changes);
   }
 
   search(query: string, workspaceId?: string): HistoryEntry[] {
