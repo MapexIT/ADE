@@ -18,7 +18,7 @@ const PARAMS: Partial<Record<ReasoningMethod, { key: NumberKey; label: string; m
 };
 
 /**
- * GN-01: picks how prompts are generated. IO (as written) is the default; switching to any other method first asks
+ * GN-01: picks how prompts are generated. IO is the default; switching to any other method first asks
  * for confirmation, because it changes what the agent receives and may make extra agent calls. Controlled, so the
  * composer and the New session dialog share it.
  */
@@ -126,7 +126,7 @@ function ReasoningDialog({
             ) : (
               <li>No extra agent calls are made.</li>
             )}
-            <li>This applies to this session until you switch back to IO (as written).</li>
+            <li>This applies to this session until you switch back to IO.</li>
           </ul>
           {(PARAMS[settings.method] ?? []).map((p) => (
             <Field key={p.key} label={p.label} htmlFor={`reasoning-${p.key}`} hint={p.hint}>
