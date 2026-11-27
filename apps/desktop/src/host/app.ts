@@ -30,6 +30,7 @@ import { LoopWatch } from './loop-watch.ts';
 import { askOnce } from './one-shot.ts';
 import { ScratchService } from './scratch.ts';
 import { instructionStatus } from './instruction-files.ts';
+import { LessonService } from './lessons.ts';
 import { exportAudit, searchSessions } from './history-search.ts';
 import { LspService } from './lsp.ts';
 import { PreviewMcp, type PreviewDriver } from './preview-mcp.ts';
@@ -322,6 +323,20 @@ export function createHost(config: HostConfig) {
     return ws.rootPath;
   };
 
+  // ED-05: lessons from the user's corrections, delivered to every agent; the watch adds "not followed" notices.
+  const lessons = new LessonService({
+    bus,
+    events: (workspaceId, types, limit) => repos.events.forWorkspace(workspaceId, types, limit),
+    session: (sessionId) => repos.sessions.get(sessionId),
+    workspaceRoot,
+    settings: repos.settings,
+    record: (sessionId, event, turnId) => sessions.record(sessionId, event, turnId),
+    instructionStatus,
+    audit: (entry) => repos.audit.append(entry),
+    now: () => Date.now(),
+  });
+  sessions.lessonNotes = (workspaceId, ids) => lessons.notesFor(workspaceId, ids);
+
   const handlers: Handlers<HostApi> = {
     'app.ping': () => ({ pid: process.pid, startedAt }),
     'workspace.list': () => workspaces.list(),
@@ -332,7 +347,7 @@ export function createHost(config: HostConfig) {
     },
     'settings.get': ({ key }) => ({ value: repos.settings.raw(key) }),
     'settings.set': ({ key, value }) => {
-      if (/^(rules|commands|checks|sync|board|mcp|envsets)\./.test(key) || key === 'pullRequests') throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
+      if (/^(rules|commands|checks|sync|board|mcp|envsets|lessons)\./.test(key) || key === 'pullRequests') throw new RpcError('invalid', 'This setting has its own request (rules.save or commands.save).');
       repos.settings.set(key, value);
       if (key.startsWith('sandbox.')) void containment.status(true);
       return { ok: true };
@@ -372,6 +387,33 @@ export function createHost(config: HostConfig) {
       ruleAdvice.dismiss(workspaceId, key, forever);
       return { ok: true };
     },
+    'lessons.list': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return lessons.list(workspaceId);
+    },
+    'lessons.save': ({ workspaceId, lessons: list }) => {
+      workspaceRoot(workspaceId);
+      lessons.save(workspaceId, list);
+      return { ok: true };
+    },
+    'lessons.advice': ({ workspaceId }) => {
+      workspaceRoot(workspaceId);
+      return lessons.advice(workspaceId);
+    },
+    'lessons.adopt': ({ workspaceId, key, lesson }) => {
+      workspaceRoot(workspaceId);
+      return lessons.adopt(workspaceId, key, lesson);
+    },
+    'lessons.dismiss': ({ workspaceId, key, forever }) => {
+      workspaceRoot(workspaceId);
+      lessons.dismiss(workspaceId, key, forever);
+      return { ok: true };
+    },
+    'lessons.rehearse': ({ workspaceId, pattern }) => {
+      workspaceRoot(workspaceId);
+      return lessons.rehearse(workspaceId, pattern);
+    },
+    'lessons.writeFiles': ({ workspaceId, alsoClaude }) => lessons.writeFiles(workspaceId, alsoClaude),
     'sessions.list': ({ workspaceId }) => repos.sessions.list(workspaceId),
     'sessions.get': ({ sessionId }) => ({
       session: repos.sessions.require(sessionId),
@@ -416,13 +458,13 @@ export function createHost(config: HostConfig) {
       if (input.reasoning) repos.settings.set(`composer.${session.id}`, { mode: 'chat', reasoning: input.reasoning });
       return session;
     },
-    'sessions.prompt': async ({ sessionId, content }) => {
-      await sessions.prompt(sessionId, content);
+    'sessions.prompt': async ({ sessionId, content, origin }) => {
+      await sessions.prompt(sessionId, content, origin);
       return { ok: true };
     },
     'sessions.promptReasoned': ({ sessionId, content, settings }) => reasoning.prompt(sessionId, content, settings),
-    'sessions.queue': async ({ sessionId, content }) => ({
-      id: (await sessions.prompt(sessionId, content)).id,
+    'sessions.queue': async ({ sessionId, content, origin }) => ({
+      id: (await sessions.prompt(sessionId, content, origin)).id,
     }),
     'sessions.unqueue': ({ sessionId, id }) => {
       sessions.unqueue(sessionId, id);
@@ -861,6 +903,7 @@ export function createHost(config: HostConfig) {
       reviewRequests.dispose();
       await installer.dispose();
       loops.dispose();
+      lessons.dispose();
       receipts.dispose();
       telegram.dispose();
       await lsp.dispose();
