@@ -13,6 +13,7 @@ import {
   Toasts,
 } from './components/Dialogs.tsx';
 import { NewSessionDialog } from './components/NewSessionDialog.tsx';
+import { ContinueCliDialog } from './components/ContinueCliDialog.tsx';
 import { CompareDialog, HandOffDialog } from './components/ParallelDialogs.tsx';
 import { RuleSuggestionDialog } from './components/RuleAdvice.tsx';
 import { SessionSearchDialog } from './components/HistoryTools.tsx';
@@ -152,6 +153,7 @@ export function App() {
         ) : null}
       </div>
       <NewSessionDialog />
+      <ContinueCliDialog />
       <CompareDialog />
       <SessionSearchDialog />
       <HandOffDialog />
