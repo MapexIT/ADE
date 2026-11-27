@@ -210,12 +210,14 @@ export const MIGRATIONS: string[] = [
   );
   `,
   // M12-T04: rule advice (AP-09) reads one event type across a workspace's sessions.
+  // Migrations 7 and 8 swapped places when SM-18 was rebased onto AP-09; a database from the earlier order
+  // already has problem_snapshots at 7, so both are safe to run again (and 9 adds the index it lacks).
   `
-  CREATE INDEX events_type ON events(type, session_id);
+  CREATE INDEX IF NOT EXISTS events_type ON events(type, session_id);
   `,
   // M11-T03: problems in a block (SM-18). The newest 3 runs per workspace, scope (session or checkout) and command.
   `
-  CREATE TABLE problem_snapshots (
+  CREATE TABLE IF NOT EXISTS problem_snapshots (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
     session_id TEXT,
@@ -226,7 +228,11 @@ export const MIGRATIONS: string[] = [
     problems_json TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
-  CREATE INDEX problem_snapshots_key ON problem_snapshots(workspace_id, command_key, created_at);
+  CREATE INDEX IF NOT EXISTS problem_snapshots_key ON problem_snapshots(workspace_id, command_key, created_at);
+  `,
+  // A database from the earlier order recorded 7 as done without the events_type index; create it if missing.
+  `
+  CREATE INDEX IF NOT EXISTS events_type ON events(type, session_id);
   `,
 ];
 
