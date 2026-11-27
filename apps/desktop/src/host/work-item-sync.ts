@@ -161,9 +161,8 @@ export class WorkItemSync {
     if (settings.source === 'shortcut') {
       const sc = this.shortcut();
       if (!sc) throw new Error('Connect Shortcut in Settings first.');
-      const iteration = await sc.currentIteration();
-      if (!iteration) return { title: 'No current Shortcut iteration', columns: [] };
-      const [states, stories] = await Promise.all([sc.workflowStates().catch(() => []), sc.iterationStories(iteration.id)]);
+      // The stories the user owns (open, and done in the last two weeks), not everyone's iteration.
+      const [states, stories] = await Promise.all([sc.workflowStates().catch(() => []), sc.ownedStories()]);
       const byId = new Map(states.map((s) => [s.id, s]));
       // Columns in workflow order, then any state names the server returned that are not in the list.
       for (const s of [...states].sort((a, b) => a.position - b.position)) columns.set(s.name, []);
@@ -171,7 +170,7 @@ export class WorkItemSync {
         const name = typeof story.state === 'number' ? (byId.get(story.state)?.name ?? `State ${story.state}`) : (story.state ?? 'No state');
         add(name, { ref: `sc-${story.id}`, title: story.name, url: story.url });
       }
-      return { title: iteration.name, columns: [...columns].filter(([, items]) => items.length).map(([name, items]) => ({ name, items })) };
+      return { title: 'Shortcut stories you own', columns: [...columns].filter(([, items]) => items.length).map(([name, items]) => ({ name, items })) };
     }
 
     if (!this.gh) throw new Error('The GitHub CLI (gh) is not installed.');

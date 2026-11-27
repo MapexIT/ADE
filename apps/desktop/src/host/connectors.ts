@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { findOnPath } from '@ade/acp-client';
 import type { ConnectorSecret, WorkItem } from '@ade/contracts';
+import { shortcutMember } from './shortcut-actions.ts';
 import type { WorkItemProvider } from './work-items.ts';
 
 /** Connector tokens, held in memory only. Main decrypts them from safeStorage and hands them over (rule 7). */
@@ -129,7 +130,8 @@ export function parseStories(result: { content?: { type: string; text?: string }
     } catch {
       continue;
     }
-    const list = Array.isArray(data) ? data : ((data as { stories?: unknown[]; data?: unknown[]; results?: unknown[] }).stories ?? (data as { data?: unknown[] }).data ?? (data as { results?: unknown[] }).results ?? []);
+    const d = data as { entities?: unknown[]; stories?: unknown[]; data?: unknown[]; results?: unknown[] };
+    const list = Array.isArray(data) ? data : (d.entities ?? d.stories ?? d.data ?? d.results ?? []);
     for (const raw of list as Record<string, unknown>[]) {
       if (!raw || (raw.id === undefined && raw.story_id === undefined)) continue;
       const id = String(raw.id ?? raw.story_id);
@@ -141,7 +143,12 @@ export function parseStories(result: { content?: { type: string; text?: string }
         description: String(raw.description ?? ''),
         state,
         url: typeof raw.app_url === 'string' ? raw.app_url : null,
-        group: typeof raw.iteration_name === 'string' ? raw.iteration_name : typeof raw.epic_name === 'string' ? raw.epic_name : null,
+        group:
+          typeof raw.iteration_name === 'string'
+            ? raw.iteration_name
+            : typeof raw.epic_name === 'string'
+              ? raw.epic_name
+              : (((raw.iterations as { entities?: { name?: unknown }[] } | undefined)?.entities?.[0]?.name as string | undefined) ?? null),
       });
     }
   }
@@ -172,7 +179,9 @@ export class ShortcutMcpProvider implements WorkItemProvider {
     const { tools } = await client.listTools();
     const tool = pickSearchTool(tools as ToolInfo[]);
     if (!tool) throw new Error('The Shortcut MCP server did not offer a story search tool ADE recognises.');
-    const result = await client.callTool({ name: tool.name, arguments: { [tool.queryArg]: `owner:me !is:done ${query ?? ''}`.trim() } });
+    // `owner:me` matches nothing on Shortcut; the search needs the member's mention name.
+    const me = await shortcutMember(client);
+    const result = await client.callTool({ name: tool.name, arguments: { [tool.queryArg]: `owner:${me.mentionName} !is:done ${query ?? ''}`.trim() } });
     return parseStories(result as { content?: { type: string; text?: string }[] });
   }
 

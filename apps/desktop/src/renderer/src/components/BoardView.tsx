@@ -8,7 +8,7 @@ import { attempt, useStore } from '../lib/store.ts';
 import { ConnectionGuide } from './ConnectionGuide.tsx';
 import { inputClass } from './Modal.tsx';
 
-/** CO-09: the current Shortcut iteration or a GitHub Projects board, with a badge for every session on an item. */
+/** CO-09: the Shortcut stories the user owns or a GitHub board, with a badge for every session on an item. */
 export function BoardView({ workspaceId }: { workspaceId: string }) {
   const selectSession = useStore((s) => s.selectSession);
   const set = useStore((s) => s.set);
@@ -76,7 +76,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
           <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
             Board
             <select value={settings.source} onChange={(e) => void save({ ...settings, source: e.target.value as BoardSettings['source'] })} className={cx(inputClass, 'min-h-9')}>
-              <option value="shortcut">Current Shortcut iteration</option>
+              <option value="shortcut">My Shortcut stories</option>
               <option value="github">GitHub project</option>
             </select>
           </label>
