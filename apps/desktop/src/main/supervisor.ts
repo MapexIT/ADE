@@ -33,9 +33,12 @@ export class ProcessSupervisor {
     const child = utilityProcess.fork(this.opts.entry, [], {
       serviceName: `ADE ${this.opts.name}`,
       env: { ...process.env, ...this.opts.env } as Record<string, string>,
-      stdio: 'inherit',
+      // Piped, not inherited: on Windows an inherited stream from a GUI process is often lost, which hid start-up crashes.
+      stdio: 'pipe',
     });
     this.child = child;
+    child.stdout?.on('data', (d: Buffer) => process.stdout.write(d));
+    child.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
     child.on('message', (msg: unknown) => {
       if ((msg as { type?: string })?.type === 'ready') {
         this.opts.onReady?.();
