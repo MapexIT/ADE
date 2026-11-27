@@ -117,14 +117,9 @@ function showWindow() {
   }
 }
 
-/** PL-05: a tray entry while the window is hidden, so the running sessions can be reopened or ADE quit. */
+/** PL-05: the ADE icon sits in the tray while ADE runs (also in development); it reopens the window or quits. */
 function updateTray() {
-  const hidden = !!window && !window.isVisible();
-  if (!hidden) {
-    tray?.destroy();
-    tray = null;
-    return;
-  }
+  if (smokeFile) return;
   if (!tray) {
     tray = new Tray(trayIcon());
     tray.on('click', showWindow);
@@ -360,6 +355,7 @@ function createWindow() {
     notify('ADE is still running', backgroundMessage(background.live));
   });
   window.on('show', updateTray);
+  updateTray();
   window.on('closed', () => (window = null));
 }
 

@@ -1,6 +1,6 @@
-import { Activity, Bell, ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleHelp, FolderGit2, GitFork, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Send, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
+import { Activity, Bell, ChevronDown, CircleHelp, FolderGit2, GitFork, GitPullRequestArrow, ListTodo, MessagesSquare, Play, Search, Send, Settings, Sparkles, SquareTerminal, Workflow, type LucideIcon } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
-import { Badge, Button, cx, Kbd, Logo } from '@ade/ui';
+import { Button, cx, Kbd, Logo } from '@ade/ui';
 import { pickAndOpenWorkspace } from '../lib/commands.ts';
 import { currentWorkspace, useStore, type Tab } from '../lib/store.ts';
 import { PanelsMenu } from './PanelsMenu.tsx';
@@ -9,6 +9,7 @@ import { PAGES, pageShortcut } from '../lib/pages.ts';
 import { followTelegram, telegramSummary, useTelegram } from '../lib/telegram.ts';
 import { useEffect } from 'react';
 import { AgentPulse } from './observe/Teams.tsx';
+import { CliStatus } from './CliStatus.tsx';
 
 const PAGE_ICONS: Record<Tab, LucideIcon> = {
   sessions: MessagesSquare,
@@ -30,7 +31,6 @@ export function TopBar() {
   const workspaces = useStore((s) => s.workspaces);
   const selectWorkspace = useStore((s) => s.selectWorkspace);
   const inboxCount = useStore((s) => s.inbox.length);
-  const agents = useStore((s) => s.agents);
   const set = useStore((s) => s.set);
   const telegram = useTelegram((t) => t.status);
   useEffect(() => followTelegram(), []);
@@ -118,8 +118,13 @@ export function TopBar() {
           </Tooltip>
         ) : null}
         <Tooltip label="Help centre" description="Every feature, with search and shortcuts" shortcut="F1">
-          <Button size="dense" variant="ghost" className="w-9 px-0" onClick={() => set({ helpOpen: true })} aria-label="Help centre">
-            <CircleHelp className="size-4" aria-hidden="true" />
+          <Button size="dense" variant="ghost" onClick={() => set({ helpOpen: true })} aria-label="Help centre" icon={<CircleHelp className="size-5" aria-hidden="true" />}>
+            <span className="hidden lg:inline">Help</span>
+          </Button>
+        </Tooltip>
+        <Tooltip label="Settings" description="Agents, connectors, notifications and more" shortcut="Ctrl ,">
+          <Button size="dense" variant="ghost" onClick={() => set({ settingsOpen: true })} aria-label="Settings" icon={<Settings className="size-5" aria-hidden="true" />}>
+            <span className="hidden lg:inline">Settings</span>
           </Button>
         </Tooltip>
         <Button size="dense" variant="secondary" className="text-ink-muted" onClick={() => set({ paletteOpen: true })} title="Search and commands (Ctrl K)" icon={<Search className="size-4" aria-hidden="true" />}>
@@ -129,30 +134,7 @@ export function TopBar() {
             <Kbd>Ctrl K</Kbd>
           </span>
         </Button>
-        {(() => {
-          // Below 2xl one summary keeps the bar on a single row; the full list is in its tooltip.
-          const real = agents.filter((a) => a.id !== 'fake');
-          const ready = real.filter((a) => a.health === 'ready').length;
-          const detail = real.map((a) => `${a.label}: ${a.health === 'ready' ? 'ready' : a.health === 'needs-sign-in' ? 'needs sign-in' : 'not installed'}`).join(' · ');
-          return real.length ? (
-            <Tooltip label="Coding CLIs" description={detail}>
-              <Badge tone={ready ? 'ok' : 'neutral'} className="hidden lg:inline-flex 2xl:hidden" tabIndex={0} aria-label={`${ready} of ${real.length} coding CLIs ready. ${detail}`}>
-                <SquareTerminal className="size-3.5" aria-hidden="true" />
-                {ready}/{real.length} CLIs ready
-              </Badge>
-            </Tooltip>
-          ) : null;
-        })()}
-        <div className="hidden flex-wrap gap-1.5 2xl:flex" aria-label="Coding CLIs">
-          {agents
-            .filter((a) => a.id !== 'fake')
-            .map((a) => (
-              <Badge key={a.id} tone={a.health === 'ready' ? 'ok' : a.health === 'needs-sign-in' ? 'attention' : 'neutral'} title={a.reason ?? a.version ?? undefined}>
-                {a.health === 'ready' ? <CircleCheck className="size-3.5" aria-hidden="true" /> : a.health === 'needs-sign-in' ? <CircleAlert className="size-3.5" aria-hidden="true" /> : <CircleDashed className="size-3.5" aria-hidden="true" />}
-                {a.label} {a.health === 'ready' ? 'ready' : a.health === 'needs-sign-in' ? 'needs sign-in' : 'not installed'}
-              </Badge>
-            ))}
-        </div>
+        <CliStatus />
       </div>
     </header>
   );

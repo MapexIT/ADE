@@ -7,6 +7,7 @@ import { EventBus } from './bus.ts';
 import { migrate, openDatabase } from './db.ts';
 import { Repositories } from './repositories.ts';
 import { ReviewService } from './review-service.ts';
+import { AgentInstaller } from './agent-install.ts';
 import { AgentService, detectRunConfigs, FileService, WorkspaceService } from './services.ts';
 import { SessionService, type HostPaths } from './session-service.ts';
 import { readWorkspaceConfig } from './workspace-config.ts';
@@ -120,6 +121,11 @@ export function createHost(config: HostConfig) {
   const review = new ReviewService(repos, sessions, paths);
   const workspaces = new WorkspaceService(repos);
   const agents = new AgentService(runtimes);
+  // ST-07: installs a missing coding CLI when the user asks; health is detected again afterwards.
+  const installer = new AgentInstaller({
+    emit: (state) => bus.emit('agents.install', state),
+    installed: async () => void (await agents.status(true)),
+  });
   const files = new FileService(repos, sessions);
   const credentials = new CredentialCache();
   const workItems = new WorkItemService();
@@ -332,6 +338,9 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'agents.status': ({ refresh }) => agents.status(refresh),
+    'agents.installPlans': () => installer.plans(),
+    'agents.install': ({ agentId }) => installer.install(agentId),
+    'agents.installStates': () => installer.list(),
     'containment.status': ({ refresh }) => containment.status(refresh),
     'rules.list': ({ workspaceId }) => {
       workspaceRoot(workspaceId);
@@ -816,6 +825,7 @@ export function createHost(config: HostConfig) {
     async dispose() {
       clearInterval(mergeTimer);
       reviewRequests.dispose();
+      await installer.dispose();
       loops.dispose();
       receipts.dispose();
       telegram.dispose();
