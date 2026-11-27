@@ -28,7 +28,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  // Windows can hold the folder for a moment after the agent processes exit.
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {
@@ -113,6 +114,7 @@ describe('ED-05 lessons in the host', () => {
     await host.handlers['sessions.prompt']({ sessionId: s.id, content: text('say comment'), origin: 'review-comment' });
     await waitFor(() => users(s.id).length === 3);
     expect(users(s.id)[2]!.origin).toBe('review-comment');
+    await idle(s.id);
   }, 60_000);
 
   it('appends the standing notes to the first prompt after the user\'s words, only for the chosen lessons', async () => {
