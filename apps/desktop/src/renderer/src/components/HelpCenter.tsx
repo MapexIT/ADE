@@ -54,6 +54,7 @@ const TAB_LABELS: Record<Tab, string> = {
   review: 'Review',
   observe: 'Observe',
   git: 'Git',
+  integrate: 'Integrate',
 };
 
 const START_STEPS = [

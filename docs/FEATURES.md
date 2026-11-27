@@ -1,6 +1,6 @@
 # Features
 
-168 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+169 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -112,6 +112,7 @@ Linux.
 | PL-03 | Compare run | v1 | One prompt to two or three agents in separate worktrees, compared side by side. |
 | PL-04 | Overlap warning | v1 | Flags two live sessions that changed the same file. |
 | PL-05 | Background sessions | v1 | Sessions keep running with the window closed. The ADE icon sits in the tray whenever ADE runs, also in development; clicking it reopens the window, and its menu shows running sessions and Quit. |
+| PL-06 | Integrate | v1 | An Integrate page (Ctrl 0) shows how ready sessions fit together before anything lands. Candidates are the workspace's ready sessions with changes (not in place); sessions still working are listed greyed as Still working and compared at their last checkpoint. A fit matrix of at most eight sessions reads, for every pair, Fits (different files), Same files (shared files that merge cleanly) or Conflicts with the file count, from a three-way `git merge-tree` of the two worktree snapshots on the merge base of their base commits; a column gives each session against the checkout's current commit. The user orders the sessions (Move up, Move down, include or leave out; default fewest changed lines first) and runs a trial: each session is merged onto the checkout's commit in turn entirely in Git's object database, each result kept under `refs/ade/integrate/<trial>/<n>`, stopping at the first conflict with its files. Optionally the workspace's checks (RV-10) run on the combined result in a temporary detached worktree after workspace setup, then the worktree is removed; each check reads Passes, Fails or "Passed alone, fails together" (every session's own last run passed), with Not run alone for a session that never ran it. On a conflicting step, or when checks fail together, Ask the agent to adapt moves that session onto the trial commit before it (as RV-11 does, conflict markers included) and sends a prompt the user sees and edits first, naming the conflicted files or failing checks and what the earlier sessions changed and said last. A trial goes out of date when a member takes a new checkpoint or ends, or the checkout moves. Land in order (refused while out of date or files changed since the trial) asks once, listing each session's files, unreviewed files (RV-15) and open receipt items (RV-16), then applies each session to the checkout in order as uncommitted changes with the normal land, stops at the first failure and says what landed; each step is in the audit log. Overview and trial never change a worktree, index or checkout file. Trial refs are removed with the trial or when a member ends. |
 
 ## Terminals (TM)
 

@@ -48,6 +48,7 @@ import { ContainmentService, type Exec } from './containment.ts';
 import { rulesKey } from './workspace-rules.ts';
 import { RULE_HISTORY_EVENTS, RuleAdviceService } from './rule-advice.ts';
 import { homedir } from 'node:os';
+import { IntegrateService } from './integrate.ts';
 
 export interface HostConfig {
   userData: string;
@@ -280,6 +281,20 @@ export function createHost(config: HostConfig) {
   const assistant = new ReviewAssistant(repos, runtimes, join(config.userData, 'review-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   const reasoning = new ReasoningService(repos, sessions, runtimes, join(config.userData, 'reasoning-tmp'), () => sessions.sandbox, () => ({ ...process.env, ADE_FAKE_STATE_DIR: paths.fakeAgentState }));
   reasoning.recover();
+  // PL-06: how ready sessions fit together, trial merges in the object database, and landing in order.
+  mkdirSync(join(config.userData, 'integrate-tmp'), { recursive: true });
+  const integrate = new IntegrateService({
+    repos,
+    bus,
+    sessions,
+    review,
+    checks,
+    resolveCommand,
+    sandbox: () => sessions.sandbox,
+    receiptItems: (sessionId) => receipts.open(sessionId).map((i) => `Turn ${i.turnIndex + 1}: ${i.text}`),
+    tmpRoot: join(config.userData, 'integrate-tmp'),
+  });
+  void integrate.recover();
   // GN-01: a session created with a reasoning method reasons about its first prompt once it is ready.
   sessions.firstReasoned = (sessionId, content, settings) => reasoning.prompt(sessionId, content, settings).catch((err: Error) => sessions.record(sessionId, { type: 'notice', level: 'error', text: `Reasoning could not start: ${err.message}` }));
   const telegram = new TelegramNotifier({
@@ -782,6 +797,21 @@ export function createHost(config: HostConfig) {
     'workItems.sources': () => workItems.sources(),
     'connectors.status': ({ workspaceId }) => connectionStatus.status(rootOrNull(workspaceId)),
     'workItems.list': ({ source, query, role }) => workItems.list(source, query, role),
+    'integrate.overview': ({ workspaceId }) => integrate.overview(workspaceId),
+    'integrate.trial': ({ workspaceId, order, runChecks }) => integrate.trial(workspaceId, order, runChecks),
+    'integrate.get': ({ trialId }) => integrate.get(trialId),
+    'integrate.current': ({ workspaceId }) => integrate.current(workspaceId),
+    'integrate.cancel': async ({ trialId }) => {
+      await integrate.cancel(trialId);
+      return { ok: true };
+    },
+    'integrate.resolvePrompt': ({ trialId, sessionId }) => integrate.resolvePrompt(trialId, sessionId),
+    'integrate.resolve': async ({ trialId, sessionId, prompt }) => {
+      await integrate.resolve(trialId, sessionId, prompt);
+      return { ok: true };
+    },
+    'integrate.landPreview': ({ trialId }) => integrate.landPreview(trialId),
+    'integrate.land': ({ trialId }) => integrate.land(trialId),
   };
 
   // CO-04: connectors are passed to agents as MCP servers only when the user opted in, because the agent then
@@ -845,6 +875,7 @@ export function createHost(config: HostConfig) {
     workItems,
     workflows,
     skills,
+    integrate,
     paths,
     /** Main hands over decrypted connector tokens; they stay in memory only. */
     setCredentials(values: Partial<Record<ConnectorSecret, string>>) {
@@ -866,6 +897,7 @@ export function createHost(config: HostConfig) {
       await lsp.dispose();
       await preview.dispose();
       await workflows.dispose();
+      await integrate.dispose();
       await sessions.shutdown();
       db.close();
     },
