@@ -38,3 +38,16 @@ test('closed panels can be shown again, and a file opens with the session panel 
     await expect(tab(page, title)).toHaveCount(1);
   await app.close();
 });
+
+test('the empty sessions list mirrors the empty inspector', async () => {
+  const { app, page } = await launch(userDataDir());
+  await page.getByRole('button', { name: 'Done' }).click();
+  const list = page.getByTestId('sessions-empty').getByText('No sessions yet');
+  const inspector = page.getByText('Details for the selected session appear here.');
+  const listBody = page.getByText('Start one to give an agent a task in its own worktree.');
+  await expect(list).toBeVisible();
+  // Compare the body texts' tops: both cards are the same shape, so equal tops mean they are level.
+  const [a, b] = await Promise.all([listBody.boundingBox(), inspector.boundingBox()]);
+  expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+  await app.close();
+});

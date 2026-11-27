@@ -1,6 +1,6 @@
-import { Plus, Search } from 'lucide-react';
+import { MessagesSquare, Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { Button, cx, SectionLabel } from '@ade/ui';
+import { Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { Session } from '@ade/contracts';
 import { groupOf, STATE_LABELS, type SessionGroup } from '@ade/session-core';
 import { useEffect, useMemo, useState } from 'react';
@@ -65,7 +65,11 @@ export function SessionsList() {
         Search sessions
       </Button>
       {Object.keys(sessions).length === 0 ? (
-        <p className="m-0 p-2 text-ink-muted">No sessions yet. Start one to give an agent a task in its own worktree.</p>
+        // Bottom padding equals the two buttons above (2 × 44 px + 12 px gap) plus the gap below them, so the empty state
+        // sits at the same height as the Inspector's on the other side.
+        <div className="flex min-h-0 flex-1 pb-[112px]" data-testid="sessions-empty">
+          <EmptyState icon={<MessagesSquare className="size-5" />} title="No sessions yet" body="Start one to give an agent a task in its own worktree." />
+        </div>
       ) : null}
       {GROUPS.map((g) => {
         const list = grouped[g.id];
