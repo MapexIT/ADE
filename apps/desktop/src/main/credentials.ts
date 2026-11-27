@@ -21,8 +21,9 @@ export class CredentialStore {
     return process.platform === 'win32' ? 'dpapi' : 'keychain';
   }
 
-  available(): boolean {
-    if (!safeStorage.isEncryptionAvailable()) return false;
+  /** Electron 45: the async safeStorage API; the sync one is deprecated. */
+  async available(): Promise<boolean> {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
     if (process.platform === 'linux') {
       const b = safeStorage.getSelectedStorageBackend();
       if (b === 'basic_text' || b === 'unknown') return false;
@@ -44,19 +45,23 @@ export class CredentialStore {
     return (Object.keys(this.load()) as CredentialKey[]).filter((k) => !k.startsWith('env:'));
   }
 
-  set(key: CredentialKey, secret: string): void {
-    if (!this.available()) {
+  async set(key: CredentialKey, secret: string): Promise<void> {
+    if (!(await this.available())) {
       throw new Error('No secure credential store is available. On Linux, install and unlock a keyring (GNOME Keyring or KWallet).');
     }
+    const encrypted = (await safeStorage.encryptStringAsync(secret)).toString('base64');
     const data = this.load();
-    data[key] = safeStorage.encryptString(secret).toString('base64');
+    data[key] = encrypted;
     writeFileSync(this.file, JSON.stringify(data), { mode: 0o600 });
   }
 
-  get(key: CredentialKey): string | null {
+  async get(key: CredentialKey): Promise<string | null> {
     const value = this.load()[key];
-    if (!value || !this.available()) return null;
-    return safeStorage.decryptString(Buffer.from(value, 'base64'));
+    if (!value || !(await this.available())) return null;
+    // Data written with the old encryptString decrypts here too. When the key was rotated, store it again.
+    const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(value, 'base64'));
+    if (shouldReEncrypt) await this.set(key, result).catch(() => undefined);
+    return result;
   }
 
   delete(key: CredentialKey): void {
