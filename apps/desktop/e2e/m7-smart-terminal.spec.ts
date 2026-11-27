@@ -32,7 +32,9 @@ test('M7-T05: suggested and drafted commands run from pending blocks; guard rail
   await app.evaluate(({ clipboard }) => {
     const g = globalThis as unknown as { copied: string[] };
     g.copied = [];
-    clipboard.writeText = (text: string) => void g.copied.push(text);
+    clipboard.writeText = async (text: string) => {
+      g.copied.push(text);
+    };
   });
   await block.getByRole('button', { name: 'Copy output' }).click();
   await expect(page.getByText('Copied.')).toBeVisible();
