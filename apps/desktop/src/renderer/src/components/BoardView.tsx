@@ -75,7 +75,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-muted">
             Board
-            <select value={settings.source} onChange={(e) => void save({ ...settings, source: e.target.value as BoardSettings['source'] })} className={cx(inputClass, 'min-h-9')}>
+            <select value={settings.source} onChange={(e) => void save({ ...settings, source: e.target.value as BoardSettings['source'] })} className={inputClass}>
               <option value="shortcut">My Shortcut stories</option>
               <option value="github">GitHub project</option>
             </select>
@@ -93,7 +93,9 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') chooseRepo(e.currentTarget.value);
                   }}
-                  className={cx(inputClass, 'min-h-9 w-64')}
+                  // Wide enough for the longest repository name offered (a text field does not size itself).
+                  style={{ width: `calc(${Math.max(16, ...[repo ?? '', repos?.current ?? '', ...(repos?.repos ?? [])].map((r) => r.length))}ch + 2rem)` }}
+                  className={cx(inputClass, 'max-w-full')}
                 />
                 <datalist id="ade-board-repos">
                   {(repos?.repos ?? []).map((r) => (
@@ -110,7 +112,8 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
                       const hit = projects?.projects.find((p) => `${p.owner}/${p.number}` === e.target.value);
                       void save({ ...settings, githubOwner: hit?.owner ?? null, githubProject: hit?.number ?? null });
                     }}
-                    className={cx(inputClass, 'min-h-9 w-56')}
+                    // No fixed width: a select is as wide as its longest option.
+                    className={cx(inputClass, 'max-w-full')}
                   >
                     <option value="">Open issues and pull requests</option>
                     {(projects?.projects ?? []).map((p) => (
@@ -123,7 +126,7 @@ export function BoardView({ workspaceId }: { workspaceId: string }) {
               ) : null}
             </>
           ) : null}
-          <Button busy={loading} icon={<RefreshCw className="size-4" aria-hidden="true" />} size="dense" disabled={loading || needsRepo} onClick={() => void load()}>
+          <Button busy={loading} icon={<RefreshCw className="size-4" aria-hidden="true" />} disabled={loading || needsRepo} onClick={() => void load()}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
         </div>
