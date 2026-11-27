@@ -1,3 +1,6 @@
+import { ClearHistoryButton, DeleteEntryButton } from '../ClearHistoryButton.tsx';
+
+const FINISHED = new Set(['succeeded', 'failed', 'cancelled']);
 import { Copy, FilePlus2, Play, Plus, Save, Undo2, Workflow } from 'lucide-react';
 import { Background, Controls, ReactFlow, type ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -44,6 +47,16 @@ export function WorkflowsScreen() {
   const toast = useStore((s) => s.toast);
   const [list, setList] = useState<WorkflowSummary[]>([]);
   const [runs, setRuns] = useState<Record<string, WorkflowRunView>>({});
+  /** HI-13: deletes finished runs (one, or all finished ones). Running and paused runs are kept. */
+  const deleteRuns = async (runIds?: string[]) => {
+    if (!workspaceId) return;
+    const res = await attempt(() => host.call('workflows.deleteRuns', runIds ? { workspaceId, runIds } : { workspaceId }));
+    if (!res) return;
+    const fresh = (await attempt(() => host.call('workflows.runs', { workspaceId }))) ?? [];
+    setRuns(Object.fromEntries(fresh.map((x) => [x.id, x])));
+    setView((v) => (v?.kind === 'run' && !fresh.some((x) => x.id === v.id) ? null : v));
+    if (!runIds) useStore.getState().toast(res.deleted === 1 ? 'Deleted 1 run.' : `Deleted ${res.deleted} runs.`);
+  };
   const [view, setView] = useState<View>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
@@ -302,11 +315,14 @@ export function WorkflowsScreen() {
             );
           })}
           <section className="flex flex-col gap-2" aria-label="Runs">
-            <SectionLabel>Runs</SectionLabel>
+            <div className="flex items-center gap-2">
+              <SectionLabel>Runs</SectionLabel>
+              {runList.some((r) => FINISHED.has(r.status)) ? <ClearHistoryButton className="ml-auto" confirmLabel="Delete finished runs" onConfirm={() => deleteRuns()} /> : null}
+            </div>
             {runList.length === 0 ? <p className="m-0 text-[12px] text-ink-muted">No runs yet.</p> : null}
             {runList.slice(0, 30).map((r) => (
+              <div key={r.id} className="relative">
               <button
-                key={r.id}
                 type="button"
                 onClick={() => setView({ kind: 'run', id: r.id })}
                 aria-current={view?.kind === 'run' && r.id === view.id ? 'true' : undefined}
@@ -323,6 +339,12 @@ export function WorkflowsScreen() {
                   <span className="text-[12px] text-ink-muted">{elapsed(r.createdAt)} ago</span>
                 </span>
               </button>
+              {FINISHED.has(r.status) ? (
+                <div className="absolute right-2 top-1.5">
+                  <DeleteEntryButton label={`Delete run of ${r.workflowName}`} onDelete={() => void deleteRuns([r.id])} />
+                </div>
+              ) : null}
+              </div>
             ))}
           </section>
         </aside>

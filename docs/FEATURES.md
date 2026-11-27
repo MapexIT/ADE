@@ -1,6 +1,6 @@
 # Features
 
-167 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+168 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -233,6 +233,7 @@ Node types: agent, command, gate, loop, branch, fan-out, connector, land.
 | HI-04 | Limits | MVP | Maximum duration and turn count per session, enforced by ADE. |
 | HI-05 | Settings | MVP | Agents, workspace setup, notifications, retention, external editor. No telemetry setting exists because there is no telemetry. |
 | HI-06 | History search | v1 | Full-text search across sessions. |
+| HI-13 | Delete history | v1 | Wherever ADE keeps history, it can be deleted: ended (landed or discarded) sessions in the Sessions list, one at a time or Delete all, with their events, turns and ADE's own Git refs; finished workflow runs; Run history (CR-15); commands typed in terminals, in Command history; and a smart terminal's finished blocks. Deleting everything asks for a second press within 4 seconds. Live sessions and running workflow runs cannot be deleted. The audit log stays append-only (HI-02) and records that sessions were deleted. |
 | HI-07 | Audit export | v1 | JSON export with secrets and local paths redacted. |
 | HI-08 | Preview pane | v1 | A built-in browser the agent can drive, with screenshots in the timeline. |
 | HI-09 | Built-in agent | Later | A fourth runtime that ADE supplies itself. |

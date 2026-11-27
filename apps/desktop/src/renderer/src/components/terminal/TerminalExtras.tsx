@@ -1,3 +1,4 @@
+import { ClearHistoryButton, DeleteEntryButton } from '../ClearHistoryButton.tsx';
 import { ClipboardPaste, Play, Sparkles, X } from 'lucide-react';
 import { Badge, Button, cx } from '@ade/ui';
 import type { AgentId, HistoryEntry, TerminalInfo, TerminalLayout } from '@ade/contracts';
@@ -104,13 +105,22 @@ export function HistoryDialog({ open, onClose, terminalId }: { open: boolean; on
   const [query, setQuery] = useState('');
   const [all, setAll] = useState(false);
   const [results, setResults] = useState<HistoryEntry[]>([]);
+  const [epoch, setEpoch] = useState(0);
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
       void host.call('history.search', { query, ...(all || !workspaceId ? {} : { workspaceId }) }).then(setResults).catch(() => setResults([]));
     }, 150);
     return () => clearTimeout(t);
-  }, [open, query, all, workspaceId]);
+  }, [open, query, all, workspaceId, epoch]);
+  /** HI-13: forgets terminal commands (one, or all in this scope). Runs and agent commands go with their run or session. */
+  const forget = async (commands?: string[]) => {
+    const scope = all || !workspaceId ? {} : { workspaceId };
+    const res = await attempt(() => host.call('history.clear', commands ? { ...scope, commands } : scope));
+    if (!res) return;
+    if (!commands) useStore.getState().toast(res.deleted === 1 ? 'Forgot 1 terminal command.' : `Forgot ${res.deleted} terminal commands.`);
+    setEpoch((n) => n + 1);
+  };
   return (
     <Modal open={open} onOpenChange={(o) => !o && onClose()} title="Command history" description="Commands from your terminals, runs and agents, in every worktree." wide>
       <div className="flex flex-col gap-2">
@@ -123,7 +133,9 @@ export function HistoryDialog({ open, onClose, terminalId }: { open: boolean; on
             <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="size-4 accent-[var(--accent)]" />
             Every repository
           </label>
+          {results.some((r) => r.source === 'terminal') ? <ClearHistoryButton confirmLabel="Forget terminal commands" onConfirm={() => forget()} /> : null}
         </div>
+        <p className="m-0 text-[12px] text-ink-muted">Clearing forgets commands typed in terminals. Runs are deleted from Run history, and agent commands with their session.</p>
         {results.length === 0 ? <p className="m-0 text-ink-muted">No matching commands.</p> : null}
         <ul className="m-0 flex max-h-[55vh] list-none flex-col gap-1 overflow-auto p-0">
           {results.map((r, i) => (
@@ -147,6 +159,7 @@ export function HistoryDialog({ open, onClose, terminalId }: { open: boolean; on
               >
                 Paste
               </Button>
+              {r.source === 'terminal' ? <DeleteEntryButton label={`Forget ${r.command}`} onDelete={() => void forget([r.command])} /> : null}
             </li>
           ))}
         </ul>

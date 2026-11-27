@@ -1,3 +1,4 @@
+import { ClearHistoryButton } from './ClearHistoryButton.tsx';
 import { ExternalLink, Play, Save, SendHorizontal, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Badge, Button, cx, EmptyState, SectionLabel, Tabs, Waiting } from '@ade/ui';
 import type { EnvSet, Run, RunConfig } from '@ade/contracts';
@@ -43,13 +44,6 @@ export function RunScreen() {
   const [editingEnv, setEditingEnv] = useState(false);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [comparing, setComparing] = useState<string[]>([]);
-  /** CR-15: "Clear history" asks for a second press within 4 seconds. */
-  const [clearArmed, setClearArmed] = useState(false);
-  useEffect(() => {
-    if (!clearArmed) return;
-    const t = setTimeout(() => setClearArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [clearArmed]);
 
   const refresh = useCallback(async () => {
     if (!workspace) return;
@@ -67,7 +61,6 @@ export function RunScreen() {
   const deleteRuns = async (runIds?: string[]) => {
     if (!workspace) return;
     const res = await attempt(() => host.call('runs.delete', runIds ? { workspaceId: workspace.id, runIds } : { workspaceId: workspace.id }));
-    setClearArmed(false);
     if (res) {
       if (!runIds) toast(res.deleted === 1 ? 'Deleted 1 run.' : `Deleted ${res.deleted} runs.`);
       void refresh();
@@ -188,15 +181,7 @@ export function RunScreen() {
               <span className="ml-auto text-[12px] text-ink-muted">{comparing.length === 1 ? 'Choose one more run to compare' : ''}</span>
             ) : null}
             {history.length ? (
-              <Button
-                size="dense"
-                variant={clearArmed ? 'attention' : 'ghost'}
-                className={cx(!comparing.length && 'ml-auto')}
-                icon={<Trash2 className="size-4" aria-hidden="true" />}
-                onClick={() => (clearArmed ? void deleteRuns() : setClearArmed(true))}
-              >
-                {clearArmed ? 'Delete all runs' : 'Clear history'}
-              </Button>
+              <ClearHistoryButton className={cx(!comparing.length && 'ml-auto')} confirmLabel="Delete all runs" onConfirm={() => deleteRuns()} />
             ) : null}
           </div>
           {history.length === 0 ? <p className="m-0 text-ink-muted">No runs yet.</p> : null}

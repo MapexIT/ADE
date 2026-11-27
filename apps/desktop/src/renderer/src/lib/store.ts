@@ -121,6 +121,8 @@ interface Actions {
   loadSession(id: string): Promise<void>;
   onEvent(e: SessionEvent): void;
   upsertSession(s: Session): void;
+  /** HI-13: drops deleted sessions from the list and their views. */
+  removeSessions(ids: string[]): void;
   setTab(tab: Tab): void;
   attach(sessionId: string, block: PromptBlock): void;
   detach(sessionId: string, index: number): void;
@@ -288,6 +290,16 @@ export const useStore = create<State & Actions>((set, get) => ({
     if (session.workspaceId !== get().workspaceId) return;
     set((s) => ({ sessions: { ...s.sessions, [session.id]: session } }));
     void host.call('sessions.get', { sessionId: session.id }).then((d) => set((s) => ({ queued: { ...s.queued, [session.id]: d.queued } })));
+  },
+
+  removeSessions(ids) {
+    if (!ids.length) return;
+    const gone = new Set(ids);
+    set((s) => ({
+      sessions: Object.fromEntries(Object.entries(s.sessions).filter(([id]) => !gone.has(id))),
+      views: Object.fromEntries(Object.entries(s.views).filter(([id]) => !gone.has(id))),
+      selectedSessionId: s.selectedSessionId && gone.has(s.selectedSessionId) ? null : s.selectedSessionId,
+    }));
   },
 
   setTab(tab) {

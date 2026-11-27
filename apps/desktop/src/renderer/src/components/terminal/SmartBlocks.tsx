@@ -1,3 +1,4 @@
+import { ClearHistoryButton } from '../ClearHistoryButton.tsx';
 import { copyText } from '../../lib/clipboard.ts';
 import { CircleStop, Copy, Play, RotateCcw, SendHorizontal, Wrench } from 'lucide-react';
 import { Button, cx } from '@ade/ui';
@@ -6,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { host, main, pty } from '../../lib/bridge.ts';
 import { attachmentText, clock, duration, joinPath } from '../../lib/format.ts';
 import { attempt, useStore, EMPTY } from '../../lib/store.ts';
-import { useTerminals } from '../../lib/terminals.ts';
+import { clearBlocks, useTerminals } from '../../lib/terminals.ts';
 import { runInTerminal, sendChecked } from '../../lib/guards.ts';
 import { InlineViewer } from './InlineViewer.tsx';
 import { BlockProblems } from './BlockProblems.tsx';
@@ -104,6 +105,11 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
         }}
       >
         {blocks.length === 0 ? <p className="m-0 font-sans text-ink-muted">Commands you run appear here as blocks with their exit code and duration.</p> : null}
+        {blocks.some((b) => b.endedAt !== null) ? (
+          <div className="flex justify-end font-sans">
+            <ClearHistoryButton label="Clear blocks" confirmLabel="Clear finished blocks" onConfirm={() => clearBlocks(terminalId)} />
+          </div>
+        ) : null}
         {blocks.map((b, i) => {
           const failed = b.exitCode !== null && b.exitCode !== 0;
           const done = b.endedAt !== null;

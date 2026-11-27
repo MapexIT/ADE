@@ -45,6 +45,12 @@ export const useTerminals = create<TerminalState>((set, get) => ({
   },
 }));
 
+/** HI-13: forgets a terminal's finished command blocks; a running one stays. */
+export async function clearBlocks(id: string): Promise<void> {
+  await pty.call('pty.clearBlocks', { id });
+  useTerminals.setState((s) => ({ blocks: { ...s.blocks, [id]: (s.blocks[id] ?? []).filter((b) => b.endedAt === null) } }));
+}
+
 export function subscribeData(id: string, listener: (data: string) => void): () => void {
   const set = dataListeners.get(id) ?? new Set();
   set.add(listener);
