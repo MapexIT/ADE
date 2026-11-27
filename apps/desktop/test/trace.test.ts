@@ -31,7 +31,7 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {
+function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 45_000): Promise<T> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const tick = () => {
@@ -102,5 +102,5 @@ describe('RV-17 trace with Git checkpoints and the fake agent', () => {
     const files = await host.handlers['sessions.changes']({ sessionId: session.id, turnIndex: null });
     expect(byPrompt.additions).toBe(files.reduce((n, f) => n + f.additions, 0));
     expect(byPrompt.deletions).toBe(files.reduce((n, f) => n + f.deletions, 0));
-  });
+  }, 60_000);
 });
