@@ -171,6 +171,21 @@ function Timeline({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (stick.current && items.length) virtualizer.scrollToIndex(items.length - 1, { align: 'end' });
   }, [items.length, lastText, virtualizer]);
+  // RV-17: Open in timeline scrolls to a tool call and marks it for a moment.
+  const focus = useStore((s) => s.timelineFocus);
+  const [marked, setMarked] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focus || focus.sessionId !== sessionId) return;
+    const index = items.findIndex((i) => i.key === focus.key);
+    if (index < 0) return;
+    stick.current = false;
+    virtualizer.scrollToIndex(index, { align: 'center' });
+    setMarked(focus.key);
+    const timer = setTimeout(() => setMarked(null), 2400);
+    return () => clearTimeout(timer);
+    // Only a new request scrolls; items arriving later do not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.seq, sessionId]);
 
   if (!items.length) {
     return (
@@ -190,7 +205,14 @@ function Timeline({ sessionId }: { sessionId: string }) {
     >
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map((v) => (
-          <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="absolute left-0 w-full py-1.5" style={{ transform: `translateY(${v.start}px)` }}>
+          <div
+            key={v.key}
+            data-index={v.index}
+            ref={virtualizer.measureElement}
+            data-marked={marked === items[v.index]?.key || undefined}
+            className={cx('absolute left-0 w-full py-1.5', marked === items[v.index]?.key && 'ade-timeline-mark')}
+            style={{ transform: `translateY(${v.start}px)` }}
+          >
             <TimelineRow item={items[v.index]!} sessionId={sessionId} />
           </div>
         ))}
