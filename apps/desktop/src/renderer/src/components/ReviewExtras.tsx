@@ -10,8 +10,8 @@ import { batchReviewPrompt, checkFailurePrompt, type ReviewComment } from '../li
 import { attempt, useStore } from '../lib/store.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
 
-const sendPrompt = (sessionId: string, text: string, busy: boolean) =>
-  attempt(() => host.call(busy ? 'sessions.queue' : 'sessions.prompt', { sessionId, content: [{ type: 'text', text }] }));
+const sendPrompt = (sessionId: string, text: string, busy: boolean, origin?: 'review-comment') =>
+  attempt(() => host.call(busy ? 'sessions.queue' : 'sessions.prompt', { sessionId, content: [{ type: 'text', text }], ...(origin ? { origin } : {}) }));
 
 /** RV-11: shown when the user's checkout moved since the session started. */
 export function BaseBanner({ session }: { session: Session }) {
@@ -244,7 +244,7 @@ export function BatchReviewPanel({ session, comments, onChange }: { session: Ses
   if (!comments.length) return null;
   const busy = isLive(session.state);
   const send = async () => {
-    if (await sendPrompt(session.id, batchReviewPrompt(comments), busy)) {
+    if (await sendPrompt(session.id, batchReviewPrompt(comments), busy, 'review-comment')) {
       onChange([]);
       toast(busy ? 'Review queued for the agent.' : 'Review sent to the agent.');
     }

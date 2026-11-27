@@ -149,7 +149,7 @@ export function ReviewScreen() {
   const sendComment = (mode: 'now') => {
     if (!comment || !active) return;
     const text = `Review comment on ${active}:${comment.line}\n${comment.text}`;
-    void attempt(() => host.call(mode === 'now' ? 'sessions.prompt' : 'sessions.queue', { sessionId: session.id, content: [{ type: 'text', text }] })).then((ok) => {
+    void attempt(() => host.call(mode === 'now' ? 'sessions.prompt' : 'sessions.queue', { sessionId: session.id, content: [{ type: 'text', text }], origin: 'review-comment' })).then((ok) => {
       if (ok) {
         setComment(null);
         useStore.getState().toast(busy ? 'Comment queued for the agent.' : 'Comment sent to the agent.');

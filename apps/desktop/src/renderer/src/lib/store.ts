@@ -5,6 +5,7 @@ import { host } from './bridge.ts';
 import { extractShellCommands } from './terminal-intel.ts';
 import type { ActiveRun } from './runs.ts';
 import { AGENT_LABELS } from '@ade/contracts';
+import type { Lesson, LessonAdvice, LessonSuggestion } from '@ade/contracts';
 
 export type Tab = 'sessions' | 'work-items' | 'workflows' | 'skills' | 'terminals' | 'run' | 'review' | 'observe' | 'git';
 
@@ -108,6 +109,12 @@ interface State {
   ruleAdvice: Record<string, RuleAdvice>;
   /** AP-09: the suggestion open in the "Rule from your decisions" dialog. */
   ruleSuggestion: { workspaceId: string; suggestion: RuleSuggestion } | null;
+  /** ED-05: lesson suggestions per workspace, from `lessons.advice`. */
+  lessonAdvice: Record<string, LessonAdvice>;
+  /** ED-05: the lesson dialog: a suggestion to review, a lesson to edit, or a new lesson (neither). */
+  lessonDialog: { workspaceId: string; suggestion: LessonSuggestion | null; lesson: Lesson | null } | null;
+  /** ED-05: bumped when lessons change, so open lists reload. */
+  lessonsVersion: number;
   /** A section of the Settings dialog to scroll to when it opens. */
   settingsSection: 'suggested-rules' | null;
 }
@@ -133,11 +140,15 @@ interface Actions {
   ask(spec: ConfirmSpec): void;
   /** AP-09: reloads rule advice for a workspace, after `delayMs` (debounced per workspace). */
   refreshRuleAdvice(workspaceId: string, delayMs?: number): void;
+  /** ED-05: reloads lesson suggestions for a workspace, after `delayMs` (debounced per workspace). */
+  refreshLessonAdvice(workspaceId: string, delayMs?: number): void;
 }
 
 let toastId = 1;
 const adviceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const adviceSeq = new Map<string, number>();
+const lessonTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const lessonSeq = new Map<string, number>();
 
 /** SM-09: shell blocks in an agent's reply become pending suggestions on that session's terminals. */
 function suggestFrom(sessionId: string, text: string) {
@@ -210,6 +221,9 @@ export const useStore = create<State & Actions>((set, get) => ({
   composerDraft: null,
   ruleAdvice: {},
   ruleSuggestion: null,
+  lessonAdvice: {},
+  lessonDialog: null,
+  lessonsVersion: 0,
   settingsSection: null,
 
   async init() {
@@ -240,6 +254,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     void host.call('settings.set', { key: 'lastWorkspaceId', value: id });
     set({ workspaceId: id, sessions: Object.fromEntries(list.map((s) => [s.id, s])), selectedSessionId: list[0]?.id ?? null, views: {}, activity: {}, turns: {}, queued: {} });
     get().refreshRuleAdvice(id);
+    get().refreshLessonAdvice(id);
     const first = list[0];
     if (first) await get().loadSession(first.id);
   },
@@ -277,6 +292,11 @@ export const useStore = create<State & Actions>((set, get) => ({
     if (e.type === 'permission.decided' && e.decidedBy === 'user') {
       const ws = get().sessions[e.sessionId]?.workspaceId;
       if (ws) get().refreshRuleAdvice(ws, 300);
+    }
+    // ED-05: a correction (a reject note or a message that is not an ordinary prompt) may make a lesson suggestion appear.
+    if ((e.type === 'permission.decided' && e.decidedBy === 'user' && e.note) || (e.type === 'user.message' && e.origin !== 'composer')) {
+      const ws = get().sessions[e.sessionId]?.workspaceId;
+      if (ws) get().refreshLessonAdvice(ws, 300);
     }
     // Turn boundaries change the turn list and the queue; refresh them from the host.
     if (e.type === 'turn.started' || e.type === 'turn.ended' || e.type === 'user.message') {
@@ -336,6 +356,24 @@ export const useStore = create<State & Actions>((set, get) => ({
 
   ask(spec) {
     set({ confirm: spec });
+  },
+
+  refreshLessonAdvice(workspaceId, delayMs = 0) {
+    clearTimeout(lessonTimers.get(workspaceId));
+    lessonTimers.set(
+      workspaceId,
+      setTimeout(() => {
+        lessonTimers.delete(workspaceId);
+        const seq = (lessonSeq.get(workspaceId) ?? 0) + 1;
+        lessonSeq.set(workspaceId, seq);
+        void host.call('lessons.advice', { workspaceId }).then(
+          (advice) => {
+            if (lessonSeq.get(workspaceId) === seq) set((s) => ({ lessonAdvice: { ...s.lessonAdvice, [workspaceId]: advice } }));
+          },
+          () => undefined,
+        );
+      }, delayMs),
+    );
   },
 
   refreshRuleAdvice(workspaceId, delayMs = 0) {
