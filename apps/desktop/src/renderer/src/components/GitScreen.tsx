@@ -1,3 +1,4 @@
+import { copyText } from '../lib/clipboard.ts';
 import { Check, Copy, FileDiff, GitCommitHorizontal, GitFork } from 'lucide-react';
 import { SafeDiffEditor as DiffEditor } from './SafeDiffEditor.tsx';
 import { Badge, Button, cx, EmptyState, SectionLabel, Waiting } from '@ade/ui';
@@ -101,7 +102,8 @@ function CommitInfo({ hash, detail, file, onFile, onSelect }: { hash: string | n
           className="w-8 px-0"
           aria-label="Copy commit hash"
           onClick={() =>
-            void navigator.clipboard.writeText(detail.hash).then(() => {
+            void copyText(detail.hash, 'Commit hash copied.').then((ok) => {
+              if (!ok) return;
               setCopied(true);
               setTimeout(() => setCopied(false), 1200);
             })

@@ -26,6 +26,20 @@ test('M7-T05: suggested and drafted commands run from pending blocks; guard rail
   await expect(suggestions).toContainText('git status --short');
   await suggestions.getByRole('button', { name: 'Run' }).click();
   await expect(page.getByRole('region', { name: /Command block/ }).filter({ hasText: 'git status --short' })).toBeVisible({ timeout: 20_000 });
+  // Copy output reaches the system clipboard (through the main process; the renderer has no clipboard permission).
+  const block = page.getByRole('region', { name: /Command block, succeeded/ }).filter({ hasText: 'git status --short' });
+  // Record what reaches Electron's clipboard (CI machines may have no clipboard to read back).
+  await app.evaluate(({ clipboard }) => {
+    const g = globalThis as unknown as { copied: string[] };
+    g.copied = [];
+    clipboard.writeText = (text: string) => void g.copied.push(text);
+  });
+  await block.getByRole('button', { name: 'Copy output' }).click();
+  await expect(page.getByText('Copied.')).toBeVisible();
+  const copied = await app.evaluate(() => (globalThis as unknown as { copied: string[] }).copied);
+  expect(copied).toHaveLength(1);
+  expect(copied[0]?.startsWith('$ git status --short')).toBe(true);
+  expect(copied[0]?.trimEnd().endsWith('[exit 0]')).toBe(true);
 
   // SM-10: a drafted command arrives as a suggestion; SM-12 shows its JSON output inline.
   const ask = page.getByRole('form', { name: 'Ask for a command' });

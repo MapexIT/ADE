@@ -1,3 +1,4 @@
+import { copyText } from '../lib/clipboard.ts';
 import { Check, Copy, GitBranch as GitBranchIcon, Maximize2, MessagesSquare, RefreshCw } from 'lucide-react';
 import { Badge, Button, cx, Waiting } from '@ade/ui';
 import type { GitBranch, GitCommit, GitGraph } from '@ade/contracts';
@@ -258,7 +259,8 @@ export function BranchGraph({
               className="w-8 px-0"
               aria-label="Copy commit hash"
               onClick={() =>
-                void navigator.clipboard.writeText(commit.hash).then(() => {
+                void copyText(commit.hash, 'Commit hash copied.').then((ok) => {
+                  if (!ok) return;
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1200);
                 })

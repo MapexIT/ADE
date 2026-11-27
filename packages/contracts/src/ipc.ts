@@ -1048,6 +1048,8 @@ export type PtyTopics = typeof ptyTopics;
 export const mainApi = defineApi({
   'main.pickDirectory': method(z.object({ title: z.string().max(200).optional() }), z.object({ path: z.string().nullable() })),
   'main.openExternal': method(z.object({ url: z.url({ protocol: /^https?$/ }) }), Ok),
+  /** Puts text on the clipboard. The renderer has no clipboard permission (every permission request is refused). */
+  'main.copyText': method(z.object({ text: z.string().max(10_000_000) }), Ok),
   'main.openInEditor': method(z.object({ path: AbsPath }), Ok),
   'main.notify': method(z.object({ title: z.string().max(200), body: z.string().max(1000), sessionId: z.string().optional() }), Ok),
   'main.credentials.status': method(
