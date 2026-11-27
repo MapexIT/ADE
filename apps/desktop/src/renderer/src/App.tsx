@@ -38,6 +38,7 @@ import { TooltipProvider } from './components/Tooltip.tsx';
 import { useStore } from './lib/store.ts';
 import { onBlockFinished, wireTerminals } from './lib/terminals.ts';
 import { wireRuns } from './lib/runs.ts';
+import { wireWatch } from './lib/watch.ts';
 import { recordBlock } from './lib/problems.ts';
 
 // SM-11: every finished terminal command goes into the searchable history. SM-18: the same (single) listener reads
@@ -74,6 +75,7 @@ function useWiring() {
         if (up) {
           wireTerminals();
           wireRuns();
+          wireWatch();
         }
       }),
       host.on('session.event', (e) => useStore.getState().onEvent(e)),

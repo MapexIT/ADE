@@ -1,10 +1,23 @@
-import type { CommandBlock, ShellKind, TerminalInfo, TerminalKind } from '@ade/contracts';
+import type { CommandBlock, ShellKind, TerminalInfo, TerminalKind, WatchFired, WatchReason } from '@ade/contracts';
+import { watchReasonText } from '@ade/shell-integration/watch';
 import { create } from 'zustand';
 import { pty } from './bridge.ts';
+
+/** SM-19: a fired watch, shown as the attention ring and a reason in words until the terminal is selected. */
+export interface WatchAttention {
+  reason: WatchReason;
+  text: string;
+  command: string;
+  blockId: string;
+  auto: boolean;
+  at: number;
+}
 
 interface TerminalState {
   terminals: Record<string, TerminalInfo & { exited: boolean; exitCode: number | null }>;
   blocks: Record<string, CommandBlock[]>;
+  attention: Record<string, WatchAttention>;
+  clearAttention(id: string): void;
   shells: { id: ShellKind; label: string; path: string }[];
   active: string | null;
   setActive(id: string | null): void;
@@ -21,10 +34,14 @@ const runListeners = new Set<(r: { runId: string; exitCode: number | null; outpu
 export const useTerminals = create<TerminalState>((set, get) => ({
   terminals: {},
   blocks: {},
+  attention: {},
   shells: [],
   active: null,
   setActive(id) {
-    set({ active: id });
+    set((s) => ({ active: id, attention: id && s.attention[id] ? omit(s.attention, id) : s.attention }));
+  },
+  clearAttention(id) {
+    set((s) => (s.attention[id] ? { attention: omit(s.attention, id) } : {}));
   },
   async create(opts) {
     const info = await pty.call('pty.create', { cols: 100, rows: 30, ...opts });
@@ -39,7 +56,7 @@ export const useTerminals = create<TerminalState>((set, get) => ({
       delete terminals[id];
       const blocks = { ...s.blocks };
       delete blocks[id];
-      return { terminals, blocks, active: s.active === id ? (Object.keys(terminals)[0] ?? null) : s.active };
+      return { terminals, blocks, attention: omit(s.attention, id), active: s.active === id ? (Object.keys(terminals)[0] ?? null) : s.active };
     });
     void get();
   },
@@ -81,6 +98,18 @@ export function onBlockFinished(listener: (terminal: TerminalInfo, block: Comman
 }
 const finished = new Set<string>();
 
+/** SM-19: told about every fired watch (set by the app, which shows a toast and an OS notification). */
+let watchListener: ((terminal: TerminalInfo, fired: WatchFired) => void) | null = null;
+export function onWatchFired(listener: (terminal: TerminalInfo, fired: WatchFired) => void) {
+  watchListener = listener;
+}
+
+function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
 let wired = false;
 /** Subscribes to the pty process streams once. Safe across reconnects (the bridge re-subscribes). */
 export function wireTerminals() {
@@ -109,6 +138,13 @@ export function wireTerminals() {
   });
   pty.on('pty.exit', ({ id, exitCode }) => {
     useTerminals.setState((s) => (s.terminals[id] ? { terminals: { ...s.terminals, [id]: { ...s.terminals[id]!, exited: true, exitCode } } } : {}));
+  });
+  pty.on('pty.watchFired', (f) => {
+    const term = useTerminals.getState().terminals[f.id];
+    if (!term) return;
+    const attention: WatchAttention = { reason: f.reason, text: watchReasonText(f), command: f.command, blockId: f.blockId, auto: f.auto, at: f.at };
+    useTerminals.setState((s) => ({ attention: { ...s.attention, [f.id]: attention } }));
+    watchListener?.(term, f);
   });
   pty.on('pty.runFinished', (r) => {
     for (const l of runListeners) l(r);

@@ -13,6 +13,7 @@ import { InlineViewer } from './InlineViewer.tsx';
 import { BlockProblems } from './BlockProblems.tsx';
 import { BlockFilter } from './BlockFilter.tsx';
 import { Linkified } from './Linkified.tsx';
+import { WatchControl } from './WatchControl.tsx';
 import { filterKey, followFilters, useBlockFilters } from '../../lib/block-filters.ts';
 
 export function blockAsText(b: CommandBlock) {
@@ -65,9 +66,12 @@ export function SmartBlocks({ terminalId }: { terminalId: string }) {
           <span className="text-ink-muted">Running</span>
           <span>{running.command}</span>
           <span className="text-ink-muted">since {clock(running.startedAt)}</span>
-          <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" className="ml-auto" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
-            Stop
-          </Button>
+          <div className="ml-auto flex gap-2 font-sans">
+            {terminal ? <WatchControl terminal={terminal} running /> : null}
+            <Button icon={<CircleStop className="size-4" aria-hidden="true" />} size="dense" onClick={() => void pty.call('pty.write', { id: terminalId, data: '\x03' })}>
+              Stop
+            </Button>
+          </div>
         </div>
       ) : null}
       <div

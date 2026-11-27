@@ -8,6 +8,7 @@ import { buildCommands, pickAndOpenWorkspace } from '../lib/commands.ts';
 import { host, main, pty } from '../lib/bridge.ts';
 import { attempt, useStore } from '../lib/store.ts';
 import { useTerminals } from '../lib/terminals.ts';
+import { AUTO_WATCH_SETTING, setAutoWatch } from '../lib/watch.ts';
 import { Field, inputClass, Modal } from './Modal.tsx';
 import { TelegramSettings } from './TelegramSettings.tsx';
 import { SANDBOX_SCOPE } from './NewSessionDialog.tsx';
@@ -79,6 +80,7 @@ const KINDS: Record<string, { label: string; icon: LucideIcon }> = {
   question: { label: 'Question', icon: CircleHelp },
   permission: { label: 'Approval', icon: ShieldQuestion },
   terminal: { label: 'Terminal', icon: SquareTerminal },
+  watch: { label: 'Watched command', icon: SquareTerminal },
   'setup-failed': { label: 'Setup failed', icon: CircleAlert },
   interrupted: { label: 'Interrupted', icon: Unplug },
   limit: { label: 'Limit reached', icon: Gauge },
@@ -134,12 +136,27 @@ export function InboxDialog() {
   const selectSession = useStore((s) => s.selectSession);
   const views = useStore((s) => s.views);
   const waitingTerminals = useTerminals(useShallow((t) => Object.values(t.terminals).filter((x) => x.agentState === 'waiting')));
+  const terminals = useTerminals((t) => t.terminals);
+  const attention = useTerminals((t) => t.attention);
+  const sessions = useStore((s) => s.sessions);
   const [index, setIndex] = useState(0);
-  const items = [
+  const items: { key: string; sessionId: string | null; title: string; sub: string; kind: string; runId: string | null; url: string | null; requestId: string | null; terminalId?: string }[] = [
     ...inbox.map((i) => ({ key: i.id, sessionId: i.sessionId, title: i.title, sub: i.sessionTitle, kind: i.kind, runId: i.runId ?? null, url: i.url ?? null, requestId: i.kind === 'permission' || i.kind === 'question' ? i.id : null })),
     ...waitingTerminals.map((t) => ({ key: t.id, sessionId: t.sessionId, title: `${t.title} is waiting for you`, sub: 'Agent terminal', kind: 'terminal' as const, runId: null, url: null, requestId: null })),
+    // SM-19: a fired watch; Enter selects its terminal.
+    ...Object.entries(attention).flatMap(([id, a]) => {
+      const t = terminals[id];
+      if (!t) return [];
+      const where = t.sessionId ? (sessions[t.sessionId]?.title ?? 'a session') : 'your checkout';
+      const what = a.reason === 'failed' ? 'failed' : a.reason === 'finished' ? 'finished' : a.reason === 'quiet' ? 'went quiet' : 'printed what you watched for';
+      return [{ key: `watch-${id}`, sessionId: t.sessionId, title: `${a.command} ${what} in ${where}`, sub: a.text, kind: 'watch', runId: null, url: null, requestId: null, terminalId: id }];
+    }),
   ];
-  const go = (sessionId: string | null, runId: string | null = null, url: string | null = null) => {
+  const go = (sessionId: string | null, runId: string | null = null, url: string | null = null, terminalId?: string) => {
+    if (terminalId) {
+      useTerminals.getState().setActive(terminalId);
+      return set({ inboxOpen: false, tab: 'terminals' });
+    }
     // AP-07, AP-08: pull requests open on GitHub.
     if (url) return void attempt(() => main('main.openExternal', { url }));
     if (runId) return set({ inboxOpen: false, tab: 'workflows', focusRunId: runId });
@@ -165,7 +182,7 @@ export function InboxDialog() {
           const cur = items[index];
           if (e.key === 'ArrowDown') setIndex((i) => Math.min(items.length - 1, i + 1));
           else if (e.key === 'ArrowUp') setIndex((i) => Math.max(0, i - 1));
-          else if (e.key === 'Enter' && cur) go(cur.sessionId, cur.runId, cur.url);
+          else if (e.key === 'Enter' && cur) go(cur.sessionId, cur.runId, cur.url, cur.terminalId);
           else if ((e.key === 'a' || e.key === 'r') && cur?.requestId && cur.sessionId) answer(cur.sessionId, cur.requestId, e.key === 'a' ? 'allow' : 'reject');
           else return;
           e.preventDefault();
@@ -179,7 +196,7 @@ export function InboxDialog() {
             <li key={it.key} role="option" aria-selected={i === index} data-kind={it.kind}>
               <button
                 type="button"
-                onClick={() => go(it.sessionId, it.runId, it.url)}
+                onClick={() => go(it.sessionId, it.runId, it.url, it.terminalId)}
                 className={cx('flex w-full items-start gap-3 rounded-[var(--radius)] border px-3 py-2 text-left', i === index ? 'border-attention-line bg-attention-tint' : 'border-line')}
               >
                 <Icon className={cx('mt-0.5 size-4 shrink-0', PR_KINDS.has(it.kind) ? 'text-accent-soft' : 'text-ink-muted')} aria-hidden="true" />
@@ -221,6 +238,7 @@ export function SettingsDialog() {
   const [receipts, setReceipts] = useState<ReceiptSettings>({ enabled: true, notify: true });
   const [ruleAdvice, setRuleAdvice] = useState<RuleAdviceSettings>({ enabled: true, threshold: 3 });
   const [lessonAdvice, setLessonAdvice] = useState(true);
+  const [autoWatch, setAutoWatchState] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -246,6 +264,7 @@ export function SettingsDialog() {
       const parsed = LessonAdviceSettings.safeParse(v.value ?? {});
       setLessonAdvice(parsed.success ? parsed.data.enabled : true);
     });
+    void host.call('settings.get', { key: AUTO_WATCH_SETTING }).then((v) => setAutoWatchState(v.value !== false));
     void main('main.credentials.status', {}).then(setCreds);
     void host.call('settings.get', { key: 'connectors.shareWithAgents' }).then((v) => setShare(v.value === true));
     void host.call('settings.get', { key: 'workflows.autoTriggers' }).then((v) => setAutoTriggers(v.value === true));
@@ -264,6 +283,7 @@ export function SettingsDialog() {
     await attempt(() => host.call('settings.set', { key: 'sandbox.byDefault', value: sandboxByDefault }));
     await attempt(() => host.call('settings.set', { key: 'sessions.runInPlace', value: runInPlace }));
     await attempt(() => host.call('settings.set', { key: 'app.keepRunningInBackground', value: keepRunning }));
+    if (await attempt(() => host.call('settings.set', { key: AUTO_WATCH_SETTING, value: autoWatch }))) setAutoWatch(autoWatch);
     toast('Settings saved.');
     if (workspaceId) useStore.getState().refreshRuleAdvice(workspaceId);
     if (workspaceId) useStore.getState().refreshLessonAdvice(workspaceId);
@@ -328,6 +348,14 @@ export function SettingsDialog() {
             <span>
               Keep sessions running when the window is closed
               <span className="block text-[12px] text-ink-muted">ADE stays in the system tray while a session is working and notifies you when it needs you.</span>
+            </span>
+          </label>
+          <SectionLabel className="mt-2">Terminals</SectionLabel>
+          <label className="flex min-h-11 items-start gap-2">
+            <input type="checkbox" checked={autoWatch} onChange={(e) => setAutoWatchState(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+            <span>
+              Tell me when a long command finishes in a terminal I am not looking at
+              <span className="block text-[12px] text-ink-muted">After 30 seconds ADE watches the command and tells you when it ends. Decided from the output alone; nothing leaves this machine.</span>
             </span>
           </label>
           <p className="m-0 text-ink-muted">Discarded sessions keep their final patch for 30 days. Notifications appear when a session needs you, finishes or fails, while ADE is in the background. The external editor comes from the ADE_EDITOR environment variable, or your system default.</p>
