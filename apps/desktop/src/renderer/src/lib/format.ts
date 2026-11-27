@@ -81,3 +81,9 @@ export function languageOf(path: string): string {
   };
   return map[ext] ?? 'plaintext';
 }
+
+/** The session's worktree while it still exists: landing or discarding a session removes it. Pure. */
+export function liveWorktree(session: { state: string; worktreePath: string | null } | null | undefined): string | null {
+  if (!session?.worktreePath || session.state === 'landed' || session.state === 'discarded') return null;
+  return session.worktreePath;
+}

@@ -1,7 +1,8 @@
 /** Pty utility process entry: node-pty instances, shell-integration parsing, runs. */
 import type { MessagePortMain } from 'electron';
+import { existsSync } from 'node:fs';
 import { spawn } from 'node-pty';
-import { createPublisher, emitterPort, ptyApi, ptyTopics, serveApi, type Handlers, type PtyApi } from '@ade/contracts';
+import { createPublisher, emitterPort, ptyApi, ptyTopics, RpcError, serveApi, type Handlers, type PtyApi } from '@ade/contracts';
 import { TerminalManager } from './terminal-manager.ts';
 
 const parent = process.parentPort;
@@ -13,7 +14,11 @@ const broadcast: Publish = (topic, payload) => {
 };
 
 const manager = new TerminalManager(
-  (file, args, opts) => spawn(file, args, { ...opts, useConpty: true }),
+  (file, args, opts) => {
+    // A deleted worktree (a landed or discarded session) otherwise fails with Windows' bare "error code: 267".
+    if (opts.cwd && !existsSync(opts.cwd)) throw new RpcError('not_found', `The folder ${opts.cwd} no longer exists. Open the terminal in the repository instead.`);
+    return spawn(file, args, { ...opts, useConpty: true });
+  },
   {
     data: (id, data) => broadcast('pty.data', { id, data }),
     block: (id, block) => broadcast('pty.block', { id, block }),

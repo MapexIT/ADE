@@ -11,6 +11,7 @@ import { basename, languageOf } from '../lib/format.ts';
 import { EDITOR_OPTIONS } from '../lib/monaco.ts';
 import { attempt, currentWorkspace, selectedSession, useStore } from '../lib/store.ts';
 import { FilePicker } from './FilePicker.tsx';
+import { liveWorktree } from '../lib/format.ts';
 
 /** ED-01: Monaco with go to file and save; saving detects external changes. */
 export function EditorPanel() {
@@ -151,7 +152,7 @@ export function EditorPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, [save]);
 
-  const root = session?.worktreePath ?? workspace?.rootPath ?? null;
+  const root = liveWorktree(session) ?? workspace?.rootPath ?? null;
   const picker = goTo && root ? (
     <FilePicker
       root={root}

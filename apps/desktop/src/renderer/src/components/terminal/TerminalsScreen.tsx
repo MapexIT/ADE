@@ -4,7 +4,7 @@ import { Badge, Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { AgentId, ShellKind, TerminalInfo } from '@ade/contracts';
 import { STATE_LABELS } from '@ade/session-core';
 import { useMemo, useState } from 'react';
-import { agentLabel, basename } from '../../lib/format.ts';
+import { agentLabel, basename, liveWorktree } from '../../lib/format.ts';
 import { attempt, currentWorkspace, selectedSession, useStore, EMPTY } from '../../lib/store.ts';
 import { useTerminals } from '../../lib/terminals.ts';
 import { latestProblems, useProblems } from '../../lib/problems.ts';
@@ -128,7 +128,7 @@ export function TerminalsScreen() {
   const sessions = useStore((s) => s.sessions);
   const session = useStore(selectedSession);
   const workspace = useStore(currentWorkspace);
-  const cwd = session?.worktreePath ?? workspace?.rootPath ?? null;
+  const cwd = liveWorktree(session) ?? workspace?.rootPath ?? null;
   const [history, setHistory] = useState(false);
   const layout = useTerminalLayout();
 
@@ -185,7 +185,7 @@ export function TerminalsScreen() {
           <Button icon={<History className="size-4" aria-hidden="true" />} size="dense" variant="ghost" onClick={() => setHistory(true)}>
             Command history
           </Button>
-          <NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />
+          <NewTerminalMenu cwd={cwd} sessionId={liveWorktree(session) ? session!.id : null} />
         </div>
       </aside>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -208,7 +208,7 @@ export function TerminalsScreen() {
             </div>
           </>
         ) : (
-          <EmptyState icon={<SquareTerminal className="size-5" />} title="No terminal open" body="Smart terminals turn every command into a block with its exit code. Plain terminals are just a shell." action={<NewTerminalMenu cwd={cwd} sessionId={session?.worktreePath ? session.id : null} />} />
+          <EmptyState icon={<SquareTerminal className="size-5" />} title="No terminal open" body="Smart terminals turn every command into a block with its exit code. Plain terminals are just a shell." action={<NewTerminalMenu cwd={cwd} sessionId={liveWorktree(session) ? session!.id : null} />} />
         )}
       </main>
       <HistoryDialog open={history} onClose={() => setHistory(false)} terminalId={current && !current.exited ? current.id : null} />
@@ -224,10 +224,10 @@ export function TerminalPanel() {
   const active = useTerminals((t) => t.active);
   const setActive = useTerminals((t) => t.setActive);
   const close = useTerminals((t) => t.close);
-  const sessionId = session?.worktreePath ? session.id : null;
+  const sessionId = liveWorktree(session) ? session!.id : null;
   const list = Object.values(terminals).filter((t) => t.sessionId === sessionId);
   const current = list.find((t) => t.id === active) ?? list[0];
-  const cwd = session?.worktreePath ?? workspace?.rootPath ?? null;
+  const cwd = liveWorktree(session) ?? workspace?.rootPath ?? null;
   return (
     <section aria-label="Terminal" className="flex h-full min-h-0 flex-col bg-surface-sunken">
       <div className="flex flex-wrap items-center gap-1 border-b border-line px-2">
