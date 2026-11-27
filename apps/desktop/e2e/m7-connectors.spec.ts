@@ -28,7 +28,13 @@ test('M7-T04: a personal MCP server reaches the agent; the board explains what i
   await expect(page.getByText('MCP servers: notes.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Work items', exact: true }).click();
+  // "Assigned to me" is the top level; the source is chosen inside it, and the board has its own.
+  const source = page.getByRole('radiogroup', { name: 'Source' });
+  await expect(source.getByRole('radio', { name: 'Shortcut' })).toHaveAttribute('aria-checked', 'true');
+  await source.getByRole('radio', { name: 'Shortcut' }).press('ArrowRight');
+  await expect(source.getByRole('radio', { name: 'GitHub' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('tab', { name: 'Board' }).click();
+  await expect(source).toBeHidden();
   await expect(page.getByText('The board could not be loaded')).toBeVisible();
   await expect(page.getByText('Connect Shortcut in Settings first.')).toBeVisible();
   await app.close();
