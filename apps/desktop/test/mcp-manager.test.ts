@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
@@ -6,6 +6,7 @@ import { git } from '@ade/git';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import { configFrom, draftFrom, statusOf } from '../src/renderer/src/lib/mcp.ts';
+import { removeTemp } from './cleanup.ts';
 
 const ECHO = join(__dirname, 'fixtures', 'echo-mcp.mjs');
 let root: string;
@@ -26,7 +27,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 describe('CO-13 MCP manager', () => {

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHost, defaultAdapterEntry, type Host } from '../src/host/app.ts';
 import { runSmokeChecks } from '../src/host/smoke.ts';
 import { SmokeRun, type SmokeReport } from '../src/main/smoke.ts';
+import { removeTemp } from './cleanup.ts';
 
 describe('SmokeRun (M5-T07)', () => {
   afterEach(() => vi.useRealTimers());
@@ -63,7 +64,7 @@ describe('runSmokeChecks (M5-T07)', () => {
   });
   afterEach(async () => {
     await host.dispose();
-    rmSync(root, { recursive: true, force: true });
+    removeTemp(root);
   });
 
   it('passes on a working install: database, bundled adapters, agents and a real session', async () => {

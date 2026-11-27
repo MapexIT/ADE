@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
@@ -18,6 +18,7 @@ import {
   wslToWindowsPath,
   type Exec,
 } from '../src/host/containment.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 
@@ -26,7 +27,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 describe('bubblewrap arguments', () => {

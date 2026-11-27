@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import type { AgentRuntime } from '@ade/acp-client';
 import { promptText, ReasoningService, reasonedContent, reasoningContext } from '../src/host/reasoning-service.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 let repo: string;
@@ -28,7 +29,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 30_000): Promise<T> {

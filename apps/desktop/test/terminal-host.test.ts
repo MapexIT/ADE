@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostApi, type Problem } from '@ade/contracts';
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, draftedCommand, type Host } from '../src/host/app.ts';
 import { MIGRATIONS, migrate, openDatabase } from '../src/host/db.ts';
 import { Repositories } from '../src/host/repositories.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 let repo: string;
@@ -28,7 +29,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {
@@ -165,7 +166,7 @@ describe('SM-18 problem snapshots', () => {
       expect(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM command_history')?.n).toBe(1);
     } finally {
       db.close();
-      rmSync(dir, { recursive: true, force: true });
+      removeTemp(dir);
     }
   });
 });

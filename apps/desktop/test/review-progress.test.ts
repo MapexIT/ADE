@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostApi } from '@ade/contracts';
@@ -9,6 +9,7 @@ import { createHost, type Host } from '../src/host/app.ts';
 import { migrate, openDatabase } from '../src/host/db.ts';
 import { Repositories } from '../src/host/repositories.ts';
 import { classifyReview, reviewedBlob, unreviewedAmong } from '../src/host/review-progress.ts';
+import { removeTemp } from './cleanup.ts';
 
 /** A fingerprint whose new side is the digit `n` repeated. */
 const fp = (n: string) => `100644 100644 ${'a'.repeat(40)} ${n.repeat(40)}`;
@@ -71,7 +72,7 @@ describe('RV-15 review marks table', () => {
       expect(repos.reviewMarks.list('other')).toEqual([]);
     } finally {
       db.close();
-      rmSync(dir, { recursive: true, force: true });
+      removeTemp(dir);
     }
   });
 });
@@ -98,7 +99,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {

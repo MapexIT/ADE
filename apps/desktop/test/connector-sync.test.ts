@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
@@ -8,6 +8,7 @@ import { createHost, type Host } from '../src/host/app.ts';
 import { runFile, type Runner } from '../src/host/connectors.ts';
 import { resultList, type ShortcutActions } from '../src/host/shortcut-actions.ts';
 import { githubIssue, parseProjectItems, parseRepoProjects, shortcutId } from '../src/host/work-item-sync.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 let repo: string;
@@ -71,7 +72,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {

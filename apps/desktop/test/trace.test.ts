@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TraceLine } from '@ade/contracts';
@@ -6,6 +6,7 @@ import { FAKE_AGENT_ENTRY } from '@ade/fake-agent';
 import { git } from '@ade/git';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 let repo: string;
@@ -28,7 +29,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 45_000): Promise<T> {

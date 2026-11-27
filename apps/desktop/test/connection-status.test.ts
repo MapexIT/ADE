@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ConnectionStatusService, firstLine, parseGhUser, parseGhVersion } from '../src/host/connection-status.ts';
 import { CredentialCache, type Runner } from '../src/host/connectors.ts';
+import { removeTemp } from './cleanup.ts';
 
 type Call = { file: string; args: string[]; env: NodeJS.ProcessEnv; cwd?: string };
 
@@ -77,7 +78,7 @@ describe('CO-14 connection status', () => {
 
   it('is answered through the host API', async () => {
     const { createHost } = await import('../src/host/app.ts');
-    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { mkdtempSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
     const root = mkdtempSync(join(tmpdir(), 'ade-conn-'));
@@ -89,7 +90,7 @@ describe('CO-14 connection status', () => {
       expect(status.github.problem).toBe('To get started with GitHub CLI, please run:  gh auth login');
     } finally {
       await host.dispose();
-      rmSync(root, { recursive: true, force: true });
+      removeTemp(root);
     }
   });
 });

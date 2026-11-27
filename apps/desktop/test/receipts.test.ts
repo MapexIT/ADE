@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session, SessionEvent, SessionEventOf, Turn } from '@ade/contracts';
@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
 import { EventBus } from '../src/host/bus.ts';
 import { ReceiptService } from '../src/host/receipts.ts';
+import { removeTemp } from './cleanup.ts';
 
 let root: string;
 let repo: string;
@@ -42,7 +43,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.dispose();
-  rmSync(root, { recursive: true, force: true });
+  removeTemp(root);
 });
 
 function waitFor<T>(check: () => T | undefined | null | false, timeoutMs = 20_000): Promise<T> {
