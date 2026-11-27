@@ -1,5 +1,5 @@
 import { ClearHistoryButton, DeleteEntryButton } from './ClearHistoryButton.tsx';
-import { History, MessagesSquare, Plus, Search } from 'lucide-react';
+import { ChevronRight, History, MessagesSquare, Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button, cx, EmptyState, SectionLabel } from '@ade/ui';
 import type { Session } from '@ade/contracts';
@@ -168,7 +168,11 @@ export function SessionsList() {
                           : 'bg-accent-tint/45 hover:border-accent/70 hover:bg-accent-tint',
                       )}
                     >
-                      <span className="font-semibold">{s.title}</span>
+                      <span className={cx('font-semibold', isSel && 'pr-6')}>{s.title}</span>
+                      {isSel ? (
+                        // Points at the Session panel, which shows this session.
+                        <ChevronRight className={cx('absolute right-2 size-5', g.id === 'done' ? 'bottom-3' : 'top-1/2 -translate-y-1/2', d.attention ? 'text-attention' : 'text-accent-soft')} aria-hidden="true" />
+                      ) : null}
                       <span className="text-ink-muted">
                         {agentLabel(s.agentId)}
                         {s.workItemRef ? ` · ${s.workItemRef}` : ''}
