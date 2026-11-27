@@ -58,6 +58,12 @@ test('M7-T05: scratchpad snippet; an environment set with a masked secret; two r
   await history.getByRole('checkbox', { name: 'Compare' }).nth(1).check();
   const compare = page.getByRole('dialog', { name: 'Compare runs' });
   await expect(compare).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(compare).toBeHidden();
+
+  // CR-15: one run can be deleted from the history.
+  await history.getByRole('button', { name: /^Delete run .*snippet\.mjs/ }).click();
+  await expect(history.getByText(/snippet\.mjs/)).toHaveCount(0);
   await app.close();
   // What ADE stored has the secret masked (the diff editor draws its lines outside the accessibility tree).
   const db = new DatabaseSync(join(data, 'ade.db'), { readOnly: true });
@@ -68,4 +74,17 @@ test('M7-T05: scratchpad snippet; an environment set with a masked secret; two r
     expect(o).toMatch(/hello\s+••••••/);
     expect(o).not.toContain('s3cret-value');
   }
+
+  // CR-15: after a restart the deleted run stays gone, and Clear history (pressed twice) empties the rest.
+  const again = await launch(data);
+  await expect(again.page.getByRole('button', { name: 'Switch workspace' })).toContainText('demo-repo');
+  await again.page.keyboard.press('Control+6');
+  const left = again.page.getByRole('complementary', { name: 'Run history' });
+  await expect(left.getByText('node -e console.log(process.env.GREETING,process.env.TOKEN)')).toHaveCount(2);
+  await expect(left.getByText(/snippet\.mjs/)).toHaveCount(0);
+  await left.getByRole('button', { name: 'Clear history' }).click();
+  await left.getByRole('button', { name: 'Delete all runs' }).click();
+  await expect(left.getByText('No runs yet.')).toBeVisible();
+  await expect(again.page.getByText('Deleted 2 runs.')).toBeVisible();
+  await again.app.close();
 });

@@ -1,6 +1,6 @@
 # Features
 
-165 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+166 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -166,6 +166,7 @@ Linux.
 | CR-12 | Watch mode | Later | Re-run on file change. |
 | CR-13 | Debugging | Later | Breakpoints and stepping. |
 | CR-14 | Container runs | Later | Run inside a dev container. |
+| CR-15 | Delete run history | v1 | Each run in the history has a delete button; "Clear history" deletes every run of the workspace after a second press ("Delete all runs", armed for 4 seconds). Only that workspace's runs are touched, and deleted runs stay gone after a restart. |
 
 ## Connectors (CO)
 
