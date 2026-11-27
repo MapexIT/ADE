@@ -455,6 +455,12 @@ export class RunRepo {
     return { ...run, id };
   }
 
+  /** CR-15: removes runs of one workspace (only that workspace's, whatever ids are given); all of them without ids. */
+  delete(workspaceId: string, runIds?: string[]): number {
+    if (!runIds) return Number(this.db.run('DELETE FROM runs WHERE workspace_id = ?', workspaceId).changes);
+    return Number(this.db.run(`DELETE FROM runs WHERE workspace_id = ? AND id IN (${runIds.map(() => '?').join(', ')})`, workspaceId, ...runIds).changes);
+  }
+
   history(workspaceId: string): Run[] {
     return this.db.all<R>('SELECT * FROM runs WHERE workspace_id = ? ORDER BY started_at DESC LIMIT 200', workspaceId).map((r) => ({
       id: String(r.id),
