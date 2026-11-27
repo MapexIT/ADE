@@ -26,16 +26,16 @@ test('generation methods need confirmation away from IO; the prompt board sends 
   await dialog.getByRole('button', { name: 'Keep current method' }).click();
   await expect(method).toHaveValue('io');
 
-  // Accept CoT self-consistency with two paths; the run shows in the timeline and its approach is sent.
+  // Accept CoT Self-Consistency with two paths; the run shows in the timeline and its approach is sent.
   await method.selectOption('cot-sc');
-  const sc = page.getByRole('dialog', { name: 'Switch generation to CoT self-consistency?' });
+  const sc = page.getByRole('dialog', { name: 'Switch generation to CoT Self-Consistency?' });
   await sc.getByLabel('Reasoning paths').fill('2');
   await expect(sc).toContainText('2 extra calls');
-  await sc.getByRole('button', { name: 'Use CoT self-consistency' }).click();
+  await sc.getByRole('button', { name: 'Use CoT Self-Consistency' }).click();
   await expect(method).toHaveValue('cot-sc');
   await page.getByLabel('Message Fake agent').fill('say FINAL APPROACH: patch the parser');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  const run = page.getByRole('region', { name: 'Reasoning: CoT self-consistency' });
+  const run = page.getByRole('region', { name: 'Reasoning: CoT Self-Consistency' });
   await expect(run.getByText('Sent to the agent')).toBeVisible({ timeout: 30_000 });
   await expect(run.getByText('2/2 agent calls · read-only')).toBeVisible();
   await expect(run.getByText('Chosen approach')).toBeVisible();

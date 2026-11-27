@@ -32,9 +32,16 @@ export function reasonedContent(content: PromptBlock[], text: string): PromptBlo
 
 type Ask = typeof askOnce;
 
+/** One temporary worktree that reasoning calls borrow, one call at a time. */
+interface Lane {
+  path: string;
+  wrapper: Awaited<ReturnType<SandboxProvider['wrapperFor']>> | null;
+  added: boolean;
+}
+
 /**
  * GN-01: runs a reasoning method before a turn. Every extra agent call goes to the session's own agent, read-only,
- * in a temporary detached worktree of the session's current state, with every permission request refused, so
+ * in temporary detached worktrees of the session's current state (one per call running at the same time), with every permission request refused, so
  * reasoning cannot change anything. Progress is stored as `reasoning.*` events; the result is sent like any prompt.
  */
 export class ReasoningService {
@@ -110,21 +117,37 @@ export class ReasoningService {
   private async reason(sessionId: string, runId: string, content: PromptBlock[], settings: ReasoningSettings, runtime: AgentRuntime, ac: AbortController) {
     const s = this.repos.sessions.require(sessionId);
     const root = this.repos.workspaces.get(s.workspaceId)!.rootPath;
-    const tmp = join(this.tmpRoot, `${s.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`);
+    const lanes: Lane[] = [];
     let calls = 0;
-    let added = false;
     try {
       const snap = await snapshot(s.worktreePath!, null, 'ADE reasoning', s.inPlace);
-      await git(['worktree', 'add', '--detach', tmp, snap], { cwd: root });
-      added = true;
-      const wrapper = s.containment !== 'none' ? ((await this.sandbox()?.wrapperFor({ ...s, worktreePath: tmp }, root)) ?? null) : null;
+      // Calls that run at the same time (parallel paths, fleet agents) each get their own worktree of the same
+      // snapshot, so one call never sees another's files. A worktree is reset before it is lent again.
+      const free: Lane[] = [];
+      const lease = async (): Promise<Lane> => {
+        const reused = free.pop();
+        if (reused) {
+          await git(['reset', '--hard', '-q', snap], { cwd: reused.path });
+          await git(['clean', '-fdq'], { cwd: reused.path });
+          return reused;
+        }
+        const lane: Lane = { path: join(this.tmpRoot, `${s.id.slice(0, 8)}-${runId.slice(0, 8)}-${lanes.length + 1}`), wrapper: null, added: false };
+        lanes.push(lane);
+        await git(['worktree', 'add', '--detach', lane.path, snap], { cwd: root });
+        lane.added = true;
+        lane.wrapper = s.containment !== 'none' ? ((await this.sandbox()?.wrapperFor({ ...s, worktreePath: lane.path }, root)) ?? null) : null;
+        return lane;
+      };
       const thinker: Thinker = {
         think: async (prompt, signal) => {
+          const lane = await lease();
           try {
-            return await this.ask(runtime, { cwd: tmp, prompt, baseEnv: this.baseEnv(), wrapper, timeoutMs: CALL_TIMEOUT_MS, timeoutMessage: 'A reasoning call did not finish in time.', signal });
+            return await this.ask(runtime, { cwd: lane.path, prompt, baseEnv: this.baseEnv(), wrapper: lane.wrapper, timeoutMs: CALL_TIMEOUT_MS, timeoutMessage: 'A reasoning call did not finish in time.', signal });
           } catch (err) {
             if (signal.aborted) throw new ReasoningCancelled();
             throw err;
+          } finally {
+            free.push(lane);
           }
         },
       };
@@ -151,7 +174,7 @@ export class ReasoningService {
         text: cancelled ? 'Reasoning was cancelled. Nothing was sent.' : `Reasoning failed, so nothing was sent: ${(err as Error).message.slice(0, 1000)}`,
       });
     } finally {
-      if (added) await git(['worktree', 'remove', '--force', tmp], { cwd: root }).catch(() => undefined);
+      for (const lane of lanes) if (lane.added) await git(['worktree', 'remove', '--force', lane.path], { cwd: root }).catch(() => undefined);
     }
   }
 }

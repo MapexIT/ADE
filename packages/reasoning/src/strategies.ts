@@ -79,7 +79,7 @@ const byScore = (a: Candidate, b: Candidate) => (b.score ?? UNRATED) - (a.score 
 /** Input-output: the prompt goes to the agent as written. */
 export const ioStrategy: ReasoningStrategy = {
   method: 'io',
-  label: 'IO (as written)',
+  label: 'IO',
   summary: 'Sends your prompt to the agent exactly as you wrote it. No extra agent calls.',
   plannedCalls: () => 0,
   run: async () => ({ approach: null, calls: 0 }),
@@ -97,7 +97,7 @@ export const cotStrategy: ReasoningStrategy = {
 /** CoT with self-consistency: several independent reasoning paths; the plan that agrees most with the others wins. */
 export const cotScStrategy: ReasoningStrategy = {
   method: 'cot-sc',
-  label: 'CoT self-consistency',
+  label: 'CoT Self-Consistency',
   summary: 'Samples several independent step-by-step reasoning paths and keeps the plan the others agree with most.',
   plannedCalls: (s) => s.samples,
   async run(task, s, ctx) {

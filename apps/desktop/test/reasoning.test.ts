@@ -6,7 +6,8 @@ import { git } from '@ade/git';
 import { DEFAULT_SETTINGS } from '@ade/reasoning';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHost, type Host } from '../src/host/app.ts';
-import { promptText, reasonedContent, reasoningContext } from '../src/host/reasoning-service.ts';
+import type { AgentRuntime } from '@ade/acp-client';
+import { promptText, ReasoningService, reasonedContent, reasoningContext } from '../src/host/reasoning-service.ts';
 
 let root: string;
 let repo: string;
@@ -92,12 +93,39 @@ describe('GN-01 reasoning methods', () => {
     await ended(s.id, 2);
     const last = sent(s.id).at(-1)!;
     expect(last.startsWith('say FINAL APPROACH: patch the parser')).toBe(true);
-    expect(last).toContain('CoT self-consistency');
+    expect(last).toContain('CoT Self-Consistency');
     const steps = events(s.id).filter((e) => e.type === 'reasoning.step');
     expect(steps.filter((e) => e.status === 'done').map((e) => e.phase)).toEqual(['sample', 'sample', 'select']);
     // The temporary worktree is gone and the session's own worktree is untouched by reasoning.
     const tmp = join(root, 'userData', 'reasoning-tmp');
     expect(existsSync(tmp) ? readdirSync(tmp) : []).toEqual([]);
+    expect((await git(['worktree', 'list'], { cwd: repo })).split('\n').filter(Boolean)).toHaveLength(2);
+  });
+
+  it('parallel reasoning calls each work in their own worktree, all removed afterwards', async () => {
+    const s = await start();
+    const tmpRoot = join(root, 'lanes');
+    const active = new Set<string>();
+    const seen: string[] = [];
+    let overlap = false;
+    const ask = async (_rt: AgentRuntime, opts: { cwd: string }) => {
+      if (active.has(opts.cwd)) overlap = true;
+      active.add(opts.cwd);
+      seen.push(opts.cwd);
+      // Each call writes a file; no other call may see it.
+      writeFileSync(join(opts.cwd, 'scratch.txt'), opts.cwd);
+      await new Promise((r) => setTimeout(r, 150));
+      active.delete(opts.cwd);
+      return 'FINAL APPROACH: patch the parser';
+    };
+    const service = new ReasoningService(host.repos, host.sessions, new Map([['fake', {} as AgentRuntime]]), tmpRoot, () => null, () => ({}), ask as never);
+    await service.prompt(s.id, text('say go'), { ...DEFAULT_SETTINGS, method: 'cot-sc', samples: 5 });
+    expect(await finished(s.id)).toMatchObject({ outcome: 'sent', calls: 5 });
+    expect(overlap).toBe(false);
+    // Three at a time, so three worktrees; the fourth and fifth calls reuse a reset one.
+    expect(new Set(seen).size).toBe(3);
+    await ended(s.id, 2);
+    await waitFor(() => !existsSync(tmpRoot) || readdirSync(tmpRoot).length === 0);
     expect((await git(['worktree', 'list'], { cwd: repo })).split('\n').filter(Boolean)).toHaveLength(2);
   });
 
@@ -147,7 +175,7 @@ describe('GN-01 starting a session with a reasoning method', () => {
     await ended(s.id, 1);
     const first = sent(s.id)[0]!;
     expect(first.startsWith('say FINAL APPROACH: start reasoned')).toBe(true);
-    expect(first).toContain('CoT self-consistency');
+    expect(first).toContain('CoT Self-Consistency');
     expect(sent(s.id)).toHaveLength(1);
     expect(await host.handlers['composer.get']({ sessionId: s.id })).toEqual({ mode: 'chat', reasoning: settings });
   });
