@@ -17,7 +17,8 @@ import {
   CliSession,
   Workspace,
 } from './entities.ts';
-import { PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
+import { MessageOrigin, PromptBlock, ReasoningSettings, SessionEvent, ToolKind } from './events.ts';
+import { Lesson, LessonAdvice, LessonDraft, LessonFiles, LessonRehearsal } from './lessons.ts';
 import { defineApi, defineTopics, method } from './rpc.ts';
 
 const Id = z.string().min(1).max(200);
@@ -223,6 +224,8 @@ export const CreateSessionInput = z.object({
   reasoning: ReasoningSettings.optional(),
   /** SR-10: continue this conversation from the agent's own CLI (its ACP session id) instead of starting a new one. */
   continueFrom: z.string().min(1).max(300).optional(),
+  /** ED-05: the first-prompt lessons to send; left out, every enabled one is sent. */
+  lessonIds: z.array(Id).max(50).optional(),
 });
 export type CreateSessionInput = z.input<typeof CreateSessionInput>;
 
@@ -705,6 +708,16 @@ export const hostApi = defineApi({
   'rules.rehearse': method(z.object({ workspaceId: Id, rule: PermissionRule }), RuleRehearsal),
   'rules.adopt': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), rule: PermissionRule }), Ok),
   'rules.dismissSuggestion': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), forever: z.boolean() }), Ok),
+  /** ED-05: lessons in the user's own words, delivered to every agent; suggestions from repeated corrections. */
+  'lessons.list': method(z.object({ workspaceId: Id }), z.array(Lesson)),
+  'lessons.save': method(z.object({ workspaceId: Id, lessons: z.array(Lesson).max(50) }), Ok),
+  'lessons.advice': method(z.object({ workspaceId: Id }), LessonAdvice),
+  /** `key` is a suggestion's key, or "manual" for a lesson added without evidence. */
+  'lessons.adopt': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), lesson: LessonDraft }), Lesson),
+  'lessons.dismiss': method(z.object({ workspaceId: Id, key: z.string().min(1).max(200), forever: z.boolean() }), Ok),
+  'lessons.rehearse': method(z.object({ workspaceId: Id, pattern: z.string().trim().min(1).max(500) }), LessonRehearsal),
+  /** Writes the marked block into AGENTS.md (and CLAUDE.md when asked) in the checkout, as an uncommitted change. */
+  'lessons.writeFiles': method(z.object({ workspaceId: Id, alsoClaude: z.boolean().default(false) }), LessonFiles),
 
   'sessions.list': method(z.object({ workspaceId: Id }), z.array(Session)),
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),
@@ -716,7 +729,7 @@ export const hostApi = defineApi({
     z.object({ workspaceId: Id }),
     z.object({ sessions: z.array(CliSession), problems: z.array(z.object({ agentId: AgentId, message: z.string() })) }),
   ),
-  'sessions.prompt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), Ok),
+  'sessions.prompt': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1), origin: MessageOrigin.optional() }), Ok),
   /**
    * GN-01: sends a prompt through a reasoning method. `io` behaves like `sessions.prompt`; the others reason in the
    * background (progress arrives as `reasoning.*` events) and then send the result. `reasoning` is true when that
@@ -726,7 +739,7 @@ export const hostApi = defineApi({
     z.object({ sessionId: Id, content: z.array(PromptBlock).min(1), settings: ReasoningSettings }),
     z.object({ reasoning: z.boolean() }),
   ),
-  'sessions.queue': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1) }), z.object({ id: z.string() })),
+  'sessions.queue': method(z.object({ sessionId: Id, content: z.array(PromptBlock).min(1), origin: MessageOrigin.optional() }), z.object({ id: z.string() })),
   'sessions.unqueue': method(z.object({ sessionId: Id, id: Id }), Ok),
   'sessions.editQueued': method(z.object({ sessionId: Id, id: Id, content: z.array(PromptBlock).min(1) }), Ok),
   'sessions.cancel': method(z.object({ sessionId: Id }), Ok),

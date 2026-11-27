@@ -6,3 +6,4 @@ export * from './teams.ts';
 export * from './loops.ts';
 export * from './receipt.ts';
 export * from './rule-advice.ts';
+export * from './lessons.ts';
