@@ -1,6 +1,6 @@
 # Features
 
-164 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
+165 features in 17 areas. Phase is `MVP`, `v1` or `Later`. MVP features have acceptance criteria; build
 nothing from `v1` or `Later` until the MVP gate in `docs/PLAN.md` has passed. MVP platforms are Windows and
 Linux.
 
@@ -8,12 +8,13 @@ Linux.
 
 | ID | Feature | Phase | Acceptance criteria / description |
 | --- | --- | --- | --- |
-| ST-01 | Agent health | MVP | Detects Codex, Claude Code and OpenCode with path and version. Shows Ready, Needs sign-in or Not installed. Sign-in and install open the agent's own flow. Capabilities come from `initialize`. |
+| ST-01 | Agent health | MVP | Detects Codex, Claude Code and OpenCode with path and version. Shows Ready, Needs sign-in or Not installed in a popover from the top bar's CLIs button (same size as the other top bar buttons). Sign-in happens in the agent's own flow. Capabilities come from `initialize`. |
 | ST-02 | Composer | MVP | Prompt, agent, base branch and permission profile, plus the model and mode options the agent advertises. Start creates the worktree and the session. A missing agent disables Start with the reason. |
 | ST-03 | Context attachments | MVP | Files, editor selections, diff hunks and images can be attached, appear as removable chips and are sent as ACP content blocks. |
 | ST-04 | Slash commands | MVP | Typing `/` lists the commands the agent advertised. Nothing advertised means no list. |
 | ST-05 | Shared MCP servers | v1 | Define MCP servers once per workspace; every session receives them. |
 | ST-06 | Prompt library | Later | Saved prompts and task templates. |
+| ST-07 | Install a coding CLI | v1 | A CLI that is not installed has an Install button in the CLIs popover; nothing installs until it is pressed. Windows uses winget (`Anthropic.ClaudeCode`, `OpenAI.Codex`, `Anomaly.OpenCode`). Linux uses the system package manager where its official repository has the package, through pkexec so the system asks for the password: pacman on Arch and its derivatives (`openai-codex`, `opencode`), zypper on openSUSE Tumbleweed (the same names). Everything else uses `npm install --global` (`@anthropic-ai/claude-code`, `@openai/codex`, `opencode-ai`); Debian, Ubuntu and Fedora carry none of the three. The exact command is shown before it runs, the installer's output streams into the popover, and health is detected again when it ends. Without winget or npm the popover says what to install. |
 
 ## Watch (WA)
 
@@ -109,7 +110,7 @@ Linux.
 | PL-02 | Concurrency cap | MVP | At most N sessions run at once (default 3); extra sessions wait as Queued. |
 | PL-03 | Compare run | v1 | One prompt to two or three agents in separate worktrees, compared side by side. |
 | PL-04 | Overlap warning | v1 | Flags two live sessions that changed the same file. |
-| PL-05 | Background sessions | v1 | Sessions keep running with the window closed. |
+| PL-05 | Background sessions | v1 | Sessions keep running with the window closed. The ADE icon sits in the tray whenever ADE runs, also in development; clicking it reopens the window, and its menu shows running sessions and Quit. |
 
 ## Terminals (TM)
 
