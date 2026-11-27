@@ -44,7 +44,8 @@ export function SessionHeader({ session }: { session: Session }) {
       ? [usage.inputTokens !== null ? `${usage.inputTokens.toLocaleString('en-GB')} tokens` : null, usage.costUsd !== null ? `$${usage.costUsd.toFixed(2)}` : null].filter(Boolean).join(' · ')
       : 'usage not reported';
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-3">
+    // The same violet edge and tint as the session's selected card in the Sessions list, so the two read as one.
+    <div className="flex flex-wrap items-center gap-2 border-b border-l-[3px] border-b-accent/40 border-l-accent bg-accent-tint px-4 py-3">
       <h1 className="m-0 text-[16px] font-semibold">{session.title}</h1>
       <Badge tone={stateTone(session.state)} className="font-semibold">
         {STATE_LABELS[session.state]}

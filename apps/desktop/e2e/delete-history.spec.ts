@@ -16,6 +16,8 @@ test('HI-13: an ended session can be deleted from the Sessions list, one at a ti
     await page.getByRole('radio', { name: /Fake agent/ }).check();
     await page.getByRole('button', { name: 'Start session' }).click();
     await expect(page.getByText('Turn 1 · finished')).toBeVisible();
+    // The Session tab names the session the list has selected.
+    await expect(page.locator('.dv-default-tab-content', { hasText: `Session · ${title}` })).toBeVisible();
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     await page.getByRole('button', { name: 'Discard session' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard session' }).click();

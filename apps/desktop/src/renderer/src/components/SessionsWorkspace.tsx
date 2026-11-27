@@ -5,7 +5,7 @@ import { Button } from '@ade/ui';
 import { useEffect, useRef } from 'react';
 import { host } from '../lib/bridge.ts';
 import { defaultLayout, PANELS, showPanel, workspaceLayout } from '../lib/layout.ts';
-import { useStore } from '../lib/store.ts';
+import { selectedSession, useStore } from '../lib/store.ts';
 import { EditorPanel } from './EditorPanel.tsx';
 import { Inspector } from './Inspector.tsx';
 import { SessionsList } from './SessionsList.tsx';
@@ -14,9 +14,26 @@ import { TerminalPanel } from './terminal/TerminalsScreen.tsx';
 
 const LAYOUT_KEY = 'layout.sessions.v1';
 
+/** The tab names the selected session, so the list and the panel that shows it read as one. */
+function SessionPanel({ api }: IDockviewPanelProps) {
+  const title = useStore((s) => selectedSession(s)?.title ?? null);
+  useEffect(() => {
+    api.setTitle(title ? `Session · ${title.length > 40 ? `${title.slice(0, 39)}…` : title}` : 'Session');
+  }, [api, title]);
+  return <SessionView />;
+}
+
+function SessionsPanel({ api }: IDockviewPanelProps) {
+  const count = useStore((s) => Object.keys(s.sessions).length);
+  useEffect(() => {
+    api.setTitle(count ? `Sessions · ${count}` : 'Sessions');
+  }, [api, count]);
+  return <SessionsList />;
+}
+
 const components: Record<string, React.FunctionComponent<IDockviewPanelProps>> = {
-  sessions: () => <SessionsList />,
-  session: () => <SessionView />,
+  sessions: SessionsPanel,
+  session: SessionPanel,
   inspector: () => <Inspector />,
   terminal: () => <TerminalPanel />,
   editor: () => <EditorPanel />,
