@@ -50,6 +50,10 @@ const handlers: Handlers<PtyApi> = {
   },
   'pty.list': () => manager.list(),
   'pty.blocks': ({ id }) => manager.blocks(id),
+  'pty.clearBlocks': ({ id }) => {
+    manager.clearBlocks(id);
+    return { ok: true };
+  },
   'pty.run': (o) => manager.run(o),
 };
 

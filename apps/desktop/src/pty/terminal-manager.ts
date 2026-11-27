@@ -65,6 +65,10 @@ export class TerminalManager {
     return [...this.terminals.values()].map((t) => t.info);
   }
 
+  clearBlocks(id: string): void {
+    this.terminals.get(id)?.builder?.clearFinished();
+  }
+
   blocks(id: string): CommandBlock[] {
     const t = this.terminals.get(id);
     if (!t?.builder) return [];

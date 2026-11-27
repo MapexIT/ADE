@@ -709,6 +709,8 @@ export const hostApi = defineApi({
   'sessions.list': method(z.object({ workspaceId: Id }), z.array(Session)),
   'sessions.get': method(z.object({ sessionId: Id }), SessionDetail),
   'sessions.create': method(CreateSessionInput, Session),
+  /** HI-13: deletes ended (landed or discarded) sessions and their stored history; all ended ones without ids. */
+  'sessions.deleteEnded': method(z.object({ workspaceId: Id, sessionIds: z.array(Id).min(1).max(500).optional() }), z.object({ deleted: z.array(Id) })),
   /** SR-10: conversations started in the agents' own CLIs in this repository, newest first, that ADE can continue. */
   'sessions.cliList': method(
     z.object({ workspaceId: Id }),
@@ -844,6 +846,8 @@ export const hostApi = defineApi({
     z.object({ previous: ProblemSnapshot.nullable(), checkout: ProblemSnapshot.nullable() }),
   ),
   'history.search': method(z.object({ workspaceId: Id.optional(), query: z.string().max(500) }), z.array(HistoryEntry)),
+  /** HI-13: forgets commands typed in terminals (the given ones, or all). Runs and agent commands go with their run or session. */
+  'history.clear': method(z.object({ workspaceId: Id.optional(), commands: z.array(z.string().max(10_000)).min(1).max(500).optional() }), z.object({ deleted: z.number().int() })),
   /** SM-10: an agent drafts one command for a question, read-only; it is never run without the user. */
   'terminal.draftCommand': method(
     z.object({ agentId: AgentId, question: z.string().trim().min(1).max(2000), cwd: AbsPath, shell: z.string().max(40) }),
@@ -931,6 +935,8 @@ export const hostApi = defineApi({
     WorkflowRunView,
   ),
   'workflows.runs': method(z.object({ workspaceId: Id }), z.array(WorkflowRunView)),
+  /** HI-13: deletes finished runs (succeeded, failed or cancelled); all finished ones without ids. */
+  'workflows.deleteRuns': method(z.object({ workspaceId: Id, runIds: z.array(Id).min(1).max(500).optional() }), z.object({ deleted: z.number().int() })),
   'workflows.decideGate': method(z.object({ runId: Id, nodeId: z.string(), approved: z.boolean() }), Ok),
   'workflows.resume': method(z.object({ runId: Id }), Ok),
   'workflows.retryFrom': method(z.object({ runId: Id, nodeId: z.string() }), Ok),
@@ -1028,6 +1034,8 @@ export const ptyApi = defineApi({
   'pty.killSession': method(z.object({ sessionId: Id }), Ok),
   'pty.list': method(z.object({}), z.array(TerminalInfo)),
   'pty.blocks': method(z.object({ id: Id }), z.array(CommandBlock)),
+  /** HI-13: forgets a terminal's finished command blocks; a running one stays. */
+  'pty.clearBlocks': method(z.object({ id: Id }), Ok),
   'pty.run': method(
     z.object({ command: z.array(z.string()).min(1), cwd: AbsPath, sessionId: z.string().nullable(), runId: Id, env: z.record(z.string(), z.string()).optional() }),
     z.object({ terminalId: z.string() }),

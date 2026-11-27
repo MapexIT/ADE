@@ -37,7 +37,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { relative as relPath } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { ComposerState, LoopSettings, PromptBoxes, ReceiptSettings, TerminalLayout, type ConnectorSecret } from '@ade/contracts';
-import { changedFiles, diffPatch, ignoredPaths } from '@ade/git';
+import { changedFiles, diffPatch, git, ignoredPaths } from '@ade/git';
 import { RECEIPT_EVENTS, ReceiptService } from './receipts.ts';
 import { ReviewRequestWatch } from './review-requests.ts';
 import { WorkItemService } from './work-items.ts';
@@ -379,6 +379,18 @@ export function createHost(config: HostConfig) {
       events: repos.events.list(sessionId),
       queued: sessions.queued(sessionId),
     }),
+    'sessions.deleteEnded': async ({ workspaceId, sessionIds }) => {
+      const workspace = repos.workspaces.get(workspaceId);
+      if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
+      const deleted = repos.sessions.deleteEnded(workspaceId, sessionIds);
+      // ADE's own refs for those sessions (turn checkpoints, in-place snapshots). The audit log keeps its record.
+      for (const id of deleted) {
+        const refs = await git(['for-each-ref', '--format=%(refname)', `refs/ade/checkpoints/${id}/`, `refs/ade/snapshots/${id}`], { cwd: workspace.rootPath }).catch(() => '');
+        for (const ref of refs.split(/\s+/).filter(Boolean)) await git(['update-ref', '-d', ref], { cwd: workspace.rootPath }).catch(() => undefined);
+      }
+      if (deleted.length) repos.audit.append({ workspaceId, sessionId: null, actor: 'user', action: 'sessions.deleted', detail: { count: deleted.length } });
+      return { deleted };
+    },
     'sessions.cliList': async ({ workspaceId }) => {
       const workspace = repos.workspaces.get(workspaceId);
       if (!workspace) throw new RpcError('not_found', 'Unknown workspace');
@@ -591,6 +603,7 @@ export function createHost(config: HostConfig) {
       return { ok: true };
     },
     'history.search': ({ workspaceId, query }) => repos.history.search(query, workspaceId),
+    'history.clear': ({ workspaceId, commands }) => ({ deleted: repos.history.clear(workspaceId, commands) }),
     'problems.record': ({ workspaceId, sessionId, commandKey, exitCode, turnCount, cut, problems }) => {
       const previous = repos.problems.latest(workspaceId, sessionId, commandKey);
       const checkout = sessionId ? repos.problems.latest(workspaceId, null, commandKey) : null;
@@ -723,6 +736,7 @@ export function createHost(config: HostConfig) {
     'workflows.list': ({ workspaceId }) => listWorkflows(workspaceId ? workspaceRoot(workspaceId) : null),
     'workflows.start': (input) => workflows.start(input),
     'workflows.runs': ({ workspaceId }) => workflows.list(workspaceId),
+    'workflows.deleteRuns': ({ workspaceId, runIds }) => ({ deleted: repos.workflowRuns.deleteFinished(workspaceId, runIds) }),
     'workflows.get': ({ workspaceId, workflowId }) => workflows.detail(workspaceId, workflowId),
     'workflows.save': ({ workspaceId, file, definition }) => workflows.save(workspaceId, file, definition),
     'workflows.testNode': (input) => workflows.testNode(input),
