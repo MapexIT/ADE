@@ -105,6 +105,8 @@ interface State {
   toasts: Toast[];
   /** WA-10: text to put in a session's chat box (Redirect the agent); the composer takes it and clears it. */
   composerDraft: { sessionId: string; text: string } | null;
+  /** RV-17: a timeline item to scroll to and mark (Open in timeline); `seq` changes per request. */
+  timelineFocus: { sessionId: string; key: string; seq: number } | null;
   /** AP-09: rule suggestions and rule usage per workspace, from `rules.advice`. */
   ruleAdvice: Record<string, RuleAdvice>;
   /** AP-09: the suggestion open in the "Rule from your decisions" dialog. */
@@ -219,6 +221,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   confirm: null,
   toasts: [],
   composerDraft: null,
+  timelineFocus: null,
   ruleAdvice: {},
   ruleSuggestion: null,
   lessonAdvice: {},

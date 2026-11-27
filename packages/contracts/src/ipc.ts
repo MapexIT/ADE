@@ -587,6 +587,50 @@ export type SessionDetail = z.infer<typeof SessionDetail>;
 export const DiffText = z.object({ path: z.string(), oldText: z.string(), newText: z.string(), binary: z.boolean() });
 export type DiffText = z.infer<typeof DiffText>;
 
+/** RV-17: where a changed line came from. `unreported`: a turn changed it but no reported edit explains it. */
+export const TraceKind = z.enum(['agent', 'user', 'unreported', 'unknown']);
+export type TraceKind = z.infer<typeof TraceKind>;
+export const TraceLine = z.object({
+  /** 1-based; on the new side in the file now, on the old side in the base version. */
+  line: z.number().int().positive(),
+  side: z.enum(['new', 'old']),
+  turnIndex: z.number().int().nonnegative().nullable(),
+  toolCallId: z.string().nullable(),
+  kind: TraceKind,
+});
+export type TraceLine = z.infer<typeof TraceLine>;
+export const TraceFile = z.object({ path: z.string(), binary: z.boolean(), lines: z.array(TraceLine).max(200_000) });
+export type TraceFile = z.infer<typeof TraceFile>;
+export const TraceDetail = z.object({
+  turnIndex: z.number().int().nonnegative(),
+  startedAt: z.string().nullable(),
+  prompt: z.string().nullable(),
+  toolCall: z.object({ toolCallId: z.string(), title: z.string(), kind: ToolKind, status: z.enum(['pending', 'in_progress', 'completed', 'failed']) }).nullable(),
+  preceding: z.object({ kind: z.enum(['message', 'thought']), text: z.string() }).nullable(),
+  permissions: z.array(z.object({ title: z.string(), decision: z.string(), decidedBy: z.string(), forToolCall: z.boolean() })).max(10),
+  commands: z.array(z.string()).max(20),
+});
+export type TraceDetail = z.infer<typeof TraceDetail>;
+export const PromptGroup = z.object({
+  kind: z.enum(['turn', 'unreported', 'user', 'unknown']),
+  turnIndex: z.number().int().nonnegative().nullable(),
+  prompt: z.string().nullable(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  hunks: z.array(
+    z.object({ path: z.string(), line: z.number().int().nonnegative(), side: z.enum(['new', 'old']), additions: z.number().int().nonnegative(), deletions: z.number().int().nonnegative() }),
+  ),
+});
+export type PromptGroup = z.infer<typeof PromptGroup>;
+export const ChangesByPrompt = z.object({
+  groups: z.array(PromptGroup),
+  /** Binary files: changed, but they have no lines to trace. */
+  binary: z.array(z.string()),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+});
+export type ChangesByPrompt = z.infer<typeof ChangesByPrompt>;
+
 export const ProtocolMessage = z.object({
   ts: z.string(),
   direction: z.enum(['in', 'out']),
@@ -803,6 +847,12 @@ export const hostApi = defineApi({
   ),
   'sessions.unmarkReviewed': method(z.object({ sessionId: Id, paths: z.array(z.string().min(1).max(4096)).min(1).max(5000) }), ReviewProgress),
   'sessions.diffSinceReviewed': method(z.object({ sessionId: Id, path: z.string().min(1).max(4096) }), DiffText),
+  /** RV-17: the turn, tool call and kind of every line the session changed in one file. */
+  'sessions.trace': method(z.object({ sessionId: Id, path: z.string().min(1).max(4096) }), TraceFile),
+  /** RV-17: the prompt, tool call, preceding agent message, approvals and commands behind a traced line. */
+  'sessions.traceDetail': method(z.object({ sessionId: Id, turnIndex: z.number().int().nonnegative(), toolCallId: z.string().max(200).nullable() }), TraceDetail),
+  /** RV-17: every hunk of the session grouped by the prompt whose turn wrote it. */
+  'sessions.changesByPrompt': method(z.object({ sessionId: Id }), ChangesByPrompt),
   'sessions.pullRequestStatus': method(z.object({ sessionId: Id }), PullRequestStatus.nullable()),
   /** RV-12: commits what changed since and pushes it to the open pull request's branch. */
   'sessions.pushUpdate': method(z.object({ sessionId: Id, message: z.string().trim().min(1).max(10_000) }), Ok),
