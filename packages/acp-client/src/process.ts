@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, dirname, extname, join, resolve } from 'node:path';
 
 /** Kills a process and all its children. Windows uses taskkill /T; POSIX kills the process group. */
@@ -76,8 +76,14 @@ export class ProcessTracker {
 const isFile = (p: string) => {
   try {
     return statSync(p).isFile();
-  } catch {
-    return false;
+  } catch (err) {
+    // Windows app execution aliases (winget.exe in WindowsApps) are links whose target cannot be read, but they run.
+    if ((err as NodeJS.ErrnoException).code !== 'EACCES') return false;
+    try {
+      return lstatSync(p).isSymbolicLink();
+    } catch {
+      return false;
+    }
   }
 };
 
