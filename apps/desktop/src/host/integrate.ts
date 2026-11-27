@@ -76,8 +76,8 @@ class TrialRepo {
   save(t: TrialRow): void {
     t.updatedAt = new Date().toISOString();
     this.db.run(
-      'UPDATE integration_trials SET steps_json = ?, checks_json = ?, sandboxed = ?, status = ?, error = ?, landed_json = ?, updated_at = ? WHERE id = ?',
-      JSON.stringify(t.steps), JSON.stringify(t.checks), t.sandboxed ? 1 : 0, t.status, t.error, JSON.stringify(t.landed), t.updatedAt, t.id,
+      'UPDATE integration_trials SET members_json = ?, steps_json = ?, checks_json = ?, sandboxed = ?, status = ?, error = ?, landed_json = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify(t.members), JSON.stringify(t.steps), JSON.stringify(t.checks), t.sandboxed ? 1 : 0, t.status, t.error, JSON.stringify(t.landed), t.updatedAt, t.id,
     );
   }
 
